@@ -40,9 +40,7 @@ jobs:
           python -m pip install "pip==24.0"
           python -m pip install "buildozer==1.5.0" "cython==0.29.37"
           
-      - name: Clean Buildozer state
-        run: |
-          buildozer android clean
+      
       - name: Build APK
         run: |
           buildozer android debug
