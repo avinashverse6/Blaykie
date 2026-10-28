@@ -12,7 +12,7 @@ source.dir = .
 
 source.include_exts = py
 
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi,charset-normalizer==2.1.1
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi
 
 orientation = portrait
 
