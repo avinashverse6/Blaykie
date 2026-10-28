@@ -43,7 +43,9 @@ jobs:
           python -m pip install "buildozer==1.5.0" "cython==0.29.37"
 
       - name: Build APK
+        shell: bash
         run: |
+          set -o pipefail
           buildozer -v android debug 2>&1 | tee build-log.txt
 
       - name: Upload build log
@@ -58,3 +60,4 @@ jobs:
         with:
           name: Zotero-Citation-Manager-APK
           path: bin/*.apk
+          if-no-files-found: error
