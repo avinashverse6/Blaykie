@@ -38,7 +38,7 @@ class ZoteroApp(App):
         root = BoxLayout(orientation="vertical", padding=15, spacing=10)
 
         root.add_widget(Label(
-            text="Zotero Citation Manager",
+            text="Blaykie",
             font_size="24sp",
             size_hint_y=None,
             height=45,
