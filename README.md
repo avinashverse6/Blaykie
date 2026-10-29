@@ -32,7 +32,7 @@ A small Android app (built with [Kivy](https://kivy.org)) that searches your [Zo
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Kivy user interface |
+| `main.py` | Kivy user interface |
 | `zotero_engine.py` | Zotero API search and APA 7 formatting logic |
 | `buildozer.spec` | Android build configuration |
 | `.github/workflows/` | GitHub Actions workflow for building the APK |
