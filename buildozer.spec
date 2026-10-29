@@ -18,6 +18,8 @@ orientation = portrait
 
 android.accept_sdk_license = True
 
+android.archs = armeabi-v7a
+
 android.ndk_api = 24
 
 android.api = 35
