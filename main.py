@@ -258,4 +258,39 @@ class ZoteroApp(App):
         if not items:
             self.status.text = "Select at least one reference."
             return
-        Clipboard.copy(m
+        Clipboard.copy(multiple_in_text(items))
+        self.status.text = "In-text citation copied to clipboard."
+
+    def copy_reference(self, instance):
+        items = self.selected_items()
+        if not items:
+            self.status.text = "Select at least one reference."
+            return
+        references = [
+            apa_full_reference(item.get("data", {}))
+            for item in sorted_items(items)
+        ]
+        Clipboard.copy("\n\n".join(references))
+        self.status.text = "APA 7 reference(s) copied to clipboard."
+
+    def copy_narrative(self, instance):
+        items = self.selected_items()
+        if not items:
+            self.status.text = "Select at least one reference."
+            return
+        citations = [
+            apa_narrative(item.get("data", {}))
+            for item in sorted_items(items)
+        ]
+        Clipboard.copy("; ".join(citations))
+        self.status.text = "Narrative citation copied to clipboard."
+
+    def clear_results(self, instance):
+        self.results = []
+        self.selected = []
+        self.results_box.clear_widgets()
+        self.status.text = "Cleared."
+
+
+if __name__ == "__main__":
+    ZoteroApp().run()
