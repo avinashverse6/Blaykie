@@ -1,4 +1,4 @@
-# CiteSnap
+# Blaykie
 
 A small Android app (built with [Kivy](https://kivy.org)) that searches your [Zotero](https://www.zotero.org) library and copies APA 7 citations to your clipboard, so you can paste them straight into your notes or manuscript from your phone.
 
