@@ -1,6 +1,6 @@
 [app]
 
-title = Zotero Citation Manager
+title = CiteSnap
 
 version = 1.0
 
