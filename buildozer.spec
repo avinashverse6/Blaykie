@@ -1,6 +1,6 @@
 [app]
 
-title = CiteSnap
+title = Blaykie
 
 version = 1.0
 
