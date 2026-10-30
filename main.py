@@ -15,14 +15,15 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 
 from zotero_engine import (
-    apa_full_reference,
-    apa_narrative,
     get_authors,
     get_year,
     multiple_in_text,
+    narrative_text,
+    references_text,
     search_zotero,
-    sorted_items,
 )
+
+APP_TITLE = "Blaykie"
 
 # Keeps the text boxes visible when the phone keyboard opens
 Window.softinput_mode = "below_target"
@@ -38,7 +39,7 @@ class ZoteroApp(App):
         root = BoxLayout(orientation="vertical", padding=15, spacing=10)
 
         root.add_widget(Label(
-            text="Blaykie",
+            text=APP_TITLE,
             font_size="24sp",
             size_hint_y=None,
             height=45,
@@ -227,8 +228,14 @@ class ZoteroApp(App):
                 halign="left",
                 valign="middle",
             )
+            # Wrap text to the label width and grow the row to fit it,
+            # so long titles never overlap the next result
             label.bind(
-                size=lambda obj, size: setattr(obj, "text_size", size)
+                width=lambda obj, w: setattr(obj, "text_size", (w, None))
+            )
+            label.bind(
+                texture_size=lambda obj, ts, r=row:
+                setattr(r, "height", max(65, ts[1] + 16))
             )
 
             row.add_widget(checkbox)
@@ -266,11 +273,7 @@ class ZoteroApp(App):
         if not items:
             self.status.text = "Select at least one reference."
             return
-        references = [
-            apa_full_reference(item.get("data", {}))
-            for item in sorted_items(items)
-        ]
-        Clipboard.copy("\n\n".join(references))
+        Clipboard.copy(references_text(items))
         self.status.text = "APA 7 reference(s) copied to clipboard."
 
     def copy_narrative(self, instance):
@@ -278,11 +281,7 @@ class ZoteroApp(App):
         if not items:
             self.status.text = "Select at least one reference."
             return
-        citations = [
-            apa_narrative(item.get("data", {}))
-            for item in sorted_items(items)
-        ]
-        Clipboard.copy("; ".join(citations))
+        Clipboard.copy(narrative_text(items))
         self.status.text = "Narrative citation copied to clipboard."
 
     def clear_results(self, instance):
