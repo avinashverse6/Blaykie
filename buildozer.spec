@@ -10,11 +10,23 @@ package.domain = org.avinash
 
 source.dir = .
 
-source.include_exts = py
+source.include_exts = py,png
 
 requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi
 
 orientation = portrait
+
+fullscreen = 0
+
+icon.filename = %(source.dir)s/icon.png
+
+icon.adaptive_foreground.filename = %(source.dir)s/icon_fg.png
+
+icon.adaptive_background.filename = %(source.dir)s/icon_bg.png
+
+presplash.filename = %(source.dir)s/presplash.png
+
+presplash.color = #0E1016
 
 android.accept_sdk_license = True
 
