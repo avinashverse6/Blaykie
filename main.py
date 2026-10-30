@@ -6,6 +6,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
 from kivy.core.window import Window
+from kivy.graphics import Color, RoundedRectangle
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.checkbox import CheckBox
@@ -13,6 +14,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
 
 from zotero_engine import (
     get_authors,
@@ -24,9 +26,28 @@ from zotero_engine import (
 )
 
 APP_TITLE = "Blaykie"
+LOGO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+BOTTOM_GAP = 70   # empty space under the buttons, keeps them clear of the navigation bar
 
 # Keeps the text boxes visible when the phone keyboard opens
 Window.softinput_mode = "below_target"
+
+
+class Logo(Widget):
+    """The cat logo with rounded corners."""
+
+    def __init__(self, source, **kwargs):
+        super().__init__(**kwargs)
+        with self.canvas:
+            Color(1, 1, 1, 1)
+            self.shape = RoundedRectangle(
+                source=source, pos=self.pos, size=self.size, radius=[14]
+            )
+        self.bind(pos=self.update_shape, size=self.update_shape)
+
+    def update_shape(self, *args):
+        self.shape.pos = self.pos
+        self.shape.size = self.size
 
 
 class ZoteroApp(App):
@@ -38,12 +59,23 @@ class ZoteroApp(App):
 
         root = BoxLayout(orientation="vertical", padding=15, spacing=10)
 
-        root.add_widget(Label(
+        header = BoxLayout(
+            orientation="horizontal", size_hint_y=None, height=56, spacing=12
+        )
+        if os.path.exists(LOGO_FILE):
+            header.add_widget(Logo(
+                LOGO_FILE, size_hint=(None, None), size=(52, 52)
+            ))
+        title = Label(
             text=APP_TITLE,
             font_size="24sp",
-            size_hint_y=None,
-            height=45,
-        ))
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        title.bind(size=lambda obj, size: setattr(obj, "text_size", size))
+        header.add_widget(title)
+        root.add_widget(header)
 
         credentials = GridLayout(
             cols=2, spacing=8, size_hint_y=None, height=100
@@ -107,6 +139,7 @@ class ZoteroApp(App):
         action_row.add_widget(clear_button)
 
         root.add_widget(action_row)
+        root.add_widget(Widget(size_hint_y=None, height=BOTTOM_GAP))
 
         self.load_credentials()
         return root

@@ -123,8 +123,8 @@ MINOR_WORDS = {
 }
 
 
-def title_case(title):
-    """APA title case (used only for no-author in-text citations)."""
+def title_case(title, capitalize_words=True):
+    """APA title case (no-author in-text citations, journal names)."""
     words = clean(title).split(" ")
     result = []
     new_sentence = True
@@ -145,7 +145,7 @@ def title_case(title):
             first_piece = index == 0
             if is_minor and not (new_sentence and first_piece):
                 fixed.append(piece.lower())
-            elif piece_core.islower():
+            elif capitalize_words and piece_core.islower():
                 position = piece.find(piece_core[0])
                 fixed.append(piece[:position] + piece[position:].capitalize())
             else:
@@ -646,6 +646,14 @@ def thesis_label(thesis_type):
     return text[:1].upper() + text[1:] if text else "Thesis"
 
 
+def periodical_name(name):
+    """Journal / magazine / newspaper names: lowercase 'Of', 'And' etc."""
+    name = clean(name)
+    if not name or name.isupper():
+        return name
+    return title_case(name, capitalize_words=False)
+
+
 class Ref:
     """Builds a reference as a list of (text, italic) pieces."""
 
@@ -721,7 +729,7 @@ def add_publisher(ref, publisher, author_text):
 
 def add_periodical(ref, data, pages_prefix=False):
     """Journal, 12(3), 45–67."""
-    journal = clean(data.get("publicationTitle"))
+    journal = periodical_name(data.get("publicationTitle"))
     volume = clean(data.get("volume"))
     issue = clean(data.get("issue"))
     pages = clean(data.get("pages"))
@@ -818,13 +826,14 @@ def build_chapter(ref, data, suffix, container_field="bookTitle"):
 def build_report(ref, data, suffix):
     extras = []
     number = clean(data.get("reportNumber"))
+    report_type = clean(data.get("reportType"))
     if number:
         if re.match(r"(?i)^(report|rep\.|no\.?|publication|technical|working)", number):
             extras.append(f"({number})")
         else:
-            extras.append(f"(Report No. {number})")
-    report_type = clean(data.get("reportType"))
-    if report_type:
+            label = title_case(report_type) if report_type else "Report"
+            extras.append(f"({label} No. {number})")
+    elif report_type:
         extras.append(f"[{report_type}]")
 
     author_text = begin(ref, data, suffix, "year", data.get("title"), True,
