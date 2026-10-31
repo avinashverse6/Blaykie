@@ -10,7 +10,7 @@ package.domain = org.avinash
 
 source.dir = .
 
-source.include_exts = py,png
+source.include_exts = py,png,ttf
 
 requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi
 
