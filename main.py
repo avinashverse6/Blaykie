@@ -32,7 +32,7 @@ from kivy.utils import escape_markup, platform
 
 from ui import (
     ACCENT_TEXT, BG, ERROR, LINE, MUTED, SURFACE, SURFACE2, TEXT,
-    InputBox, PillButton, ResultCard, col, paint, small_label,
+    GearButton, InputBox, Logo, PillButton, ResultCard, col, paint, small_label,
 )
 
 Window.clearcolor = col(BG)
@@ -64,6 +64,8 @@ if platform == "android":
         from androidstorage4kivy import Chooser, ShareSheet, SharedStorage
     except Exception:
         IMPORT_ERRORS.append("storage: " + traceback.format_exc(limit=2))
+
+LOGO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
 
 CHUNK = 10          # paragraphs drawn at a time while you scroll
 SEARCH_LIMIT = 60   # references fetched per Zotero search
@@ -118,6 +120,14 @@ def wrapped_label(text, color=TEXT, size=14, height=None):
     if height is None:
         label.bind(texture_size=lambda w, v: setattr(w, "height", v[1] + dp(4)))
     return label
+
+
+def fit_panel(view, panel):
+    """Make the pop-up exactly as tall as its content (no empty space)."""
+    total = sum(child.height for child in panel.children)
+    total += panel.spacing * (len(panel.children) - 1) + dp(32)
+    view.size_hint_y = None
+    view.height = total
 
 
 class BlockCard(ButtonBehavior, BoxLayout):
@@ -232,7 +242,7 @@ class LabApp(App):
 
     def build_settings(self):
         view, panel = panel_view(0.62)
-        panel.add_widget(small_label("Zotero settings", color=TEXT, size=18,
+        panel.add_widget(small_label("Zotero account", color=TEXT, size=18,
                                      bold=True, height=32))
         panel.add_widget(wrapped_label(
             "Find your User ID and API key at zotero.org/settings/keys "
@@ -247,6 +257,10 @@ class LabApp(App):
         panel.add_widget(key_box)
         self.settings_message = small_label("", color=ERROR, size=12, height=22)
         panel.add_widget(self.settings_message)
+        speed = PillButton(text="Speed log", style="ghost", size_hint_y=None,
+                           height=dp(40), font_size=sp(12))
+        speed.bind(on_release=lambda *a: (view.dismiss(), self.open_speed_log()))
+        panel.add_widget(speed)
         row = BoxLayout(size_hint_y=None, height=dp(52), spacing=dp(10))
         cancel = PillButton(text="Cancel", style="ghost")
         cancel.bind(on_release=lambda *a: view.dismiss())
@@ -255,6 +269,7 @@ class LabApp(App):
         row.add_widget(cancel)
         row.add_widget(save)
         panel.add_widget(row)
+        fit_panel(view, panel)
         self.settings_view = view
 
     def open_settings(self, *args):
@@ -298,38 +313,51 @@ class LabApp(App):
     def show_home(self):
         self.screen = "home"
         self.root_box.clear_widgets()
-        area = BoxLayout(orientation="vertical", padding=[dp(24), dp(48), dp(24), dp(40)],
+        area = BoxLayout(orientation="vertical", padding=[dp(22), dp(36), dp(22), dp(28)],
                          spacing=dp(14))
-        title = Label(
-            text="[size=34sp][b]Blaykie[/b][/size]\n[size=14sp][color=#A3A9BC]"
-                 "Add Zotero citations to your Word document[/color][/size]",
-            markup=True, color=col(TEXT), size_hint_y=None, height=dp(110),
-            halign="left", valign="middle")
-        title.bind(size=lambda w, v: setattr(w, "text_size", v))
-        area.add_widget(title)
 
-        open_btn = PillButton(text="Open a .docx", style="primary",
-                              size_hint_y=None, height=dp(56))
+        header = BoxLayout(size_hint_y=None, height=dp(64), spacing=dp(12))
+        if os.path.exists(LOGO_FILE):
+            header.add_widget(Logo(LOGO_FILE, size_hint=(None, None),
+                                   size=(dp(52), dp(52)), pos_hint={"center_y": 0.5}))
+        title = Label(
+            text="[size=26sp][b]Blaykie[/b][/size]\n[size=12sp][color=#A3A9BC]"
+                 "Cite smarter. APA 7 in seconds.[/color][/size]",
+            markup=True, color=col(TEXT), halign="left", valign="middle")
+        title.bind(size=lambda w, v: setattr(w, "text_size", v))
+        header.add_widget(title)
+        gear = GearButton(size_hint=(None, None), size=(dp(46), dp(46)),
+                          pos_hint={"center_y": 0.5})
+        gear.bind(on_release=self.open_settings)
+        header.add_widget(gear)
+        area.add_widget(header)
+        area.add_widget(Label(size_hint_y=None, height=dp(6)))
+
+        open_btn = PillButton(
+            text="[b]Open a .docx[/b]\n[size=12sp]Choose a Word file from your phone[/size]",
+            markup=True, style="primary", size_hint_y=None, height=dp(88),
+            font_size=sp(18))
         open_btn.bind(on_release=self.choose)
         area.add_widget(open_btn)
 
         saved = self.read_state()
         if saved:
+            name = os.path.basename(saved["path"])[:34]
             resume = PillButton(
-                text="Continue: " + os.path.basename(saved["path"])[:28],
-                style="secondary", size_hint_y=None, height=dp(56))
+                text="[b]Continue[/b]\n[size=12sp]" + escape_markup(name) + "[/size]",
+                markup=True, style="secondary", size_hint_y=None, height=dp(76),
+                font_size=sp(16))
             resume.bind(on_release=self.resume)
             area.add_widget(resume)
 
-        settings = PillButton(text="Zotero settings", style="ghost",
-                              size_hint_y=None, height=dp(52))
-        settings.bind(on_release=self.open_settings)
-        area.add_widget(settings)
-
-        speed = PillButton(text="Speed log", style="ghost", size_hint_y=None, height=dp(44),
-                           font_size=sp(12))
-        speed.bind(on_release=self.open_speed_log)
-        area.add_widget(speed)
+        tips = BoxLayout(orientation="vertical", size_hint_y=None, height=dp(136),
+                         padding=dp(16), spacing=dp(4))
+        paint(tips, SURFACE, [dp(18)], edge_hex=LINE)
+        tips.add_widget(small_label("How it works", color=TEXT, size=13, bold=True, height=22))
+        for line in ("1   Open your Word file", "2   Tap where a citation goes",
+                     "3   Pick it from Zotero, then export"):
+            tips.add_widget(small_label(line, color=MUTED, size=12, height=22))
+        area.add_widget(tips)
 
         self.home_status = wrapped_label("", MUTED, 13)
         area.add_widget(self.home_status)
