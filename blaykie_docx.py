@@ -30,6 +30,25 @@ TAG_RE = re.compile(
 )
 ENTITY_RE = re.compile(r"&(#x[0-9A-Fa-f]+|#\d+|amp|lt|gt|quot|apos);")
 OBJECT_CHAR = "\ufffc"
+HAS_TEXT = re.compile(r"<w:t(?:\s[^>]*)?>[^<]*[^<\s][^<]*</w:t>")
+
+
+BOOKMARK_RE = re.compile(r'w:name="' + BOOKMARK_PREFIX + r'([A-Z0-9]+)_(\d+)"')
+
+
+class MissingReferences(Exception):
+    """The document holds Blaykie citations whose references are not loaded yet."""
+
+    def __init__(self, keys):
+        super().__init__("References for these Zotero items are needed: "
+                         + ", ".join(sorted(keys)))
+        self.keys = sorted(keys)
+
+
+# Word measures line spacing in 240ths of a line:
+# 240 = single, 360 = 1.5 lines, 480 = double
+SPACING_VALUES = {"single": 240, "1.5": 360, "double": 480}
+DEFAULT_LINE = "match"          # same spacing as the body text of the document
 
 
 class NotEditable(Exception):
@@ -120,7 +139,7 @@ def container_text(xml, start, end):
 
 class Seg:
     __slots__ = ("kind", "tag", "start", "end", "text", "rpr",
-                 "off0", "off1", "depth")
+                 "off0", "off1", "depth", "cite")
 
     def __init__(self, kind, tag, start, end):
         self.kind = kind          # text (editable run) | locked | meta
@@ -131,6 +150,7 @@ class Seg:
         self.rpr = ""
         self.off0 = self.off1 = 0
         self.depth = 0            # field depth before this segment
+        self.cite = False         # inside a Blaykie citation bookmark
 
 
 CLOSING_METAS = ("w:bookmarkEnd", "w:proofErr", "w:commentRangeEnd")
@@ -162,10 +182,21 @@ class Para:
 
         depth = 0
         offset = 0
+        open_cites = set()
         for tag, s, e in children(xml, lo, hi):
             seg = Seg("meta", tag, s, e)
             seg.depth = depth
             seg.off0 = offset
+            seg.cite = bool(open_cites)
+            if tag == "w:bookmarkStart":
+                mark = re.search(r'w:id="(\d+)" w:name="' + BOOKMARK_PREFIX
+                                 + r'[A-Z0-9]+_\d+"', xml[s:e])
+                if mark:
+                    open_cites.add(mark.group(1))
+            elif tag == "w:bookmarkEnd":
+                mark = re.search(r'w:id="(\d+)"', xml[s:e])
+                if mark:
+                    open_cites.discard(mark.group(1))
 
             if tag == "w:r":
                 delta = self._read_run(seg, depth)
@@ -241,18 +272,22 @@ class Para:
         total = len(self.text)
         if offset < 0 or offset > total:
             raise NotEditable("Position is outside the paragraph.")
-        for index in range(self.first_content_index(), len(self.segs) + 1):
-            if self.offset_before(index) != offset:
-                continue
-            if self.depth_before(index) != 0:
-                raise NotEditable("This spot is inside a field (for example "
-                                  "a Zotero citation). Blaykie will not touch it.")
-            while (index < len(self.segs)
-                   and self.segs[index].tag in CLOSING_METAS
-                   and self.segs[index].off0 == offset):
-                index += 1
-            return index
-        raise NotEditable("Position is inside a part Blaykie cannot edit.")
+        candidates = [
+            index for index in range(self.first_content_index(), len(self.segs) + 1)
+            if self.offset_before(index) == offset
+        ]
+        if not candidates:
+            raise NotEditable("Position is inside a part Blaykie cannot edit.")
+        valid = [i for i in candidates if self.depth_before(i) == 0]
+        if not valid:
+            raise NotEditable("This spot is inside a field (for example "
+                              "a Zotero citation). Blaykie will not touch it.")
+        index = valid[0]
+        while (index < len(self.segs)
+               and self.segs[index].tag in CLOSING_METAS
+               and self.segs[index].off0 == offset):
+            index += 1
+        return index
 
     def seg_at(self, offset):
         """Text segment that contains the character at `offset`."""
@@ -283,6 +318,9 @@ class Para:
         if start == end:
             seg_index, seg = self.seg_at(start)
             if seg is not None and seg.off0 < start < seg.off1:
+                if seg.cite:
+                    raise NotEditable("This is a Blaykie citation. Put the cursor "
+                                      "before or after it, or select all of it.")
                 if seg.kind != "text":
                     raise NotEditable("This spot is inside a link, field or "
                                       "special item. Blaykie will not touch it.")
@@ -307,6 +345,10 @@ class Para:
         if any(s.kind != "text" for i, s in touched):
             raise NotEditable("The selection includes a field, link or special "
                               "item. Blaykie will not change it.")
+        for _i, seg in touched:
+            if seg.cite and not (start <= seg.off0 and end >= seg.off1):
+                raise NotEditable("This is a Blaykie citation. Select all of it to "
+                                  "remove it, or use Undo.")
         first_i, first = touched[0]
         last_i, last = touched[-1]
         for index in range(first_i, last_i + 1):
@@ -329,9 +371,24 @@ class Para:
                 + xml[last.end:])
 
 
+def item_key(item):
+    return re.sub(r"[^A-Za-z0-9]", "", str(item.get("key") or "ITEM")).upper()[:12] or "ITEM"
+
+
 def bookmark_name(item, number):
     key = re.sub(r"[^A-Za-z0-9]", "", str(item.get("key") or "ITEM")).upper()[:12]
     return f"{BOOKMARK_PREFIX}{key or 'ITEM'}_{number}"
+
+
+EMPTY_BOOKMARK = re.compile(
+    r'<w:bookmarkStart w:id="(\d+)" w:name="' + BOOKMARK_PREFIX
+    + r'[A-Z0-9]+_\d+"/><w:bookmarkEnd w:id="\1"/>')
+
+
+def drop_empty_bookmarks(xml):
+    while EMPTY_BOOKMARK.search(xml):
+        xml = EMPTY_BOOKMARK.sub("", xml)
+    return xml
 
 
 def make_run(rpr, text):
@@ -409,6 +466,7 @@ class DocxProject:
         self.bom = raw.startswith(b"\xef\xbb\xbf")
         self.original_xml = raw.decode("utf-8-sig")
         self.ops = []
+        self.known = {}
         self._split_body()
 
         ids = [int(i) for i in re.findall(
@@ -461,6 +519,19 @@ class DocxProject:
             cells = re.findall(r"<w:tc\b.*?</w:tc>", block.xml, re.S)
             return " | ".join(container_text(c, 0, len(c)) for c in cells)
         return container_text(block.xml, 0, len(block.xml))
+
+    def visible_blocks(self):
+        """Blocks worth showing (quick check, no full parsing)."""
+        shown = []
+        for index, block in enumerate(self.blocks):
+            if block.tag == "w:tbl":
+                shown.append(index)
+            elif block.tag == "w:p":
+                if HAS_TEXT.search(block.xml):
+                    shown.append(index)
+            elif container_text(block.xml, 0, len(block.xml)).strip():
+                shown.append(index)
+        return shown
 
     def block_kind(self, index):
         block = self.blocks[index]
@@ -520,6 +591,9 @@ class DocxProject:
                 found.append(index)
         return found
 
+    def has_blaykie_bibliography(self):
+        return BIB_BOOKMARK in self.original_xml
+
     def has_zotero_fields(self):
         return bool(re.search(r"ZOTERO_ITEM|ZOTERO_BIBL|CSL_CITATION|CSL_BIBLIOGRAPHY",
                               self.original_xml))
@@ -564,6 +638,68 @@ class DocxProject:
         self._apply(op)
         self.ops.append(op)
 
+    def apply_text_edit(self, block, new_text):
+        """The user changed a paragraph with the normal Android text tools
+        (cut, delete, paste, type). Apply exactly that difference to the
+        document. Returns True if something changed. Raises NotEditable (and
+        leaves everything untouched) if the change touches a protected part."""
+        import difflib
+        para = self._para(block)
+        old_text = para.text
+        if new_text == old_text:
+            return False
+        matcher = difflib.SequenceMatcher(None, old_text, new_text, autojunk=False)
+        raw = [(i1, i2, new_text[j1:j2]) for tag, i1, i2, j1, j2
+               in matcher.get_opcodes() if tag != "equal"]
+        # join changes separated by only a few unchanged characters
+        changes = []
+        for change in raw:
+            if changes and change[0] - changes[-1][1] < 4:
+                previous = changes.pop()
+                between = old_text[previous[1]:change[0]]
+                changes.append((previous[0], change[1], previous[2] + between + change[2]))
+            else:
+                changes.append(change)
+        for _s, _e, text in changes:
+            if "\n" in text or "\r" in text or "\t" in text:
+                raise NotEditable("Line breaks and tabs cannot be typed here.")
+        op = {"type": "edit", "block": block,
+              "changes": [list(c) for c in reversed(changes)]}
+        try:
+            self._apply(op)
+            if self._para(block).text != new_text:
+                raise NotEditable("That change could not be applied exactly.")
+        except NotEditable:
+            self._replay()
+            raise
+        self.ops.append(op)
+        return True
+
+    def edit_summary(self):
+        """Characters removed from / added to the text by the user's own edits."""
+        removed = added = 0
+        for op in self.ops:
+            if op["type"] == "delete":
+                removed += op["end"] - op["start"]
+            elif op["type"] == "edit":
+                for start, end, text in op["changes"]:
+                    removed += end - start
+                    added += len(text)
+        return removed, added
+
+    def load_ops(self, ops):
+        """Re-apply edits saved earlier (after the app was closed)."""
+        self.ops = []
+        self._load_blocks()
+        for op in ops:
+            self._apply(op)
+            self.ops.append(op)
+        cites = [op for op in self.ops if op["type"] == "cite"]
+        if cites:
+            self.next_citation = max(self.next_citation, max(op["n"] for op in cites) + 1)
+            self.next_bookmark_id = max(
+                self.next_bookmark_id, max(max(op["bm_ids"]) for op in cites) + 1)
+
     def undo(self):
         if not self.ops:
             return False
@@ -586,12 +722,22 @@ class DocxProject:
     def _apply(self, op):
         block = self.blocks[op["block"]]
         para = self._para(op["block"])
-        start, end = op["start"], op["end"]
+        start, end = op.get("start", 0), op.get("end", 0)
 
         if op["type"] == "delete":
             if start == end:
                 return
-            block.set_xml(para.replace(start, end, ""))
+            block.set_xml(drop_empty_bookmarks(para.replace(start, end, "")))
+            return
+
+        if op["type"] == "edit":
+            # several small changes inside one paragraph, applied right to left
+            for change_start, change_end, new_text in op["changes"]:
+                para = self._para(op["block"])
+                rpr = para.format_source(change_start, change_end)
+                run = make_run(rpr, new_text)
+                xml = para.replace(change_start, change_end, run)
+                block.set_xml(drop_empty_bookmarks(xml))
             return
 
         rpr = para.format_source(start, end)
@@ -604,6 +750,27 @@ class DocxProject:
             pieces.append(f'<w:bookmarkEnd w:id="{bm_id}"/>')
         pieces.append(make_run(rpr, op["trail"]))
         block.set_xml(para.replace(start, end, "".join(pieces)))
+
+    # ----- references already in the document -----
+
+    def existing_keys(self):
+        """Zotero item keys of Blaykie citations found in the opened file."""
+        return sorted({m.group(1) for m in BOOKMARK_RE.finditer(self.original_xml)})
+
+    def register_items(self, items):
+        """Give Blaykie the Zotero items for citations that are already in the
+        document (fetched by key from Zotero)."""
+        for item in items:
+            self.known[item_key(item)] = item
+
+    def present_keys(self):
+        self._replay()
+        joined = "".join(b.xml for b in self.blocks)
+        return {m.group(1) for m in BOOKMARK_RE.finditer(joined)}
+
+    def missing_keys(self):
+        pool = set(self.known) | {item_key(i) for i in self.cited_items()}
+        return sorted(self.present_keys() - pool)
 
     # ----- cited references -----
 
@@ -659,7 +826,7 @@ class DocxProject:
                 values.append(int(match.group(1)))
         if values:
             return Counter(values).most_common(1)[0][0]
-        return 480
+        return 240
 
     def _bibliography_xml(self, items, line, heading, page_break, bm_id):
         fonts, size = self._base_run_format()
@@ -686,10 +853,20 @@ class DocxProject:
         return out
 
     def build_xml(self, bibliography=True, heading="References", line="match",
-                  page_break=True):
-        """The final document.xml text (citations refreshed, bibliography added)."""
+                  page_break=True, allow_missing=False):
+        """The final document.xml text (citations refreshed, bibliography added).
+        The reference list contains exactly the Blaykie citations that are still
+        in the document, so citations deleted in Word drop out of it."""
         self._replay()
-        items = self.cited_items()
+        present = {m.group(1) for b in self.blocks
+                   for m in BOOKMARK_RE.finditer(b.xml)}
+        pool = dict(self.known)
+        for item in self.cited_items():
+            pool[item_key(item)] = item
+        missing = present - set(pool)
+        if missing and bibliography and not allow_missing:
+            raise MissingReferences(missing)
+        items = unique_items([pool[k] for k in sorted(present) if k in pool])
 
         # refresh citation texts so a/b suffixes are right across the paper
         xml_blocks = [b.gap + b.xml for b in self.blocks]
@@ -717,7 +894,12 @@ class DocxProject:
         self._split_body()
         self._load_blocks()
         try:
-            spacing = self._body_line_spacing() if line == "match" else int(line)
+            if line == "match":
+                spacing = self._body_line_spacing()
+            else:
+                spacing = SPACING_VALUES.get(str(line))
+                if spacing is None:
+                    spacing = int(line)
             bm_id = max(
                 [int(i) for i in re.findall(
                     r'<w:bookmarkStart\b[^>]*\bw:id="(\d+)"', joined)] + [0]) + 1
@@ -749,6 +931,12 @@ class DocxProject:
             (self.original_xml, self.prefix, self.suffix, self.body_lo,
              self.body_hi, self.blocks, self.tail_gap) = saved
         return result
+
+    def default_export_name(self):
+        import os
+        stem = os.path.splitext(os.path.basename(self.path))[0]
+        stem = re.sub(r"[^A-Za-z0-9_\- ]+", "", stem).strip().replace(" ", "_")
+        return (stem or "Document") + "_Blaykie.docx"
 
     def export(self, out_path, **options):
         if _same_file(out_path, self.path):

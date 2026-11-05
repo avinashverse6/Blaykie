@@ -1,8 +1,6 @@
 import re
 import unicodedata
 
-import requests
-
 API_BASE = "https://api.zotero.org"
 SKIP_TYPES = ("attachment", "note", "annotation")
 
@@ -15,6 +13,7 @@ PAGE_SIZE = 100     # Zotero allows at most 100 items per request
 # =====================================================================
 
 def fetch_page(url, headers, params):
+    import requests      # loaded only when needed: keeps the app start fast
     try:
         response = requests.get(
             url,
@@ -40,8 +39,10 @@ def fetch_page(url, headers, params):
     return page, response.headers.get("Total-Results", "")
 
 
-def search_zotero(query, user_id, api_key):
+def search_zotero(query, user_id, api_key, max_results=None):
     # "items/top" skips child PDFs and notes, so slots are not wasted on them
+    limit = max_results or MAX_RESULTS
+    page_size = min(PAGE_SIZE, limit)
     url = f"{API_BASE}/users/{user_id}/items/top"
     headers = {
         "Zotero-API-Key": api_key,
@@ -49,20 +50,23 @@ def search_zotero(query, user_id, api_key):
     }
 
     collected = []
+    kept = 0
     start = 0
 
-    while len(collected) < MAX_RESULTS:
+    while kept < limit:
         params = {
             "q": query,
-            "limit": PAGE_SIZE,
+            "limit": page_size,
             "start": start,
             "format": "json",
         }
         page, total = fetch_page(url, headers, params)
         collected.extend(page)
-        start += PAGE_SIZE
+        kept = sum(1 for item in collected
+                   if item.get("data", {}).get("itemType") not in SKIP_TYPES)
+        start += page_size
 
-        if len(page) < PAGE_SIZE:
+        if len(page) < page_size:
             break
         if total.isdigit() and start >= int(total):
             break
@@ -72,7 +76,7 @@ def search_zotero(query, user_id, api_key):
         item for item in collected
         if item.get("data", {}).get("itemType") not in SKIP_TYPES
     ]
-    return items[:MAX_RESULTS]
+    return items[:limit]
 
 
 # =====================================================================
@@ -266,6 +270,26 @@ def get_creators(data, kind):
         elif name:
             people.append({"first": "", "last": name, "group": True})
     return people
+
+
+def fetch_items_by_keys(keys, user_id, api_key):
+    """Zotero items for a list of item keys (50 per request)."""
+    url = f"{API_BASE}/users/{user_id}/items"
+    headers = {
+        "Zotero-API-Key": api_key,
+        "Zotero-API-Version": "3",
+    }
+    keys = list(keys)
+    found = []
+    for start in range(0, len(keys), 50):
+        params = {
+            "itemKey": ",".join(keys[start:start + 50]),
+            "limit": 100,
+            "format": "json",
+        }
+        page, _total = fetch_page(url, headers, params)
+        found.extend(page)
+    return found
 
 
 def get_authors(data):
@@ -481,14 +505,16 @@ def needs_initials(data, flagged):
     return bool(people) and sort_text(people[0]["last"]) in flagged
 
 
-def multiple_in_text(items):
-    """One combined citation: (Ahmed, 2019; Kumar, 2020; Singh, 1998, 2021)"""
+def multiple_in_text(items, context=None):
+    """One combined citation: (Ahmed, 2019; Kumar, 2020; Singh, 1998, 2021)
+    context: every reference cited in the paper (for a/b suffixes)."""
     items = unique_items(items)
     if not items:
         return ""
 
-    suffixes = year_suffixes(items)
-    flagged = surnames_needing_initials(items)
+    context = unique_items(context) if context else items
+    suffixes = year_suffixes(context)
+    flagged = surnames_needing_initials(context)
 
     order = []
     groups = {}
@@ -505,10 +531,11 @@ def multiple_in_text(items):
     return "(" + "; ".join(parts) + ")"
 
 
-def narrative_text(items):
+def narrative_text(items, context=None):
     items = unique_items(items)
-    suffixes = year_suffixes(items)
-    flagged = surnames_needing_initials(items)
+    context = unique_items(context) if context else items
+    suffixes = year_suffixes(context)
+    flagged = surnames_needing_initials(context)
     parts = []
     for item in sorted_items(items):
         data = item.get("data", {})
