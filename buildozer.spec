@@ -2,7 +2,7 @@
 
 title = Blaykie
 
-version = 1.0
+version = 2.0
 
 package.name = zoterocitationmanager
 
@@ -12,7 +12,7 @@ source.dir = .
 
 source.include_exts = py,png,ttf
 
-requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi
+requirements = python3==3.11.9,hostpython3==3.11.9,kivy==2.3.1,requests==2.28.1,urllib3==1.26.18,idna,certifi,androidstorage4kivy
 
 orientation = portrait
 
@@ -40,7 +40,7 @@ android.minapi = 24
 
 p4a.branch = v2026.05.09
 
-android.permissions = INTERNET,ACCESS_NETWORK_STATE
+android.permissions = INTERNET,ACCESS_NETWORK_STATE,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
 [buildozer]
 
