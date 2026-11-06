@@ -32,7 +32,7 @@ from kivy.utils import escape_markup, platform
 
 from theme import configure_theme, is_dark, resolve_color
 from ui import (
-    ACCENT_TEXT, BG, ERROR, LINE, MUTED, SURFACE, SURFACE2, TEXT,
+    ACCENT, ACCENT_TEXT, BG, ERROR, LINE, MUTED, SURFACE, SURFACE2, TEXT,
     GearButton, InputBox, Logo, PillButton, ResultCard, col, paint, small_label,
 )
 
