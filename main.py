@@ -696,8 +696,26 @@ class LabApp(App):
     # ------------------------------------------------------------------
 
     def open_block(self, block):
-        with timed("open paragraph box"):
-            self.build_paragraph_box(block)
+        try:
+            with timed("open paragraph box"):
+                self.build_paragraph_box(block)
+        except Exception:
+            self.report_error("open paragraph box")
+
+    def report_error(self, where):
+        """Show the error instead of letting the app close; keep it in the Speed log."""
+        text = traceback.format_exc()
+        PERF.append((f"ERROR in {where}:\n{text[-700:]}", 0))
+        del PERF[:-80]
+        try:
+            with open(os.path.join(self.user_data_dir, "crash.log"), "a", encoding="utf-8") as file:
+                file.write(f"--- {where} ---\n{text}\n")
+        except OSError:
+            pass
+        try:
+            self.info_label.text = "Error: " + text.strip().splitlines()[-1][:90]
+        except Exception:
+            pass
 
     def build_paragraph_box(self, block):
         project = self.project
