@@ -11,23 +11,27 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.widget import Widget
 from kivy.utils import get_color_from_hex
 
+from theme import resolve_color
+
+
 def col(hex_value, alpha=1.0):
-    r, g, b, _ = get_color_from_hex(hex_value)
+    r, g, b, _ = get_color_from_hex(resolve_color(hex_value))
     return (r, g, b, alpha)
 
 
-BG = "#0E1016"
-SURFACE = "#171A23"
-SURFACE2 = "#222744"
-SURFACE2_DOWN = "#2D3358"
-LINE = "#2C3244"
-BORDER2 = "#4A5168"
-ACCENT = "#5B4BEA"
-ACCENT_DOWN = "#4A3BD0"
-ACCENT_TEXT = "#B9B0FF"
-TEXT = "#F3F4F8"
-MUTED = "#A3A9BC"
-ERROR = "#FF8A8A"
+# Semantic roles resolve against the currently active palette at draw time.
+BG = "BG"
+SURFACE = "SURFACE"
+SURFACE2 = "SURFACE2"
+SURFACE2_DOWN = "SURFACE2_DOWN"
+LINE = "LINE"
+BORDER2 = "BORDER2"
+ACCENT = "ACCENT"
+ACCENT_DOWN = "ACCENT_DOWN"
+ACCENT_TEXT = "ACCENT_TEXT"
+TEXT = "TEXT"
+MUTED = "MUTED"
+ERROR = "ERROR"
 
 
 
@@ -117,7 +121,7 @@ class PillButton(ButtonBehavior, Label):
             text = (1, 1, 1, 1)
         elif self.style == "secondary":
             fill = col(SURFACE2_DOWN if pressed else SURFACE2)
-            edge = col("#3B4170")
+            edge = col("BUTTON_BORDER")
             text = col(ACCENT_TEXT)
         else:
             fill = col(LINE, 0.7 if pressed else 0.0)
