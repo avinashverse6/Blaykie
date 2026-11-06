@@ -30,6 +30,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.textinput import TextInput
 from kivy.utils import escape_markup, platform
 
+from theme import configure_theme, is_dark, resolve_color
 from ui import (
     ACCENT_TEXT, BG, ERROR, LINE, MUTED, SURFACE, SURFACE2, TEXT,
     GearButton, InputBox, Logo, PillButton, ResultCard, col, paint, small_label,
@@ -186,6 +187,10 @@ class LabApp(App):
         os.makedirs(self.docs_dir, exist_ok=True)
         self.state_path = os.path.join(self.user_data_dir, "state.json")
         self.config_path = os.path.join(self.user_data_dir, "credentials.json")
+        self.appearance_path = os.path.join(self.user_data_dir, "appearance.json")
+        self.theme_mode = self.load_theme_mode()
+        configure_theme(self.theme_mode, self.system_theme_is_dark())
+        Window.clearcolor = col(BG)
 
         self._save_event = None
         self.cards = {}
@@ -234,14 +239,90 @@ class LabApp(App):
         return False
 
     def on_resume(self):
-        pass
+        if self.theme_mode != "system":
+            return
+        previous = is_dark()
+        configure_theme(self.theme_mode, self.system_theme_is_dark())
+        if previous != is_dark():
+            self.refresh_for_theme()
+
+    def system_theme_is_dark(self):
+        """Read Android's current UI_MODE_NIGHT flag; default to light elsewhere."""
+        if platform != "android":
+            return False
+        try:
+            from jnius import autoclass
+            activity = autoclass("org.kivy.android.PythonActivity").mActivity
+            ui_mode = activity.getResources().getConfiguration().uiMode
+            return (ui_mode & 0x30) == 0x20  # UI_MODE_NIGHT_YES
+        except Exception:
+            return False
+
+    def load_theme_mode(self):
+        try:
+            with open(self.appearance_path, "r", encoding="utf-8") as file:
+                mode = json.load(file).get("theme", "system")
+            return mode if mode in ("light", "dark", "system") else "system"
+        except (OSError, ValueError, AttributeError):
+            return "system"
+
+    def persist_theme_mode(self):
+        try:
+            with open(self.appearance_path, "w", encoding="utf-8") as file:
+                json.dump({"theme": self.theme_mode}, file)
+        except OSError:
+            pass
+
+    def select_theme(self, mode):
+        """Persist and apply a selection immediately, preserving settings inputs."""
+        user_id, api_key = self.user_id.text, self.api_key.text
+        self.settings_view.dismiss()
+        self.theme_mode = mode
+        configure_theme(mode, self.system_theme_is_dark())
+        self.persist_theme_mode()
+        Window.clearcolor = col(BG)
+        self.show_home()
+        self.build_settings()
+        self.user_id.text, self.api_key.text = user_id, api_key
+        self.settings_view.open()
+
+    def refresh_for_theme(self):
+        """Recreate the active screen so every canvas and widget uses new colors."""
+        Window.clearcolor = col(BG)
+        if self.screen == "doc" and self.project:
+            scroll_y = getattr(getattr(self, "cards_scroll", None), "scroll_y", 1)
+            self.show_doc()
+            Clock.schedule_once(lambda dt: setattr(self.cards_scroll, "scroll_y", scroll_y), 0)
+        else:
+            was_settings_open = getattr(self, "settings_view", None) in SHEETS
+            credentials = (self.user_id.text, self.api_key.text) if was_settings_open else None
+            if was_settings_open:
+                self.settings_view.dismiss()
+            self.show_home()
+            if was_settings_open:
+                self.build_settings()
+                self.user_id.text, self.api_key.text = credentials
+                self.settings_view.open()
 
     # ------------------------------------------------------------------
     #  settings (Zotero details)
     # ------------------------------------------------------------------
 
     def build_settings(self):
-        view, panel = panel_view(0.62)
+        view, panel = panel_view(0.82)
+        panel.add_widget(small_label("Appearance", color=TEXT, size=18,
+                                     bold=True, height=30))
+        theme_row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(6))
+        for mode, title in (("light", "Light"), ("dark", "Dark"),
+                            ("system", "System Default")):
+            button = PillButton(
+                text=title,
+                style="primary" if mode == self.theme_mode else "secondary",
+                font_size=sp(12),
+            )
+            button.bind(on_release=lambda *args, selected=mode: self.select_theme(selected))
+            theme_row.add_widget(button)
+        panel.add_widget(theme_row)
         panel.add_widget(small_label("Zotero account", color=TEXT, size=18,
                                      bold=True, height=32))
         panel.add_widget(wrapped_label(
@@ -321,7 +402,7 @@ class LabApp(App):
             header.add_widget(Logo(LOGO_FILE, size_hint=(None, None),
                                    size=(dp(52), dp(52)), pos_hint={"center_y": 0.5}))
         title = Label(
-            text="[size=26sp][b]Blaykie[/b][/size]\n[size=12sp][color=#A3A9BC]"
+            text=f"[size=26sp][b]Blaykie[/b][/size]\n[size=12sp][color={resolve_color(MUTED)}]"
                  "Cite smarter. APA 7 in seconds.[/color][/size]",
             markup=True, color=col(TEXT), halign="left", valign="middle")
         title.bind(size=lambda w, v: setattr(w, "text_size", v))
@@ -647,7 +728,7 @@ class LabApp(App):
             text=project.block_text(block), multiline=True, keyboard_mode="managed",
             background_normal="", background_active="",
             background_color=col(SURFACE2), foreground_color=col(TEXT),
-            cursor_color=col(ACCENT_TEXT), selection_color=col("#5B4BEA", 0.45),
+            cursor_color=col(ACCENT_TEXT), selection_color=col(ACCENT, 0.45),
             font_size=sp(16), padding=[dp(12), dp(12)],
         )
         panel.add_widget(field)
@@ -752,8 +833,9 @@ class LabApp(App):
         before = escape_markup(text[max(0, start - 36):start])
         after = escape_markup(text[start:start + 36])
         where = Label(
-            text=f"[color=#A3A9BC]...{before}[/color][b][color=#B9B0FF] | [/color][/b]"
-                 f"[color=#A3A9BC]{after}...[/color]",
+            text=f"[color={resolve_color(MUTED)}]...{before}[/color]"
+                 f"[b][color={resolve_color(ACCENT_TEXT)}] | [/color][/b]"
+                 f"[color={resolve_color(MUTED)}]{after}...[/color]",
             markup=True, font_size=sp(12), halign="left", valign="top",
             size_hint_y=None, height=dp(44))
         where.bind(width=lambda w, v: setattr(w, "text_size", (v, None)))
@@ -864,7 +946,7 @@ class LabApp(App):
         else:
             who = f"{authors[0]['last']} et al."
         title = (data.get("title") or "[No title]")[:100]
-        text = (f"[size=14sp][color=#F3F4F8][b]{escape_markup(who)} \u00b7 "
+        text = (f"[size=14sp][color={resolve_color(TEXT)}][b]{escape_markup(who)} \u00b7 "
                 f"{escape_markup(get_year(data))}[/b][/color][/size]\n{escape_markup(title)}")
         card = ResultCard(text, lambda sel, n=number: self.toggle_item(n, sel))
         if number in self.cite_selected:
