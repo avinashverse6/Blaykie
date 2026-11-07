@@ -1,0 +1,144 @@
+{
+  "items": [
+    {
+      "key": "ONE1",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Citation studies in practice",
+        "creators": [
+          {
+            "firstName": "Ada",
+            "lastName": "Lovelace",
+            "creatorType": "author"
+          }
+        ],
+        "date": "2020",
+        "publicationTitle": "Journal of Testing",
+        "volume": "12",
+        "issue": "3",
+        "pages": "1-10",
+        "DOI": "10.1234/test.2020"
+      }
+    },
+    {
+      "key": "TWO2",
+      "data": {
+        "itemType": "book",
+        "title": "A thoughtful book",
+        "creators": [
+          {
+            "firstName": "Amy",
+            "lastName": "Adams",
+            "creatorType": "author"
+          },
+          {
+            "firstName": "Ben",
+            "lastName": "Brown",
+            "creatorType": "author"
+          }
+        ],
+        "date": "2019",
+        "publisher": "Example Press",
+        "edition": "2"
+      }
+    },
+    {
+      "key": "THREE3",
+      "data": {
+        "itemType": "bookSection",
+        "title": "A chapter",
+        "creators": [
+          {
+            "firstName": "Chris",
+            "lastName": "Clark",
+            "creatorType": "author"
+          },
+          {
+            "firstName": "Diana",
+            "lastName": "Davis",
+            "creatorType": "author"
+          },
+          {
+            "firstName": "Eve",
+            "lastName": "Evans",
+            "creatorType": "author"
+          },
+          {
+            "firstName": "Edward",
+            "lastName": "Editor",
+            "creatorType": "editor"
+          }
+        ],
+        "date": "2021",
+        "bookTitle": "An edited book",
+        "publisher": "Book Press",
+        "pages": "5-15"
+      }
+    },
+    {
+      "key": "NONE4",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "A title without authors",
+        "creators": [],
+        "date": "2022",
+        "publicationTitle": "Journal of Testing"
+      }
+    },
+    {
+      "key": "NODATE5",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Undated work",
+        "creators": [
+          {
+            "firstName": "Nora",
+            "lastName": "Nolan",
+            "creatorType": "author"
+          }
+        ],
+        "date": "",
+        "publicationTitle": "Journal of Testing"
+      }
+    },
+    {
+      "key": "INDIA6",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Language research",
+        "creators": [
+          {
+            "firstName": "आशा",
+            "lastName": "शर्मा",
+            "creatorType": "author"
+          },
+          {
+            "firstName": "આશા",
+            "lastName": "પટેલ",
+            "creatorType": "author"
+          }
+        ],
+        "date": "2023",
+        "publicationTitle": "Journal of Testing"
+      }
+    }
+  ],
+  "citations": [
+    "(Lovelace, 2020)",
+    "(Adams & Brown, 2019)",
+    "(Clark et al., 2021)",
+    "(\"A Title Without Authors,\" 2022)",
+    "(Nolan, n.d.)",
+    "(शर्मा & પટેલ, 2023)"
+  ],
+  "references": [
+    "Lovelace, A. (2020). Citation studies in practice. Journal of Testing, 12(3), 1–10. https://doi.org/10.1234/test.2020",
+    "Adams, A., & Brown, B. (2019). A thoughtful book (2nd ed.). Example Press.",
+    "Clark, C., Davis, D., & Evans, E. (2021). A chapter. In E. Editor (Ed.), An edited book (pp. 5–15). Book Press.",
+    "A title without authors. (2022). Journal of Testing.",
+    "Nolan, N. (n.d.). Undated work. Journal of Testing.",
+    "शर्मा, आ., & પટેલ, આ. (2023). Language research. Journal of Testing."
+  ],
+  "combinedCitation": "(Adams & Brown, 2019; Clark et al., 2021; Lovelace, 2020; Nolan, n.d.; \"A Title Without Authors,\" 2022; शर्मा & પટેલ, 2023)",
+  "referenceList": "Adams, A., & Brown, B. (2019). A thoughtful book (2nd ed.). Example Press.\n\nClark, C., Davis, D., & Evans, E. (2021). A chapter. In E. Editor (Ed.), An edited book (pp. 5–15). Book Press.\n\nLovelace, A. (2020). Citation studies in practice. Journal of Testing, 12(3), 1–10. https://doi.org/10.1234/test.2020\n\nNolan, N. (n.d.). Undated work. Journal of Testing.\n\nA title without authors. (2022). Journal of Testing.\n\nशर्मा, आ., & પટેલ, આ. (2023). Language research. Journal of Testing."
+}
