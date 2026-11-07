@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -12,6 +13,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -43,6 +45,10 @@ import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
+import org.blaykie.nativeapp.export.DOCX_MIME
+import org.blaykie.nativeapp.export.ExportController
+import org.blaykie.nativeapp.export.ExportPhase
+import org.blaykie.nativeapp.export.ExportScreen
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
@@ -69,6 +75,7 @@ class MainActivity : ComponentActivity() {
         val accountStore = AccountStore(filesDir, AndroidKeyCipher())
         val account = ViewModelProvider(this, AccountController.Factory(accountStore))[AccountController::class.java]
         val citationSearch = ViewModelProvider(this, CitationSearchController.Factory(accountStore))[CitationSearchController::class.java]
+        val exportController = ViewModelProvider(this, ExportController.Factory(applicationContext, sessions, accountStore))[ExportController::class.java]
         setContent {
             val settings by settingsStore.settings.collectAsState(initial = Settings())
             val dark = when (settings.theme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
@@ -77,7 +84,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                     Surface(Modifier.fillMaxSize()) {
-                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch) }
+                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch, exportController) }
                     }
                 }
             }
@@ -87,9 +94,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
     val accountState by account.state.collectAsState()
     val searchState by citationSearch.state.collectAsState()
+    val exportState by exportController.state.collectAsState()
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
@@ -140,6 +148,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
             Screen.DOCUMENT -> navigate(Screen.HOME)
+            Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
             Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
             Screen.HOME -> Unit
@@ -186,6 +195,23 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             loading = false
         }
     }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
+    LaunchedEffect(exportState.phase) {
+        if (exportState.phase == ExportPhase.CHOOSE && exportController.chooserLaunched()) {
+            try { exportPicker.launch(exportState.name) } catch (_: Exception) { exportController.destination(null); exportController.message("Could not open the save dialog.") }
+        }
+    }
+    fun sendExport(open: Boolean) {
+        val file = exportState.shareFile ?: return
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.exports", file)
+            val intent = if (open) Intent(Intent.ACTION_VIEW).setDataAndType(uri, DOCX_MIME) else Intent(Intent.ACTION_SEND).setType(DOCX_MIME).putExtra(Intent.EXTRA_STREAM, uri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.clipData = ClipData.newUri(context.contentResolver, "Exported document", uri)
+            context.startActivity(if (open) intent else Intent.createChooser(intent, "Share document"))
+        } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
+        catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
+    }
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -210,6 +236,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                         persist(s.copy(edits = s.edits.dropLast(1), draft = null)); reloadCards()
                     } else message = "Nothing to undo."
                 }) { Text("Undo") }
+                TextButton(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
             Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.titleLarge)
             Text("${session?.edits?.size ?: 0} edit(s)", style = MaterialTheme.typography.bodyMedium)
@@ -280,6 +307,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
             }, modifier = Modifier.fillMaxWidth().weight(1f))
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
+        }
+        Screen.EXPORT -> project?.let { p ->
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }

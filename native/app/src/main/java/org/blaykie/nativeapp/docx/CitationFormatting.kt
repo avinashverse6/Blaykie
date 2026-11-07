@@ -54,7 +54,7 @@ internal object CitationFormatting {
         return normalized.replace(Regex("[^a-z0-9]"), "").ifEmpty { normalized }
     }
     private fun titleSort(item: CitationItem) = sortKey(item.title.replace(Regex("^(a|an|the)\\s+", RegexOption.IGNORE_CASE), ""))
-    private fun ordered(items: List<CitationItem>) = items.distinctBy { it.key }.sortedWith(
+    internal fun ordered(items: List<CitationItem>) = items.distinctBy { it.key }.sortedWith(
         compareBy<CitationItem> { sortKey(it.authors.firstOrNull()?.last ?: "").ifEmpty { titleSort(it) } }
             .thenBy { sortKey(it.authors.firstOrNull()?.first ?: "") }
             .thenBy { year(it).toIntOrNull() ?: if (year(it) == "in press") 99999 else 0 }
@@ -69,7 +69,7 @@ internal object CitationFormatting {
         2 -> "${item.authors[0].last} $joiner ${item.authors[1].last}"
         else -> "${item.authors[0].last} et al."
     }
-    private fun suffixes(items: List<CitationItem>): Map<String, String> {
+    internal fun suffixes(items: List<CitationItem>): Map<String, String> {
         val groups = items.distinctBy { it.key }.groupBy { item ->
             val authorKey = item.authors.map { sortKey(it.last) to sortKey(it.first) }
             Triple(if (authorKey.isEmpty()) listOf("title" to titleSort(item)) else authorKey, year(item), item.authors.isEmpty())
