@@ -2,6 +2,28 @@
 
 **Cite smarter. APA 7 in seconds.**
 
+## Native Android app
+
+The native app opens a Word `.docx`, lets you edit supported paragraphs and insert citations from your Zotero library, and exports a new document with references. Review the exported document and keep the original.
+
+### Install
+
+When a native release is published, download its APK from the [Releases](../../releases) page, open it on an Android 7.0 (API 24) or newer device, and allow installation from your chosen source if Android asks. Verify the APK using the accompanying SHA-256 checksum; a debug build is a separate app and does not share the release app's data.
+
+### Privacy
+
+Your Zotero API key is stored encrypted on the phone. The app has no analytics and sends app network requests only to `api.zotero.org`; the key-creation button opens `zotero.org` in your browser.
+
+### Known limitations
+
+- A Zotero API key must be supplied manually for now.
+- Documents are presented as paragraph cards rather than a page view.
+- Tables and protected document content cannot be edited; review formatting after export.
+
+## Kivy app
+
+The remainder of this document describes the existing Kivy app and its build process.
+
 Blaykie is an Android app that inserts APA 7 citations from your [Zotero](https://www.zotero.org) library straight into your own Word document, right where you tap, and builds the reference list for you. It then exports a **new** `.docx`. Your original file is never changed.
 
 Blaykie is not a word processor. It does one job: citing from Zotero into your document, on your phone.
