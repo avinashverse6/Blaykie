@@ -60,6 +60,10 @@ class SessionStoreTest {
         assertSame(UndoResult.Failed, result)
         assertEquals(changed, ready.project.blockText(0)); assertEquals(session.edits, (store.read() as SessionRead.Ready).session.edits)
         assertEquals(session.draft, (store.read() as SessionRead.Ready).session.draft); assertArrayEquals(bytes, source.readBytes())
+        val documentSession = session.copy(draft = null); store.save(documentSession)
+        assertSame(UndoResult.Failed, undoTransaction(documentSession, null, store::read) { throw IOException("simulated save failure") })
+        assertEquals(changed, ready.project.blockText(0)); assertEquals(documentSession.edits, (store.read() as SessionRead.Ready).session.edits)
+        store.save(session)
         val success = store.undo(session, 0) as UndoResult.Success
         assertEquals("alpha bravo charlie delta echo", success.project.blockText(0))
         assertEquals(success.project.blockText(0), success.session.draft!!.text)
@@ -86,6 +90,15 @@ class SessionStoreTest {
         val fresh = opened(store)
         assertEquals(0, store.unexportedEdits(fresh.session, fresh.project))
         store.end(); assertFalse(File(temp.root, "export-revision.json").exists())
+    }
+    @Test fun failedExportTrackingKeepsEditsUnexported() {
+        val store = SessionStore(temp.root); val ready = opened(store)
+        val text = "alpha BRAVO charlie delta echo"
+        assertTrue(ready.project.applyTextEdit(0, text))
+        val session = ready.session.copy(edits = listOf(EditOperation(0, text))); store.save(session)
+        File(temp.root, "export-revision.json").mkdir()
+        assertFalse(store.recordExport(session))
+        assertEquals(1, store.unexportedEdits(session, ready.project))
     }
     @Test fun corruptSessionAndMissingSourceAreInvalid() {
         val store = SessionStore(temp.root); val ready = opened(store)

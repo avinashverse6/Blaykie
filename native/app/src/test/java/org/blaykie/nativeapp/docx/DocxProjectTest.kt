@@ -68,6 +68,21 @@ class DocxProjectTest {
         assertTrue(project.undo()); assertEquals(setOf("ONE1", "TWO2"), project.presentKeys())
         assertTrue(project.undo()); assertTrue(project.presentKeys().isEmpty())
     }
+    @Test fun deletingMultiCitationRangeRemovesAllNestedBookmarks() {
+        val fixture = Json.parseToJsonElement(resource("nested-delete-golden.json").toString(Charsets.UTF_8)) as JsonObject
+        val items = (fixture["items"] as JsonArray).map { value ->
+            val item = value as JsonObject
+            ZoteroItem((item["key"] as JsonPrimitive).content, item["data"] as JsonObject).citationItem()
+        }
+        val source = File(temp.root, "source.docx").apply { writeBytes(resource("m4c/source.docx")) }
+        val bytes = source.readBytes(); val project = DocxProject(source); val before = project.blockText(1)
+        project.insertCitation(1, before.length, before.length, items)
+        project.deleteRange(1, before.length + 1, project.blockText(1).length)
+        assertEquals(before, project.blockText(1)); assertTrue(project.presentKeys().isEmpty())
+        val exported = output(); project.export(exported)
+        val xml = zipContent(exported).getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertFalse(xml.contains("BLK_BIBLIOGRAPHY")); assertArrayEquals(bytes, source.readBytes())
+    }
     @Test fun insertCitation() {
         val project = DocxProject(makeDocx())
         assertEquals(1, project.insertCitation(0, first.length, first.length, listOf(item)))
