@@ -114,6 +114,17 @@ class SessionStoreTest {
         assertTrue(File(temp.root, "session-sources/${second.session.sourceName}").exists())
         store.end(); assertFalse(File(temp.root, "session-sources/${second.session.sourceName}").exists())
     }
+    @Test fun openingAnotherDocumentAndEndingNeverChangesOriginalSource() {
+        val original = File(temp.root, "original-user.docx").apply { writeBytes(fixture()) }
+        val before = original.readBytes(); val store = SessionStore(temp.root)
+        val first = store.open("content://example/original", "original.docx") { target -> original.copyTo(target) }
+        val edited = "alpha BRAVO charlie delta echo"
+        assertTrue(first.project.applyTextEdit(0, edited))
+        store.save(first.session.copy(edits = listOf(EditOperation(0, edited))))
+        store.open("content://example/other", "other.docx") { it.writeBytes(fixture()) }
+        assertArrayEquals(before, original.readBytes())
+        store.end(); assertArrayEquals(before, original.readBytes())
+    }
     @Test fun backStackClosesEditorThenDocumentThenExits() {
         assertEquals(Screen.DOCUMENT, backTarget(Screen.EDITOR)); assertEquals(Screen.HOME, backTarget(Screen.DOCUMENT))
         assertNull(backTarget(Screen.HOME)); assertEquals(Screen.SETTINGS, backTarget(Screen.LAST_CRASH))
