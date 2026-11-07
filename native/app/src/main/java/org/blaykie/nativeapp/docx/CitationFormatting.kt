@@ -96,8 +96,61 @@ internal object CitationFormatting {
             .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
         return normalized.replace(Regex("[^a-z0-9]"), "").ifEmpty { normalized }
     }
+    // Unicode 14 canonical-combining-class nonzero ranges, matching Python's unicodedata.combining.
+    // Some nonspacing marks have class zero and must be retained (notably in Indic scripts).
+    private val combiningRanges = intArrayOf(
+        0x300, 0x34E, 0x350, 0x36F, 0x483, 0x487, 0x591, 0x5BD, 0x5BF, 0x5BF, 0x5C1, 0x5C2,
+        0x5C4, 0x5C5, 0x5C7, 0x5C7, 0x610, 0x61A, 0x64B, 0x65F, 0x670, 0x670, 0x6D6, 0x6DC,
+        0x6DF, 0x6E4, 0x6E7, 0x6E8, 0x6EA, 0x6ED, 0x711, 0x711, 0x730, 0x74A, 0x7EB, 0x7F3,
+        0x7FD, 0x7FD, 0x816, 0x819, 0x81B, 0x823, 0x825, 0x827, 0x829, 0x82D, 0x859, 0x85B,
+        0x898, 0x89F, 0x8CA, 0x8E1, 0x8E3, 0x8FF, 0x93C, 0x93C, 0x94D, 0x94D, 0x951, 0x954,
+        0x9BC, 0x9BC, 0x9CD, 0x9CD, 0x9FE, 0x9FE, 0xA3C, 0xA3C, 0xA4D, 0xA4D, 0xABC, 0xABC,
+        0xACD, 0xACD, 0xB3C, 0xB3C, 0xB4D, 0xB4D, 0xBCD, 0xBCD, 0xC3C, 0xC3C, 0xC4D, 0xC4D,
+        0xC55, 0xC56, 0xCBC, 0xCBC, 0xCCD, 0xCCD, 0xD3B, 0xD3C, 0xD4D, 0xD4D, 0xDCA, 0xDCA,
+        0xE38, 0xE3A, 0xE48, 0xE4B, 0xEB8, 0xEBA, 0xEC8, 0xECB, 0xF18, 0xF19, 0xF35, 0xF35,
+        0xF37, 0xF37, 0xF39, 0xF39, 0xF71, 0xF72, 0xF74, 0xF74, 0xF7A, 0xF7D, 0xF80, 0xF80,
+        0xF82, 0xF84, 0xF86, 0xF87, 0xFC6, 0xFC6, 0x1037, 0x1037, 0x1039, 0x103A, 0x108D, 0x108D,
+        0x135D, 0x135F, 0x1714, 0x1715, 0x1734, 0x1734, 0x17D2, 0x17D2, 0x17DD, 0x17DD, 0x18A9, 0x18A9,
+        0x1939, 0x193B, 0x1A17, 0x1A18, 0x1A60, 0x1A60, 0x1A75, 0x1A7C, 0x1A7F, 0x1A7F, 0x1AB0, 0x1ABD,
+        0x1ABF, 0x1ACE, 0x1B34, 0x1B34, 0x1B44, 0x1B44, 0x1B6B, 0x1B73, 0x1BAA, 0x1BAB, 0x1BE6, 0x1BE6,
+        0x1BF2, 0x1BF3, 0x1C37, 0x1C37, 0x1CD0, 0x1CD2, 0x1CD4, 0x1CE0, 0x1CE2, 0x1CE8, 0x1CED, 0x1CED,
+        0x1CF4, 0x1CF4, 0x1CF8, 0x1CF9, 0x1DC0, 0x1DFF, 0x20D0, 0x20DC, 0x20E1, 0x20E1, 0x20E5, 0x20F0,
+        0x2CEF, 0x2CF1, 0x2D7F, 0x2D7F, 0x2DE0, 0x2DFF, 0x302A, 0x302F, 0x3099, 0x309A, 0xA66F, 0xA66F,
+        0xA674, 0xA67D, 0xA69E, 0xA69F, 0xA6F0, 0xA6F1, 0xA806, 0xA806, 0xA82C, 0xA82C, 0xA8C4, 0xA8C4,
+        0xA8E0, 0xA8F1, 0xA92B, 0xA92D, 0xA953, 0xA953, 0xA9B3, 0xA9B3, 0xA9C0, 0xA9C0, 0xAAB0, 0xAAB0,
+        0xAAB2, 0xAAB4, 0xAAB7, 0xAAB8, 0xAABE, 0xAABF, 0xAAC1, 0xAAC1, 0xAAF6, 0xAAF6, 0xABED, 0xABED,
+        0xFB1E, 0xFB1E, 0xFE20, 0xFE2F, 0x101FD, 0x101FD, 0x102E0, 0x102E0, 0x10376, 0x1037A, 0x10A0D, 0x10A0D,
+        0x10A0F, 0x10A0F, 0x10A38, 0x10A3A, 0x10A3F, 0x10A3F, 0x10AE5, 0x10AE6, 0x10D24, 0x10D27, 0x10EAB, 0x10EAC,
+        0x10F46, 0x10F50, 0x10F82, 0x10F85, 0x11046, 0x11046, 0x11070, 0x11070, 0x1107F, 0x1107F, 0x110B9, 0x110BA,
+        0x11100, 0x11102, 0x11133, 0x11134, 0x11173, 0x11173, 0x111C0, 0x111C0, 0x111CA, 0x111CA, 0x11235, 0x11236,
+        0x112E9, 0x112EA, 0x1133B, 0x1133C, 0x1134D, 0x1134D, 0x11366, 0x1136C, 0x11370, 0x11374, 0x11442, 0x11442,
+        0x11446, 0x11446, 0x1145E, 0x1145E, 0x114C2, 0x114C3, 0x115BF, 0x115C0, 0x1163F, 0x1163F, 0x116B6, 0x116B7,
+        0x1172B, 0x1172B, 0x11839, 0x1183A, 0x1193D, 0x1193E, 0x11943, 0x11943, 0x119E0, 0x119E0, 0x11A34, 0x11A34,
+        0x11A47, 0x11A47, 0x11A99, 0x11A99, 0x11C3F, 0x11C3F, 0x11D42, 0x11D42, 0x11D44, 0x11D45, 0x11D97, 0x11D97,
+        0x16AF0, 0x16AF4, 0x16B30, 0x16B36, 0x16FF0, 0x16FF1, 0x1BC9E, 0x1BC9E, 0x1D165, 0x1D169, 0x1D16D, 0x1D172,
+        0x1D17B, 0x1D182, 0x1D185, 0x1D18B, 0x1D1AA, 0x1D1AD, 0x1D242, 0x1D244, 0x1E000, 0x1E006, 0x1E008, 0x1E018,
+        0x1E01B, 0x1E021, 0x1E023, 0x1E024, 0x1E026, 0x1E02A, 0x1E130, 0x1E136, 0x1E2AE, 0x1E2AE, 0x1E2EC, 0x1E2EF,
+        0x1E8D0, 0x1E8D6, 0x1E944, 0x1E94A,
+    )
+    private fun pythonSortKey(value: String): String {
+        val normalized = java.text.Normalizer.normalize(value.trim().lowercase(), java.text.Normalizer.Form.NFKD)
+        val kept = StringBuilder()
+        var i = 0
+        while (i < normalized.length) {
+            val cp = normalized.codePointAt(i)
+            var low = 0; var high = combiningRanges.size / 2 - 1; var combining = false
+            while (low <= high) {
+                val mid = (low + high) ushr 1; val first = combiningRanges[mid * 2]; val last = combiningRanges[mid * 2 + 1]
+                if (cp < first) high = mid - 1 else if (cp > last) low = mid + 1 else { combining = true; break }
+            }
+            if (!combining) kept.appendCodePoint(cp)
+            i += Character.charCount(cp)
+        }
+        val text = kept.toString()
+        return text.replace(Regex("[^a-z0-9]"), "").ifEmpty { text }
+    }
     private fun titleSort(item: CitationItem) = sortKey(item.title.trim().replace(Regex("^(a|an|the)\\s+", RegexOption.IGNORE_CASE), ""))
-    private fun namesKey(item: CitationItem): List<Pair<String, String>> = if (item.authors.isEmpty()) listOf(titleSort(item) to "") else item.authors.map { sortKey(it.last) to sortKey(it.first) }
+    private fun namesKey(item: CitationItem): List<Pair<String, String>> = if (item.authors.isEmpty()) listOf(titleSort(item) to "") else item.authors.map { (if (it.group) pythonSortKey(it.last) else sortKey(it.last)) to sortKey(it.first) }
     private fun compareNames(a: List<Pair<String, String>>, b: List<Pair<String, String>>): Int {
         for (i in 0 until minOf(a.size, b.size)) {
             val last = a[i].first.compareTo(b[i].first); if (last != 0) return last
@@ -212,13 +265,13 @@ internal object CitationFormatting {
             if (authors.isEmpty()) add(" $date.")
             add(" ")
         }
-        fun sameName(a: String, b: String) = sortKey(a).isNotEmpty() && sortKey(a) == sortKey(b)
+        fun sameName(a: String, b: String) = pythonSortKey(a).isNotEmpty() && pythonSortKey(a) == pythonSortKey(b)
         fun publisher(value: String, author: String = authors) { val p = value.trim(); if (p.isNotEmpty() && !sameName(p, author)) add("$p.") }
         fun usableUrl(): String = item.url.trim().takeUnless { value -> listOf("ebscohost", "proquest", "ezproxy", "galegroup", "gale.com", "infotrac", "lexisnexis", "libproxy", "oclc.org", "worldcat").any { it in value.lowercase() } }.orEmpty()
-        fun link() {
+        fun link(allowUrl: Boolean = true) {
             val doi = item.doi.trim().ifEmpty { Regex("^\\s*DOI:\\s*(\\S+)", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)).find(item.extra.trim())?.groupValues?.get(1).orEmpty() }
             if (doi.isNotEmpty()) add(" https://doi.org/" + doi.replace(Regex("^(?:doi:\\s*|https?://(?:dx\\.)?doi\\.org/)", RegexOption.IGNORE_CASE), "").trim())
-            else if (usableUrl().isNotEmpty()) add(" ${usableUrl()}")
+            else if (allowUrl && usableUrl().isNotEmpty()) add(" ${usableUrl()}")
         }
         fun pages(prefix: Boolean = true): String {
             val p = item.pages.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
@@ -251,7 +304,30 @@ internal object CitationFormatting {
             if (locator.isNotEmpty()) add(", $locator")
             add(".")
         }
+        fun chapter(container: String) {
+            begin("year", false)
+            val editors = item.editors.map { if (it.group) it.last else "${initials(it.first)} ${it.last}".trim() }
+            val editorText = when (editors.size) { 0 -> ""; 1 -> "${editors[0]} (Ed.)"; 2 -> "${editors[0]} & ${editors[1]} (Eds.)"; else -> editors.dropLast(1).joinToString(", ") + ", & ${editors.last()} (Eds.)" }
+            if (container.isNotEmpty() || editorText.isNotEmpty()) {
+                add("In "); if (editorText.isNotEmpty()) add(editorText + if (container.isNotEmpty()) ", " else "")
+                add(container, true)
+                val details = mutableListOf<String>(); if (edition().isNotEmpty()) details += edition(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"; if (pages().isNotEmpty()) details += pages()
+                if (details.isNotEmpty()) add(" (${details.joinToString(", ")})")
+                add(". ")
+            }
+            publisher(item.publisher); link()
+        }
+        fun book() {
+            val details = mutableListOf<String>(); if (edition().isNotEmpty()) details += edition(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"
+            begin("year", true, if (details.isEmpty()) "" else "(${details.joinToString(", ")})")
+            publisher(item.publisher)
+            val hasDoi = item.doi.isNotBlank() || Regex("^\\s*DOI:\\s*(\\S+)", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)).containsMatchIn(item.extra.trim())
+            if (hasDoi) link(false) else if (item.publisher.isBlank()) link()
+        }
         when (item.itemType) {
+            "journalArticle" -> { begin("year", false); periodical(false); link() }
+            "book" -> book()
+            "bookSection" -> chapter(item.bookTitle.trim())
             "magazineArticle", "newspaperArticle" -> { begin("day", false); periodical(item.itemType == "newspaperArticle"); link() }
             "webpage" -> {
                 begin("day", true, item.websiteType.trim().let { if (it.isEmpty()) "" else "[$it]" })
@@ -263,7 +339,7 @@ internal object CitationFormatting {
                 if (blog.isNotEmpty()) { add(blog, true); add(".") }
                 if (usableUrl().isNotEmpty()) add(" ${usableUrl()}")
             }
-            "report" -> {
+            "report", "document" -> {
                 val number = item.reportNumber.trim(); val type = item.reportType.trim()
                 val extras = if (number.isNotEmpty()) {
                     if (Regex("^(report|rep\\.|no\\.?|publication|technical|working)", RegexOption.IGNORE_CASE).containsMatchIn(number)) "($number)"
@@ -287,18 +363,17 @@ internal object CitationFormatting {
             }
             "conferencePaper" -> {
                 if (item.proceedingsTitle.trim().isNotEmpty()) {
-                    begin("year", false)
-                    val editors = item.editors.map { if (it.group) it.last else "${initials(it.first)} ${it.last}".trim() }
-                    val editorText = when (editors.size) { 0 -> ""; 1 -> "${editors[0]} (Ed.)"; 2 -> "${editors[0]} & ${editors[1]} (Eds.)"; else -> editors.dropLast(1).joinToString(", ") + ", & ${editors.last()} (Eds.)" }
-                    add("In "); if (editorText.isNotEmpty()) add("$editorText, "); add(item.proceedingsTitle.trim(), true)
-                    val details = mutableListOf<String>(); if (edition().isNotEmpty()) details += edition(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"; if (pages().isNotEmpty()) details += pages()
-                    if (details.isNotEmpty()) add(" (${details.joinToString(", ")})")
-                    add(". "); publisher(item.publisher); link()
+                    chapter(item.proceedingsTitle.trim())
                 } else if (item.conferenceName.trim().isNotEmpty()) {
                     begin("day", true, "[Paper presentation]"); add(item.conferenceName.trim() + (if (item.place.isNotBlank()) ", ${item.place.trim()}" else "") + "."); link()
                 } else { begin("year", false); publisher(item.publisher, ""); link() }
             }
             "preprint" -> { begin("year", false); if (item.repository.isNotBlank()) { add(item.repository.trim(), true); add(".") }; link() }
+            else -> when {
+                item.publicationTitle.isNotBlank() -> { begin("year", false); periodical(false); link() }
+                item.publisher.isNotBlank() -> book()
+                else -> { begin("year", false); link() }
+            }
         }
         val merged = mutableListOf<Pair<String, Boolean>>()
         for ((text, italic) in parts) {
@@ -312,7 +387,7 @@ internal object CitationFormatting {
     }
 
     fun reference(item: CitationItem, suffix: String = ""): List<Pair<String, Boolean>> {
-        if (item.itemType in setOf("magazineArticle", "newspaperArticle", "webpage", "blogPost", "report", "thesis", "conferencePaper", "preprint")) return round2Reference(item, suffix)
+        if (item.authors.any { it.group } || item.itemType in setOf("magazineArticle", "newspaperArticle", "webpage", "blogPost", "report", "thesis", "conferencePaper", "preprint")) return round2Reference(item, suffix)
         val names = item.authors.map { author ->
             val initials = author.first.trim().replace(".", " ").split(Regex("\\s+"))
                 .filter { it.isNotEmpty() }
