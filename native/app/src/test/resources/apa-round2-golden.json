@@ -412,6 +412,8 @@
         ],
         "proceedingsTitle": "Proceedings of Science",
         "publisher": "Publisher",
+        "edition": "second",
+        "volume": "2",
         "pages": "3-7",
         "DOI": "https://doi.org/10.7/conf"
       }
@@ -486,6 +488,16 @@
           }
         ],
         "publisher": "Institute"
+      }
+    },
+    {
+      "key": "BARE",
+      "data": {
+        "itemType": "webpage",
+        "title": "Future without month",
+        "date": "2101",
+        "creators": [],
+        "url": "https://example.org/future"
       }
     },
     {
@@ -921,7 +933,7 @@
           true
         ],
         [
-          " (pp. 3–7). Publisher. https://doi.org/10.7/conf",
+          " (2nd ed., Vol. 2, pp. 3–7). Publisher. https://doi.org/10.7/conf",
           false
         ]
       ]
@@ -1014,6 +1026,22 @@
         ],
         [
           ". Institute.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "BARE",
+      "year": "n.d.",
+      "parenthetical": "(Future Without Month, n.d.)",
+      "narrative": "Future Without Month (n.d.)",
+      "reference_parts": [
+        [
+          "Future without month",
+          true
+        ],
+        [
+          ". (n.d.). https://example.org/future",
           false
         ]
       ]

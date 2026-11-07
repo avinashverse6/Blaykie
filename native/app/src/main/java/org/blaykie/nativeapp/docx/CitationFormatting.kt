@@ -224,6 +224,22 @@ internal object CitationFormatting {
             val p = item.pages.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
             return if (p.isEmpty() || !prefix) p else (if ('–' in p || ',' in p) "pp. " else "p. ") + p
         }
+        fun edition(): String {
+            var text = item.edition.trim(); if (text.isEmpty()) return ""
+            val low = text.lowercase().trimEnd('.').replace(Regex("\\s*(edition|ed)$"), "").trim()
+            val words = listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+            val number = low.toIntOrNull() ?: Regex("(\\d+)(?:st|nd|rd|th)").matchEntire(low)?.groupValues?.get(1)?.toIntOrNull() ?: words.indexOf(low).let { if (it < 0) null else it + 1 }
+            if (number != null) {
+                if (number == 1) return ""
+                val suffix = if (number % 100 in 10..20) "th" else when (number % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }
+                return "$number$suffix ed."
+            }
+            text = text.replace(Regex("\\s*edition$", RegexOption.IGNORE_CASE), "").trim()
+            if (text.lowercase().trimEnd('.') in setOf("rev", "revised")) return "Rev. ed."
+            if (!Regex("\\bed\\.?$", RegexOption.IGNORE_CASE).containsMatchIn(text)) text += " ed."
+            else if (!text.endsWith('.')) text += "."
+            return text
+        }
         fun periodical(prefix: Boolean) {
             val name = item.publicationTitle.trim(); if (name.isEmpty()) return
             add(if (name.uppercase() == name) name else titleCase(name, false), true)
@@ -275,7 +291,7 @@ internal object CitationFormatting {
                     val editors = item.editors.map { if (it.group) it.last else "${initials(it.first)} ${it.last}".trim() }
                     val editorText = when (editors.size) { 0 -> ""; 1 -> "${editors[0]} (Ed.)"; 2 -> "${editors[0]} & ${editors[1]} (Eds.)"; else -> editors.dropLast(1).joinToString(", ") + ", & ${editors.last()} (Eds.)" }
                     add("In "); if (editorText.isNotEmpty()) add("$editorText, "); add(item.proceedingsTitle.trim(), true)
-                    val details = mutableListOf<String>(); if (item.edition.isNotBlank()) details += item.edition.trim(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"; if (pages().isNotEmpty()) details += pages()
+                    val details = mutableListOf<String>(); if (edition().isNotEmpty()) details += edition(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"; if (pages().isNotEmpty()) details += pages()
                     if (details.isNotEmpty()) add(" (${details.joinToString(", ")})")
                     add(". "); publisher(item.publisher); link()
                 } else if (item.conferenceName.trim().isNotEmpty()) {
