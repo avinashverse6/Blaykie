@@ -23,18 +23,32 @@ data class CitationItem(
     val editors: List<CitationAuthor> = emptyList(),
     val url: String = "",
     val editorLead: Boolean = false,
+    val extra: String = "",
+    val websiteType: String = "",
+    val websiteTitle: String = "",
+    val blogTitle: String = "",
+    val reportNumber: String = "",
+    val reportType: String = "",
+    val institution: String = "",
+    val thesisType: String = "",
+    val university: String = "",
+    val archive: String = "",
+    val proceedingsTitle: String = "",
+    val conferenceName: String = "",
+    val place: String = "",
+    val repository: String = "",
 )
 
 internal object CitationFormatting {
     private val minorWords = setOf("a", "an", "the", "and", "but", "or", "for", "nor", "as", "at", "by", "in", "of", "off", "on", "per", "to", "up", "via")
-    private fun titleCase(value: String): String {
+    private fun titleCase(value: String, capitalizeWords: Boolean = true): String {
         var beginning = true
         return value.trim().split(" ").joinToString(" ") { word ->
             val fixed = word.split("-").mapIndexed { index, piece ->
                 val core = piece.trim { !it.isLetterOrDigit() && it != '_' }
                 if (core.isEmpty()) piece
                 else if (core.lowercase() in minorWords && !(beginning && index == 0)) piece.lowercase()
-                else if (core.all { !it.isLetter() || it.isLowerCase() }) {
+                else if (capitalizeWords && core.all { !it.isLetter() || it.isLowerCase() }) {
                     val position = piece.indexOf(core.first())
                     piece.substring(0, position) + piece.substring(position).replaceFirstChar { it.titlecase() }
                 } else piece
@@ -43,31 +57,86 @@ internal object CitationFormatting {
             fixed
         }
     }
-    private fun year(item: CitationItem): String {
-        if (item.date.contains("in press", true) || item.date.contains("forthcoming", true)) return "in press"
-        return Regex("\\b(1\\d{3}|20\\d{2})\\b").find(item.date)?.value ?: "n.d."
+    private data class ParsedDate(val year: Int?, val month: Int? = null, val day: Int? = null, val label: String = "")
+    private val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+    private fun parseDate(value: String): ParsedDate {
+        val text = value.trim(); val lower = text.lowercase()
+        if (text.isEmpty() || lower in setOf("n.d.", "nd", "no date", "undated")) return ParsedDate(null, label = "n.d.")
+        if ("in press" in lower || "forthcoming" in lower) return ParsedDate(null, label = "in press")
+        val iso = Regex("\\b(\\d{4})[-/.](\\d{1,2})(?:[-/.](\\d{1,2}))?\\b").find(text)
+        if (iso != null) {
+            val month = iso.groupValues[2].toInt()
+            val day = iso.groupValues[3].toIntOrNull()?.takeIf { it in 1..31 }
+            if (month in 1..12) return ParsedDate(iso.groupValues[1].toInt(), month, day)
+        }
+        val match = Regex("\\b(1\\d{3}|20\\d{2})\\b").find(text) ?: return ParsedDate(null, label = "n.d.")
+        val rest = text.substring(0, match.range.first) + " " + text.substring(match.range.last + 1)
+        val month = Regex("[A-Za-z]+").findAll(rest).mapNotNull { word ->
+            val w = word.value.lowercase()
+            val i = months.indexOfFirst { it.lowercase() == w || it.take(3).lowercase() == w || (it == "September" && w == "sept") }
+            if (i < 0) null else i + 1
+        }.firstOrNull()
+        val day = if (month == null) null else Regex("\\b(\\d{1,2})(?:st|nd|rd|th)?\\b").find(rest)?.groupValues?.get(1)?.toIntOrNull()?.takeIf { it in 1..31 }
+        return ParsedDate(match.value.toInt(), month, day)
     }
+    private fun dateText(item: CitationItem, level: String = "year", suffix: String = ""): String {
+        val date = parseDate(item.date)
+        if (date.year == null) return date.label + if (suffix.isEmpty()) "" else "-$suffix"
+        var text = "${date.year}$suffix"
+        if (level in setOf("month", "day") && date.month != null) {
+            text += ", ${months[date.month - 1]}"
+            if (level == "day" && date.day != null) text += " ${date.day}"
+        }
+        return text
+    }
+    private fun year(item: CitationItem): String = dateText(item)
     fun displayYear(item: CitationItem): String = year(item)
     private fun sortKey(value: String): String {
-        val normalized = java.text.Normalizer.normalize(value.lowercase(), java.text.Normalizer.Form.NFKD)
+        val normalized = java.text.Normalizer.normalize(value.trim().lowercase(), java.text.Normalizer.Form.NFKD)
             .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
         return normalized.replace(Regex("[^a-z0-9]"), "").ifEmpty { normalized }
     }
-    private fun titleSort(item: CitationItem) = sortKey(item.title.replace(Regex("^(a|an|the)\\s+", RegexOption.IGNORE_CASE), ""))
-    internal fun ordered(items: List<CitationItem>) = items.distinctBy { it.key }.sortedWith(
-        compareBy<CitationItem> { sortKey(it.authors.firstOrNull()?.last ?: "").ifEmpty { titleSort(it) } }
-            .thenBy { sortKey(it.authors.firstOrNull()?.first ?: "") }
-            .thenBy { year(it).toIntOrNull() ?: if (year(it) == "in press") 99999 else 0 }
-            .thenBy { titleSort(it) }
-    )
-    private fun label(item: CitationItem, joiner: String = "&"): String = when (item.authors.size) {
-        0 -> {
-            val title = titleCase(item.title.ifBlank { "Untitled" }).split(Regex("\\s+")).take(6).joinToString(" ").trimEnd('.', ',', ':', ';')
-            if (item.itemType in setOf("journalArticle", "bookSection", "newspaperArticle", "magazineArticle", "blogPost", "conferencePaper", "encyclopediaArticle", "dictionaryEntry", "preprint", "forumPost")) "\"$title\"" else title
+    private fun titleSort(item: CitationItem) = sortKey(item.title.trim().replace(Regex("^(a|an|the)\\s+", RegexOption.IGNORE_CASE), ""))
+    private fun namesKey(item: CitationItem): List<Pair<String, String>> = if (item.authors.isEmpty()) listOf(titleSort(item) to "") else item.authors.map { sortKey(it.last) to sortKey(it.first) }
+    private fun compareNames(a: List<Pair<String, String>>, b: List<Pair<String, String>>): Int {
+        for (i in 0 until minOf(a.size, b.size)) {
+            val last = a[i].first.compareTo(b[i].first); if (last != 0) return last
+            val first = a[i].second.compareTo(b[i].second); if (first != 0) return first
         }
-        1 -> item.authors[0].last
-        2 -> "${item.authors[0].last} $joiner ${item.authors[1].last}"
-        else -> "${item.authors[0].last} et al."
+        return a.size.compareTo(b.size)
+    }
+    internal fun ordered(items: List<CitationItem>) = items.distinctBy { it.key }.sortedWith { a, b ->
+        val names = compareNames(namesKey(a), namesKey(b))
+        if (names != 0) names else {
+            fun yearOrder(item: CitationItem): Int = parseDate(item.date).let { it.year ?: if (it.label == "in press") 99999 else 0 }
+            val years = yearOrder(a).compareTo(yearOrder(b))
+            if (years != 0) years else titleSort(a).compareTo(titleSort(b))
+        }
+    }
+    private fun initials(value: String): String = value.trim().replace(".", " ").split(Regex("\\s+"))
+        .filter { it.isNotEmpty() }.joinToString(" ") { word -> word.split('-').filter { it.isNotEmpty() }.joinToString("-") { part ->
+            String(Character.toChars(part.codePointAt(0))).uppercase() + "."
+        } }
+    private fun surnamesNeedingInitials(items: List<CitationItem>): Set<String> {
+        val seen = mutableMapOf<String, MutableSet<String>>()
+        items.distinctBy { it.key }.forEach { item ->
+            val first = item.authors.firstOrNull()
+            if (first != null && !first.group) seen.getOrPut(sortKey(first.last)) { mutableSetOf() }.add(initials(first.first))
+        }
+        return seen.filterValues { it.size > 1 }.keys
+    }
+    private fun label(item: CitationItem, joiner: String = "&", flagged: Set<String> = emptySet()): String {
+        if (item.authors.isEmpty()) {
+            val title = titleCase(item.title.ifBlank { "Untitled" }).split(Regex("\\s+")).take(6).joinToString(" ").trimEnd('.', ',', ':', ';')
+            return if (item.itemType in setOf("journalArticle", "bookSection", "newspaperArticle", "magazineArticle", "blogPost", "conferencePaper", "encyclopediaArticle", "dictionaryEntry", "preprint", "forumPost")) "\"$title\"" else title
+        }
+        val first = item.authors[0]
+        val name = if (!first.group && first.first.isNotEmpty() && sortKey(first.last) in flagged) "${initials(first.first)} ${first.last}" else first.last
+        return when (item.authors.size) {
+            1 -> name
+            2 -> "$name $joiner ${item.authors[1].last}"
+            else -> "$name et al."
+        }
     }
     internal fun suffixes(items: List<CitationItem>): Map<String, String> {
         val groups = items.distinctBy { it.key }.groupBy { item ->
@@ -82,12 +151,14 @@ internal object CitationFormatting {
     }
     fun inText(items: List<CitationItem>, context: List<CitationItem> = items): String {
         if (items.isEmpty()) return ""
-        val suffixes = suffixes(context)
+        val pool = context.ifEmpty { items }
+        val suffixes = suffixes(pool)
+        val flagged = surnamesNeedingInitials(pool)
         val groups = linkedMapOf<String, MutableList<String>>()
         for (item in ordered(items)) {
             val suffix = suffixes[item.key].orEmpty()
-            val date = year(item) + (if (suffix.isNotEmpty() && year(item) in setOf("n.d.", "in press")) "-" else "") + suffix
-            groups.getOrPut(label(item)) { mutableListOf() }.add(date)
+            val date = dateText(item, suffix = suffix)
+            groups.getOrPut(label(item, flagged = flagged)) { mutableListOf() }.add(date)
         }
         return groups.entries.joinToString("; ", "(", ")") { (label, years) ->
             val joined = years.joinToString(", ")
@@ -101,12 +172,14 @@ internal object CitationFormatting {
         val pages = page.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
         val pageText = if (pages.isEmpty()) "" else (if ('–' in pages || ',' in pages) "pp. " else "p. ") + pages
         if (style == "narrative") {
-            val suffixes = suffixes(context)
+            val pool = context.ifEmpty { chosen }
+            val suffixes = suffixes(pool)
+            val flagged = surnamesNeedingInitials(pool)
             return ordered(chosen).joinToString("; ") { item ->
                 val suffix = suffixes[item.key].orEmpty()
-                val yr = year(item) + (if (suffix.isNotEmpty() && year(item) in setOf("n.d.", "in press")) "-" else "") + suffix
+                val yr = dateText(item, suffix = suffix)
                 val locator = if (chosen.size == 1 && pageText.isNotEmpty()) ", $pageText" else ""
-                "${label(item, "and")} ($yr$locator)"
+                "${label(item, "and", flagged)} ($yr$locator)"
             }
         }
         var inner = inText(chosen, context).removePrefix("(").removeSuffix(")")
@@ -120,7 +193,110 @@ internal object CitationFormatting {
         return ordered(items).joinToString("\n\n") { reference(it, suffixes[it.key].orEmpty()).joinToString("") { part -> part.first }.trim() }
     }
 
+    private fun round2Reference(item: CitationItem, suffix: String): List<Pair<String, Boolean>> {
+        val parts = mutableListOf<Pair<String, Boolean>>()
+        fun add(text: String, italic: Boolean = false) { if (text.isNotEmpty()) parts.add(text to italic) }
+        val names = item.authors.map { a -> a.last + if (a.group || initials(a.first).isEmpty()) "" else ", ${initials(a.first)}" }
+        val authorList = when (names.size) {
+            0 -> ""; 1 -> names[0]; 2 -> names.joinToString(", & ")
+            in 3..20 -> names.dropLast(1).joinToString(", ") + ", & " + names.last()
+            else -> names.take(19).joinToString(", ") + ", . . . " + names.last()
+        }
+        val authors = authorList + if (item.editorLead && authorList.isNotEmpty()) if (names.size == 1) " (Ed.)" else " (Eds.)" else ""
+        fun begin(level: String, italic: Boolean, extras: String = "") {
+            val title = item.title.trim().ifEmpty { "Untitled" }
+            val date = "(${dateText(item, level, suffix)})"
+            if (authors.isNotEmpty()) add((if (authors.last() in ".?!") authors else "$authors.") + " $date. ")
+            add(title, italic)
+            if (extras.isNotEmpty()) add(" $extras.") else if (title.last() !in ".?!") add(".")
+            if (authors.isEmpty()) add(" $date.")
+            add(" ")
+        }
+        fun sameName(a: String, b: String) = sortKey(a).isNotEmpty() && sortKey(a) == sortKey(b)
+        fun publisher(value: String, author: String = authors) { val p = value.trim(); if (p.isNotEmpty() && !sameName(p, author)) add("$p.") }
+        fun usableUrl(): String = item.url.trim().takeUnless { value -> listOf("ebscohost", "proquest", "ezproxy", "galegroup", "gale.com", "infotrac", "lexisnexis", "libproxy", "oclc.org", "worldcat").any { it in value.lowercase() } }.orEmpty()
+        fun link() {
+            val doi = item.doi.trim().ifEmpty { Regex("^\\s*DOI:\\s*(\\S+)", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)).find(item.extra.trim())?.groupValues?.get(1).orEmpty() }
+            if (doi.isNotEmpty()) add(" https://doi.org/" + doi.replace(Regex("^(?:doi:\\s*|https?://(?:dx\\.)?doi\\.org/)", RegexOption.IGNORE_CASE), "").trim())
+            else if (usableUrl().isNotEmpty()) add(" ${usableUrl()}")
+        }
+        fun pages(prefix: Boolean = true): String {
+            val p = item.pages.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
+            return if (p.isEmpty() || !prefix) p else (if ('–' in p || ',' in p) "pp. " else "p. ") + p
+        }
+        fun periodical(prefix: Boolean) {
+            val name = item.publicationTitle.trim(); if (name.isEmpty()) return
+            add(if (name.uppercase() == name) name else titleCase(name, false), true)
+            val volume = item.volume.trim(); val issue = item.issue.trim()
+            if (volume.isNotEmpty()) { add(", "); add(volume, true); if (issue.isNotEmpty()) add("($issue)") }
+            else if (issue.isNotEmpty()) add(", ($issue)")
+            val raw = item.pages.trim()
+            val locator = if (Regex("[A-Za-z]{1,3}\\d{3,}[A-Za-z0-9.\\-]*|\\d{5,}").matches(raw)) "Article $raw" else pages(prefix)
+            if (locator.isNotEmpty()) add(", $locator")
+            add(".")
+        }
+        when (item.itemType) {
+            "magazineArticle", "newspaperArticle" -> { begin("day", false); periodical(item.itemType == "newspaperArticle"); link() }
+            "webpage" -> {
+                begin("day", true, item.websiteType.trim().let { if (it.isEmpty()) "" else "[$it]" })
+                publisher(item.websiteTitle)
+                if (usableUrl().isNotEmpty()) add(" ${usableUrl()}")
+            }
+            "blogPost" -> {
+                begin("day", false); val blog = item.blogTitle.ifBlank { item.websiteTitle }.trim()
+                if (blog.isNotEmpty()) { add(blog, true); add(".") }
+                if (usableUrl().isNotEmpty()) add(" ${usableUrl()}")
+            }
+            "report" -> {
+                val number = item.reportNumber.trim(); val type = item.reportType.trim()
+                val extras = if (number.isNotEmpty()) {
+                    if (Regex("^(report|rep\\.|no\\.?|publication|technical|working)", RegexOption.IGNORE_CASE).containsMatchIn(number)) "($number)"
+                    else "(${if (type.isEmpty()) "Report" else titleCase(type)} No. $number)"
+                } else if (type.isNotEmpty()) "[$type]" else ""
+                begin("year", true, extras); publisher(item.institution.ifBlank { item.publisher }); link()
+            }
+            "thesis" -> {
+                val type = item.thesisType.trim()
+                val label = when {
+                    Regex("\\b(ph\\.?\\s?d|d\\.?\\s?phil|doctor\\w*|dissertation)\\b", RegexOption.IGNORE_CASE).containsMatchIn(type) -> "Doctoral dissertation"
+                    Regex("\\b(master\\w*|m\\.?\\s?phil|m\\.?\\s?sc|m\\.?\\s?a|m\\.?\\s?ed|mba|m\\.?\\s?tech)\\b", RegexOption.IGNORE_CASE).containsMatchIn(type) -> "Master's thesis"
+                    type.isEmpty() -> "Thesis"
+                    else -> type.replaceFirstChar { it.uppercase() }
+                }
+                val university = item.university.ifBlank { item.institution }.trim(); val archive = item.archive.trim()
+                val published = usableUrl().isNotEmpty() || archive.isNotEmpty()
+                val extras = if (published) "[$label${if (university.isNotEmpty()) ", $university" else ""}]" else "[Unpublished ${label.replaceFirstChar { it.lowercase() }}]"
+                begin("year", true, extras)
+                if (published) { if (archive.isNotEmpty()) add("$archive."); link() } else publisher(university)
+            }
+            "conferencePaper" -> {
+                if (item.proceedingsTitle.trim().isNotEmpty()) {
+                    begin("year", false)
+                    val editors = item.editors.map { if (it.group) it.last else "${initials(it.first)} ${it.last}".trim() }
+                    val editorText = when (editors.size) { 0 -> ""; 1 -> "${editors[0]} (Ed.)"; 2 -> "${editors[0]} & ${editors[1]} (Eds.)"; else -> editors.dropLast(1).joinToString(", ") + ", & ${editors.last()} (Eds.)" }
+                    add("In "); if (editorText.isNotEmpty()) add("$editorText, "); add(item.proceedingsTitle.trim(), true)
+                    val details = mutableListOf<String>(); if (item.edition.isNotBlank()) details += item.edition.trim(); if (item.volume.isNotBlank()) details += "Vol. ${item.volume.trim()}"; if (pages().isNotEmpty()) details += pages()
+                    if (details.isNotEmpty()) add(" (${details.joinToString(", ")})")
+                    add(". "); publisher(item.publisher); link()
+                } else if (item.conferenceName.trim().isNotEmpty()) {
+                    begin("day", true, "[Paper presentation]"); add(item.conferenceName.trim() + (if (item.place.isNotBlank()) ", ${item.place.trim()}" else "") + "."); link()
+                } else { begin("year", false); publisher(item.publisher, ""); link() }
+            }
+            "preprint" -> { begin("year", false); if (item.repository.isNotBlank()) { add(item.repository.trim(), true); add(".") }; link() }
+        }
+        val merged = mutableListOf<Pair<String, Boolean>>()
+        for ((text, italic) in parts) {
+            if (merged.isNotEmpty() && merged.last().second == italic) merged[merged.lastIndex] = (merged.last().first + text) to italic else merged.add(text to italic)
+        }
+        return merged.mapIndexed { index, (text, italic) ->
+            var t = text.replace(Regex(" {2,}"), " ")
+            if (index == 0) t = t.trimStart(); if (index == merged.lastIndex) t = t.trimEnd()
+            t to italic
+        }.filter { it.first.isNotEmpty() }
+    }
+
     fun reference(item: CitationItem, suffix: String = ""): List<Pair<String, Boolean>> {
+        if (item.itemType in setOf("magazineArticle", "newspaperArticle", "webpage", "blogPost", "report", "thesis", "conferencePaper", "preprint")) return round2Reference(item, suffix)
         val names = item.authors.map { author ->
             val initials = author.first.trim().replace(".", " ").split(Regex("\\s+"))
                 .filter { it.isNotEmpty() }

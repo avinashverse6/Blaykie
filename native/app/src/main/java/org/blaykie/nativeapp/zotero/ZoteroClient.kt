@@ -40,17 +40,21 @@ data class ZoteroItem(val key: String, val data: JsonObject) {
             val role = (c["creatorType"] as? JsonPrimitive)?.contentOrNull
             if (kind == "author" && role != null && role != "author") return@mapNotNull null
             if (kind != "author" && role != kind) return@mapNotNull null
-            val last = (c["lastName"] as? JsonPrimitive)?.contentOrNull.orEmpty().ifEmpty { (c["name"] as? JsonPrimitive)?.contentOrNull.orEmpty() }
+            val last = (c["lastName"] as? JsonPrimitive)?.contentOrNull.orEmpty().trim().ifEmpty { (c["name"] as? JsonPrimitive)?.contentOrNull.orEmpty().trim() }
             if (last.isEmpty()) return@mapNotNull null
-            val group = (c["lastName"] as? JsonPrimitive)?.contentOrNull.isNullOrEmpty()
-            CitationAuthor((c["firstName"] as? JsonPrimitive)?.contentOrNull.orEmpty(), last, group)
+            val group = (c["lastName"] as? JsonPrimitive)?.contentOrNull.orEmpty().trim().isEmpty()
+            CitationAuthor(if (group) "" else (c["firstName"] as? JsonPrimitive)?.contentOrNull.orEmpty().trim(), last, group)
         }
         val type = string("itemType")
         val originalAuthors = creators("author")
         val editors = creators("editor")
         val editorLead = originalAuthors.isEmpty() && type == "book" && editors.isNotEmpty()
         val authors = if (editorLead) editors else originalAuthors
-        return CitationItem(key, string("title"), authors, string("date"), string("publicationTitle"), string("volume"), string("issue"), string("pages"), string("DOI"), type, string("publisher"), string("bookTitle"), string("edition"), editors, string("url"), editorLead)
+        return CitationItem(key, string("title"), authors, string("date"), string("publicationTitle"), string("volume"), string("issue"), string("pages"), string("DOI"), type, string("publisher"), string("bookTitle"), string("edition"), editors, string("url"), editorLead,
+            extra = string("extra"), websiteType = string("websiteType"), websiteTitle = string("websiteTitle"), blogTitle = string("blogTitle"),
+            reportNumber = string("reportNumber"), reportType = string("reportType"), institution = string("institution"), thesisType = string("thesisType"),
+            university = string("university"), archive = string("archive"), proceedingsTitle = string("proceedingsTitle"),
+            conferenceName = string("conferenceName"), place = string("place"), repository = string("repository"))
     }
 }
 
