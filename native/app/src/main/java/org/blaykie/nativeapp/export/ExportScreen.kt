@@ -32,7 +32,7 @@ internal fun ExportScreen(project: DocxProject, state: ExportState, controller: 
             }
         }
         if (!idle) CircularProgressIndicator()
-        if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodyMedium)
+        if (state.message.isNotEmpty()) Text(if (state.message == "Zotero error: 404") "User ID not found. Check your Zotero User ID." else state.message, style = MaterialTheme.typography.bodyMedium)
         if (state.needsKey) Button(onClick = onAddKey) { Text("Add Zotero key") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = idle, onClick = onExport) { Text("Export now") }

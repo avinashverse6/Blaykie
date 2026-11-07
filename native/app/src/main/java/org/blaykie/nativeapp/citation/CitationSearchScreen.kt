@@ -16,7 +16,7 @@ import org.blaykie.nativeapp.docx.CitationFormatting
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-internal fun CitationSearchScreen(state: SearchState, controller: CitationSearchController, onCancel: () -> Unit, onInsert: () -> Unit, onAddKey: () -> Unit) {
+internal fun CitationSearchScreen(state: SearchState, controller: CitationSearchController, paragraph: String, onCancel: () -> Unit, onInsert: () -> Unit, onAddKey: () -> Unit) {
     BackHandler { onCancel() }
     // One scrollable viewport keeps the query and the bottom fields reachable when
     // the IME or a larger text size leaves little vertical space.
@@ -33,7 +33,7 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
                 }
             }
             if (state.loading) item { CircularProgressIndicator() }
-            if (state.message.isNotEmpty()) item { Text(state.message, style = MaterialTheme.typography.bodyMedium) }
+            if (state.message.isNotEmpty()) item { Text(if (state.message == "Zotero error: 404") "User ID not found. Check your Zotero User ID." else state.message, style = MaterialTheme.typography.bodyMedium) }
             itemsIndexed(state.results.take(state.shown)) { index, item ->
                 val data = item.citationItem()
                 val authors = if (data.editorLead) emptyList() else data.authors
@@ -69,6 +69,9 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
                 }
             }
             item {
+                val position = state.position.coerceIn(0, paragraph.length)
+                val start = (position - 60).coerceAtLeast(0); val end = (position + 60).coerceAtMost(paragraph.length)
+                Text(paragraph.substring(start, position) + "|" + paragraph.substring(position, end), style = MaterialTheme.typography.bodyMedium)
                 val preview = state.preview()
                 Text(if (preview.isEmpty()) "Select one or more references." else "Will insert:  $preview", style = MaterialTheme.typography.bodyMedium)
             }
