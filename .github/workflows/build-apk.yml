@@ -49,11 +49,30 @@ jobs:
       - name: Choose the processor type
         run: sed -i "s/^android.archs = .*/android.archs = ${{ matrix.arch }}/" buildozer.spec
 
+      - name: Cache buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: ${{ runner.os }}-buildozer-${{ matrix.arch }}-${{ hashFiles('buildozer.spec', '.github/workflows/build-apk.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-buildozer-${{ matrix.arch }}-
+
       - name: Build APK
         shell: bash
         run: |
           set -o pipefail
-          buildozer -v android debug 2>&1 | tee build-log.txt
+          : > build-log.txt
+          for attempt in 1 2 3; do
+            echo "=== Build attempt $attempt of 3 ===" | tee -a build-log.txt
+            if buildozer -v android debug 2>&1 | tee -a build-log.txt; then
+              exit 0
+            fi
+            echo "Build attempt $attempt failed." >&2
+            if [ "$attempt" -lt 3 ]; then sleep 15; fi
+          done
+          exit 1
 
       - name: Upload build log
         if: always()
