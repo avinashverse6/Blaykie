@@ -17,6 +17,7 @@ import threading
 import traceback
 
 from kivy.app import App
+from kivy.base import ExceptionHandler, ExceptionManager
 from kivy.clock import Clock
 from kivy.core.clipboard import Clipboard
 from kivy.core.window import Window
@@ -165,6 +166,57 @@ class ParaInput(TextInput):
         for bad in ("\r\n", "\n", "\r", "\t"):
             substring = substring.replace(bad, " ")
         return super().insert_text(substring, from_undo=from_undo)
+
+
+class CrashHandler(ExceptionHandler):
+    """An unexpected error must not close the app: write it to crash.log
+    (through report_error) and show a short message instead."""
+
+    def __init__(self):
+        self.noticed = False
+        self.last_text = ""
+        self.written = 0
+        self.last_shown = ""
+        self.shown = 0
+
+    def handle_exception(self, inst):
+        try:
+            app = App.get_running_app()
+            if app is not None:
+                text = traceback.format_exc()
+                if text != self.last_text and self.written < 20:
+                    self.last_text = text
+                    self.written += 1
+                    app.report_error("uncaught error")
+                if (text != self.last_shown and self.shown < 3
+                        and not self.noticed):
+                    self.last_shown = text
+                    self.shown += 1
+                    self.noticed = True
+                    Clock.schedule_once(lambda dt: self.notice(app), 0)
+        except Exception:
+            pass
+        return ExceptionManager.PASS
+
+    def notice(self, app):
+        try:
+            view, panel = panel_view(0.6)
+            panel.add_widget(wrapped_label(
+                "Something went wrong, but Blaykie is still running. "
+                "The full error was saved to crash.log.", ERROR, 13, 64))
+            row = BoxLayout(size_hint_y=None, height=dp(52))
+            ok = PillButton(text="OK", style="primary")
+            ok.bind(on_release=lambda *a: view.dismiss())
+            row.add_widget(ok)
+            panel.add_widget(row)
+            fit_panel(view, panel)
+            view.bind(on_dismiss=lambda v: setattr(self, "noticed", False))
+            view.open()
+        except Exception:
+            self.noticed = False
+
+
+ExceptionManager.add_handler(CrashHandler())
 
 
 class LabApp(App):
