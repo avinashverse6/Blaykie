@@ -32,6 +32,14 @@ jobs:
       - name: Run unit tests and build debug APK
         working-directory: native
         run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-test-reports
+          path: |
+            native/app/build/reports/tests
+            native/app/build/test-results
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

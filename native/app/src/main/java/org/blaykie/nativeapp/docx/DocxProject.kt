@@ -138,7 +138,7 @@ private class Paragraph(private val xml: String) {
         if ((first.index..last.index).any { segments[it].depth != 0 }) throw NotEditable("The selection is inside a field.")
         val left = if (start > first.value.off0) makeRun(first.value.rpr, first.value.text.substring(0, start - first.value.off0)) else ""
         val right = if (end < last.value.off1) makeRun(last.value.rpr, last.value.text.substring(end - last.value.off0)) else ""
-        val metas = segments.subList(first.index + 1, last.index).filter { it.kind != "text" }.joinToString("") { xml.substring(it.start, it.end) }
+        val metas = segments.drop(first.index + 1).take((last.index - first.index - 1).coerceAtLeast(0)).filter { it.kind != "text" }.joinToString("") { xml.substring(it.start, it.end) }
         return xml.substring(0, first.value.start) + left + replacement + right + metas + xml.substring(last.value.end)
     }
 }

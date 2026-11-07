@@ -102,7 +102,7 @@ class DocxProjectTest {
         val unicodeItem = item.copy(key = "UTF123", authors = listOf(CitationAuthor("आशा", "પટેલ & < > \"")))
         val length = project.blockText(0).length
         project.insertCitation(0, length, length, listOf(unicodeItem))
-        val expected = "Start$inserted (પટેલ & < > \", 2020)"
+        val expected = "Start$inserted (પટેલ & < > ,\" 2020)"
         assertEquals(expected, project.blockText(0))
         project.export(output())
         val reopened = DocxProject(output())
