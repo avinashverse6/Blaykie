@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 *.txt
 temp/
+
+# Android release signing material
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties

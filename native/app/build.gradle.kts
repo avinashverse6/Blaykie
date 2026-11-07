@@ -9,11 +9,32 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "org.blaykie.nativeapp"
+        applicationId = "io.github.avinashverse6.blaykie"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
+        manifestPlaceholders["appLabel"] = "Blaykie"
+    }
+    signingConfigs {
+        create("release") {
+            storeType = "PKCS12"
+            storeFile = System.getenv("ANDROID_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }?.let { file(it) }
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "Blaykie (debug)"
+        }
+        getByName("release") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("release")
+        }
     }
     testOptions {
         unitTests.all {
