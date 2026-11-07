@@ -1,0 +1,128 @@
+name: Build signed native release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: native-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout tag and history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main || { echo 'Tag commit is not on main'; exit 1; }
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.3
+      - name: Set up Java
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Android SDK components
+        run: |
+          set -eu
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Run unit tests and check debug identity
+        working-directory: native
+        run: |
+          set -eu
+          ./gradlew --no-daemon testDebugUnitTest testReleaseUnitTest assembleDebug
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          "$aapt" dump badging "$apk" | grep -F "package: name='io.github.avinashverse6.blaykie.debug'"
+          "$aapt" dump badging "$apk" | grep -F "application-label:'Blaykie (debug)'"
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml | grep -F 'io.github.avinashverse6.blaykie.debug.exports'
+      - name: Build signed release
+        working-directory: native
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/blaykie-release.p12
+        run: |
+          set -eu
+          : "${ANDROID_KEYSTORE_BASE64:?Missing keystore secret}"
+          : "${ANDROID_KEYSTORE_PASSWORD:?Missing keystore password}"
+          : "${ANDROID_KEY_ALIAS:?Missing key alias}"
+          : "${ANDROID_KEY_PASSWORD:?Missing key password}"
+          umask 077
+          trap 'rm -f "$ANDROID_KEYSTORE_PATH"' EXIT
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
+          ./gradlew --no-daemon assembleRelease
+      - name: Verify release identity, signature and checksum
+        working-directory: native
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_CERT_SHA256: ${{ vars.ANDROID_CERT_SHA256 }}
+        run: |
+          set -eu
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          apk=app/build/outputs/apk/release/app-release.apk
+          expected=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+          [[ "$expected" =~ ^[0-9A-F]{64}$ ]] || { echo 'ANDROID_CERT_SHA256 must be a SHA-256 fingerprint'; exit 1; }
+          "$tools/aapt" dump badging "$apk" | grep -F "package: name='io.github.avinashverse6.blaykie'"
+          "$tools/aapt" dump badging "$apk" | grep -F "versionName='${RELEASE_TAG#v}'"
+          "$tools/aapt" dump xmltree "$apk" AndroidManifest.xml | grep -F 'io.github.avinashverse6.blaykie.exports'
+          verification=$("$tools/apksigner" verify --verbose --print-certs "$apk")
+          printf '%s\n' "$verification"
+          mapfile -t fingerprints < <(printf '%s\n' "$verification" | sed -nE 's/^Signer #[0-9]+ certificate SHA-256 digest: *//p')
+          [ "${#fingerprints[@]}" -eq 1 ] || { echo 'Expected exactly one signer'; exit 1; }
+          actual=$(printf '%s' "${fingerprints[0]}" | tr -d ':[:space:]' | tr '[:lower:]' '[:upper:]')
+          [[ "$actual" =~ ^[0-9A-F]{64}$ ]] && [ "$actual" = "$expected" ] || { echo 'Signing certificate fingerprint mismatch'; exit 1; }
+          echo "Certificate SHA-256: $actual"
+          mkdir -p release-assets
+          cp "$apk" "release-assets/Blaykie-${RELEASE_TAG}.apk"
+          cd release-assets
+          echo "APK size in bytes: $(wc -c < "Blaykie-${RELEASE_TAG}.apk")"
+          sha256sum "Blaykie-${RELEASE_TAG}.apk" > "Blaykie-${RELEASE_TAG}.apk.sha256"
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-release-assets
+          path: native/release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  draft-release:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: native-release-assets
+          path: release-assets
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          cd release-assets
+          sha256sum --check "Blaykie-${RELEASE_TAG}.apk.sha256"
+          gh release create "$RELEASE_TAG" "Blaykie-${RELEASE_TAG}.apk" "Blaykie-${RELEASE_TAG}.apk.sha256" \
+            --draft --verify-tag --title "Blaykie ${RELEASE_TAG}" \
+            --notes 'Native Android release. Review the exported document and keep the original. Known limitations: a Zotero API key is required and documents are shown as paragraph cards rather than pages.'

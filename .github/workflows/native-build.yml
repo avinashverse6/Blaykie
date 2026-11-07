@@ -2,6 +2,7 @@ name: Build native Android APK
 
 on:
   push:
+    tags-ignore: ['v*']
     paths:
       - 'native/**'
       - '.github/workflows/native-build.yml'
