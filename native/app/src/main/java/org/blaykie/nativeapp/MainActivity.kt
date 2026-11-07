@@ -17,6 +17,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
                         // Insets are consumed by systemBarsPadding before imePadding, so the
                         // navigation bar is not added a second time when the IME is visible.
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-                            AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch, exportController) }
+                            AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, settings, sessions, account, citationSearch, exportController) }
                         }
                     }
                 }
@@ -384,7 +385,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
 
 /** A bounded viewport around an intrinsically tall text field. Keeping the scroll
  * outside the field lets us reveal the cursor again when only the IME size changes. */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldValue) -> Unit, modifier: Modifier = Modifier) {
     val scroll = rememberScrollState()
