@@ -36,17 +36,22 @@ internal fun sameDocument(source: String, target: String, sourceId: Pair<String,
 internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userId: Long, key: String): ZoteroResult<Int> {
     val missing = project.missingKeys().sorted()
     if (missing.isEmpty()) return ZoteroResult.Success(0)
-    return when (val response = client.fetchItems(userId, key, missing)) {
-        is ZoteroResult.Success -> { project.registerItems(response.value.map { it.citationItem() }); ZoteroResult.Success(project.missingKeys().size) }
-        is ZoteroResult.EmptyLibrary -> ZoteroResult.Success(missing.size)
-        is ZoteroResult.Cancelled -> response
-        is ZoteroResult.InvalidKey -> response
-        is ZoteroResult.RateLimited -> response
-        is ZoteroResult.NetworkFailure -> response
-        is ZoteroResult.MalformedJson -> response
-        is ZoteroResult.HttpError -> response
+    for (group in missing.chunked(200)) {
+        when (val response = client.fetchItems(userId, key, group)) {
+            is ZoteroResult.Success -> project.registerItems(response.value.map { it.citationItem() })
+            is ZoteroResult.EmptyLibrary -> Unit
+            is ZoteroResult.Cancelled -> return response
+            is ZoteroResult.InvalidKey -> return response
+            is ZoteroResult.RateLimited -> return response
+            is ZoteroResult.NetworkFailure -> return response
+            is ZoteroResult.MalformedJson -> return response
+            is ZoteroResult.HttpError -> return response
+        }
     }
+    return ZoteroResult.Success(project.missingKeys().size)
 }
+
+internal fun mayStartExport(phase: ExportPhase): Boolean = phase == ExportPhase.IDLE || phase == ExportPhase.DONE
 
 internal class SourceDestinationConflict : IllegalArgumentException()
 internal fun writeVerifiedExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, sameSource: Boolean, beforeCopy: () -> Unit, destination: () -> OutputStream) {

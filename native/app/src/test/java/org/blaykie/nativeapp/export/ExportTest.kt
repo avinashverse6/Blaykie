@@ -103,6 +103,12 @@ class ExportTest {
         assertTrue(sameDocument("content://one", "content://one", null, null))
         assertTrue(sameDocument("a", "b", "provider" to "123", "provider" to "123"))
         assertFalse(sameDocument("a", "b", "provider" to "123", "provider" to "456"))
+        // A same-named picker result with a different identity is not the source.
+        assertFalse(sameDocument("content://provider/document/source", "content://provider/document/collision", "provider" to "source", "provider" to "collision"))
+    }
+    @Test fun exportSingleFlightSurvivesEveryBusyPhase() {
+        assertTrue(mayStartExport(ExportPhase.IDLE)); assertTrue(mayStartExport(ExportPhase.DONE))
+        for (phase in listOf(ExportPhase.PREPARING, ExportPhase.CHOOSE, ExportPhase.WAITING, ExportPhase.WRITING)) assertFalse(mayStartExport(phase))
     }
     @Test fun cleanupConfinedToShareFolder() {
         val other = File(temp.root, "keep.txt").apply { writeText("keep") }

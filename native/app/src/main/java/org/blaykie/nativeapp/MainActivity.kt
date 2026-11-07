@@ -171,7 +171,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
             }
             SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT) navigate(Screen.HOME)
+            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
         }
         loading = false
     }

@@ -43,7 +43,7 @@ internal class ExportController(private val context: Context, private val sessio
     private var prepared: Prepared? = null
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
     fun begin(session: Session) {
-        if (mutable.value.phase !in setOf(ExportPhase.IDLE, ExportPhase.DONE)) return
+        if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val line = mutable.value.line
         mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), message = "Preparing export…")
