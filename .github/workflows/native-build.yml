@@ -2,6 +2,7 @@ name: Build native Android APK
 
 on:
   push:
+    branches: ['**']
     tags-ignore: ['v*']
     paths:
       - 'native/**'
