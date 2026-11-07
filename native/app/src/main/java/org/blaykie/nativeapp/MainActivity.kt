@@ -12,6 +12,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -33,6 +34,10 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.blaykie.nativeapp.account.AccountController
+import org.blaykie.nativeapp.account.AccountGate
+import org.blaykie.nativeapp.account.AccountStore
+import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
@@ -56,6 +61,7 @@ class MainActivity : ComponentActivity() {
         CrashLog.install(filesDir)
         val settingsStore = SettingsStore(applicationContext)
         val sessions = SessionStore(filesDir)
+        val account = ViewModelProvider(this, AccountController.Factory(AccountStore(filesDir, AndroidKeyCipher())))[AccountController::class.java]
         setContent {
             val settings by settingsStore.settings.collectAsState(initial = Settings())
             val dark = when (settings.theme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
@@ -63,7 +69,9 @@ class MainActivity : ComponentActivity() {
             val scaled = remember(density, settings.textSize) { Density(density.density, density.fontScale * settings.textSize.scale) }
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
-                    Surface(Modifier.fillMaxSize()) { AppScreens(this, settingsStore, settings, sessions) }
+                    Surface(Modifier.fillMaxSize()) {
+                        AccountGate(this, account) { openAccount -> AppScreens(this, settingsStore, settings, sessions, openAccount) }
+                    }
                 }
             }
         }
@@ -72,7 +80,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, onAccount: () -> Unit) {
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
@@ -238,7 +246,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }, modifier = Modifier.fillMaxWidth().weight(1f))
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
-        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, onBack = { navigate(Screen.HOME) }, onCrash = {
+        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, onBack = { navigate(Screen.HOME) }, onAccount = onAccount, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
             navigate(Screen.LAST_CRASH)
         })
@@ -252,7 +260,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
 }
 
 @Composable
-private fun SettingsScreen(settings: Settings, store: SettingsStore, onBack: () -> Unit, onCrash: () -> Unit) {
+private fun SettingsScreen(settings: Settings, store: SettingsStore, onBack: () -> Unit, onAccount: () -> Unit, onCrash: () -> Unit) {
     val scope = rememberCoroutineScope()
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
         TextButton(onClick = onBack) { Text("Back") }
@@ -273,6 +281,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, onBack: () 
                 }
             }
         }
+        TextButton(onClick = onAccount) { Text("Account") }
         TextButton(onClick = onCrash) { Text("Last crash") }
     }
 }
