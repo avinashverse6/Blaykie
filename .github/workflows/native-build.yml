@@ -1,0 +1,33 @@
+name: Build native Android APK
+
+on:
+  push:
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Run unit tests and build debug APK
+        working-directory: native
+        run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blaykie-native-debug
+          path: native/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
