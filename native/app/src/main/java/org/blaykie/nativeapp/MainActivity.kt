@@ -1,11 +1,13 @@
 package org.blaykie.nativeapp
 
+import android.app.UiModeManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
@@ -17,7 +19,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -36,10 +41,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -65,6 +77,8 @@ import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
 import java.io.File
+import kotlin.math.cos
+import kotlin.math.sin
 
 private data class CardData(val index: Int, val kind: String, val text: String)
 private data class Loaded(val session: Session, val project: DocxProject, val cards: List<CardData>)
@@ -80,6 +94,15 @@ private fun readName(context: Context, uri: Uri): String {
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // DataStore is asynchronous. A small cached mode lets the initial window
+        // match the last selected theme while the authoritative setting loads.
+        val launchPreferences = getSharedPreferences("launch_theme", Context.MODE_PRIVATE)
+        val launchTheme = ThemeMode.entries.firstOrNull { it.name == launchPreferences.getString("theme", null) } ?: ThemeMode.System
+        setTheme(when (launchTheme) {
+            ThemeMode.Light -> R.style.Theme_Blaykie_Light
+            ThemeMode.Dark -> R.style.Theme_Blaykie_Dark
+            ThemeMode.System -> R.style.Theme_Blaykie
+        })
         super.onCreate(savedInstanceState)
         CrashLog.install(filesDir)
         val settingsStore = SettingsStore(applicationContext)
@@ -89,22 +112,43 @@ class MainActivity : ComponentActivity() {
         val citationSearch = ViewModelProvider(this, CitationSearchController.Factory(accountStore))[CitationSearchController::class.java]
         val exportController = ViewModelProvider(this, ExportController.Factory(applicationContext, sessions, accountStore))[ExportController::class.java]
         setContent {
-            val settings by settingsStore.settings.collectAsState(initial = Settings())
-            val dark = when (settings.theme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
+            val settings by settingsStore.settings.collectAsState(initial = null)
+            val selectedTheme = settings?.theme ?: launchTheme
+            val dark = when (selectedTheme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
+            LaunchedEffect(settings?.theme) {
+                val mode = settings?.theme ?: return@LaunchedEffect
+                if (launchPreferences.getString("theme", null) != mode.name) {
+                    // The platform persists this app-local override for the Android 12+
+                    // system splash; AUTO clears the override and follows the system.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val nightMode = when (mode) {
+                            ThemeMode.System -> UiModeManager.MODE_NIGHT_AUTO
+                            ThemeMode.Light -> UiModeManager.MODE_NIGHT_NO
+                            ThemeMode.Dark -> UiModeManager.MODE_NIGHT_YES
+                        }
+                        getSystemService(UiModeManager::class.java).setApplicationNightMode(nightMode)
+                    }
+                    launchPreferences.edit().putString("theme", mode.name).commit()
+                }
+            }
             SideEffect {
                 val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                     else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.BLACK)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
             val density = LocalDensity.current
-            val scaled = remember(density, settings.textSize) { Density(density.density, density.fontScale * settings.textSize.scale) }
+            val textSize = settings?.textSize ?: TextSize.Normal
+            val scaled = remember(density, textSize) { Density(density.density, density.fontScale * textSize.scale) }
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                     Surface(Modifier.fillMaxSize()) {
                         // Insets are consumed by systemBarsPadding before imePadding, so the
                         // navigation bar is not added a second time when the IME is visible.
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
-                            AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, settings, sessions, account, citationSearch, exportController) }
+                            val loadedSettings = settings
+                            if (loadedSettings != null) {
+                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, sessions, account, citationSearch, exportController) }
+                            }
                         }
                     }
                 }
@@ -286,13 +330,17 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     )
     when (screen) {
         Screen.HOME -> Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Blaykie", style = MaterialTheme.typography.headlineMedium)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Image(painter = painterResource(R.drawable.home_logo), contentDescription = null,
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)))
+                Text("Blaykie", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                SettingsGearButton { navigate(Screen.SETTINGS) }
+            }
             Button(onClick = { requestDiscardAction("open") }) { Text("Open a .docx") }
             if (session != null && project != null) {
                 Button(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }) { Text("Continue") }
                 TextButton(onClick = { requestDiscardAction("end") }) { Text("End session") }
             }
-            TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Settings") }
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -379,6 +427,32 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Back") }
             TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Last crash", crashText)) }) { Text("Copy") }
             Text(crashText, modifier = Modifier.verticalScroll(rememberScrollState()))
+        }
+    }
+}
+
+@Composable
+private fun SettingsGearButton(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    val lineColor = MaterialTheme.colorScheme.onSurfaceVariant
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp).clip(shape).background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outline, shape)
+            .semantics { contentDescription = "Settings" },
+    ) {
+        Canvas(Modifier.size(24.dp)) {
+            val center = Offset(size.width / 2, size.height / 2)
+            val unit = size.minDimension / 24f
+            drawCircle(lineColor, radius = 6.5f * unit, center = center, style = Stroke(1.6f * unit))
+            drawCircle(lineColor, radius = 2.2f * unit, center = center, style = Stroke(1.4f * unit))
+            for (step in 0 until 8) {
+                val angle = step * (Math.PI / 4)
+                val dx = cos(angle).toFloat(); val dy = sin(angle).toFloat()
+                drawLine(lineColor, Offset(center.x + dx * 7.5f * unit, center.y + dy * 7.5f * unit),
+                    Offset(center.x + dx * 10.5f * unit, center.y + dy * 10.5f * unit),
+                    strokeWidth = 2f * unit, cap = StrokeCap.Round)
+            }
         }
     }
 }
