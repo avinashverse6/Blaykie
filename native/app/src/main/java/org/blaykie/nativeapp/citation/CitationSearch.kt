@@ -37,7 +37,7 @@ internal data class SearchState(
     val open: Boolean = false, val block: Int = 0, val position: Int = 0,
     val query: String = "", val results: List<ZoteroItem> = emptyList(), val selected: Set<Int> = emptySet(),
     val style: String = "parenthetical", val page: String = "", val prefix: String = "",
-    val loading: Boolean = false, val hasKey: Boolean = true, val message: String = "",
+    val loading: Boolean = false, val hasKey: Boolean = true, val message: String = "", val shown: Int = 20,
 ) {
     override fun toString() = "SearchState(redacted)"
     fun selectedItems(): List<CitationItem> = chosenItems(results, selected)
@@ -80,13 +80,14 @@ internal class CitationSearchController(private val accounts: AccountStore) : Vi
         mutable.value = mutable.value.copy(selected = selected)
     }
     fun message(value: String) { mutable.value = mutable.value.copy(message = value) }
+    fun showMore() { mutable.value = mutable.value.copy(shown = (mutable.value.shown + 20).coerceAtMost(mutable.value.results.size)) }
     fun search() {
         val query = mutable.value.query.trim()
         if (query.isEmpty()) { message("Type something to search."); return }
         client?.cancel(); job?.cancel()
         val current = ++generation
         val requestClient = ZoteroClient(); client = requestClient
-        mutable.value = mutable.value.copy(loading = true, results = emptyList(), selected = emptySet(), message = "")
+        mutable.value = mutable.value.copy(loading = true, results = emptyList(), selected = emptySet(), shown = 20, message = "Searching Zotero...")
         job = scope.launch {
             val response = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {

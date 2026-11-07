@@ -4,11 +4,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.ImeAction
 import org.blaykie.nativeapp.docx.CitationFormatting
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -22,13 +25,13 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
             Button(onClick = onAddKey) { Text("Add key") }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = state.query, onValueChange = controller::query, label = { Text("Search your Zotero library") }, singleLine = true, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = state.query, onValueChange = controller::query, label = { Text("Search your Zotero library") }, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { controller.search() }), modifier = Modifier.weight(1f))
                 TextButton(onClick = controller::search) { Text("Search") }
             }
             if (state.loading) CircularProgressIndicator()
             if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodyMedium)
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                itemsIndexed(state.results) { index, item ->
+                itemsIndexed(state.results.take(state.shown)) { index, item ->
                     val data = item.citationItem()
                     val authors = if (data.editorLead) emptyList() else data.authors
                     val name = when (authors.size) {
@@ -46,6 +49,9 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
                             }
                         }
                     }
+                }
+                if (state.shown < state.results.size) item {
+                    TextButton(onClick = controller::showMore) { Text("Show more (${state.results.size - state.shown})") }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
