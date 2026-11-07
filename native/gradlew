@@ -249,4 +249,12 @@ eval "set -- $(
         tr '\n' ' '
     )" '"$@"'
 
-exec "$JAVACMD" "$@"
+"$JAVACMD" "$@" > "$APP_HOME/ci-diagnostic.log" 2>&1
+status=$?
+cat "$APP_HOME/ci-diagnostic.log"
+if [ "$status" -ne 0 ]; then
+    grep -E '(^e: |^\* What went wrong:|^> |^Caused by:|^FAILURE:)' "$APP_HOME/ci-diagnostic.log" | tail -40 | while IFS= read -r line; do
+        printf '::error::%s\n' "$line"
+    done
+fi
+exit "$status"
