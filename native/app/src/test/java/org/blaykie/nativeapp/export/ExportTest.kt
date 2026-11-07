@@ -140,6 +140,39 @@ class ExportTest {
         } catch (e: IOException) { assertTrue(copyStarted); assertEquals("Not enough space to export the document.", exportError(e, FailureStage.DESTINATION)) }
         assertArrayEquals(before, source.readBytes())
     }
+    @Test fun partialCopyIsDeletedOrNamedWhenDeletionFails() {
+        val source = file("source.docx"); val before = source.readBytes(); val project = DocxProject(source)
+        for (deleteSucceeds in listOf(true, false)) {
+            val privateFile = File(temp.root, "private-$deleteSucceeds.docx")
+            val partial = File(temp.root, "destination-$deleteSucceeds.docx")
+            var error: IOException? = null
+            try {
+                writeVerifiedExport(project, privateFile, "match", false, false, {}, {
+                    val output = partial.outputStream()
+                    object : OutputStream() {
+                        var count = 0
+                        override fun write(value: Int) {
+                            if (count++ == 12) throw IOException("ENOSPC")
+                            output.write(value)
+                        }
+                        override fun close() { output.close() }
+                    }
+                })
+                fail("Copy must fail")
+            } catch (e: IOException) { error = e }
+            assertTrue(partial.length() > 0)
+            var attempted = false
+            val message = failedCopyMessage(error!!, partial.name) { attempted = true; if (deleteSucceeds) partial.delete() else false }
+            assertTrue(attempted); assertFalse(message.contains("Saved")); assertEquals(!deleteSucceeds, partial.exists())
+            if (deleteSucceeds) assertTrue(message.contains("deleted"))
+            else { assertTrue(message.contains(partial.name)); assertTrue(message.contains("may remain")) }
+            assertArrayEquals(before, source.readBytes())
+        }
+    }
+    @Test fun partialCleanupExceptionReportsTheFilename() {
+        val message = failedCopyMessage(IOException("denied"), "chosen.docx") { throw SecurityException("private") }
+        assertTrue(message.contains("chosen.docx")); assertTrue(message.contains("may remain")); assertFalse(message.contains("private"))
+    }
     @Test fun missingReferenceLookupCanBeCancelled() {
         val project = DocxProject(file("golden-match.docx")); val server = MockWebServer(); server.start()
         try {

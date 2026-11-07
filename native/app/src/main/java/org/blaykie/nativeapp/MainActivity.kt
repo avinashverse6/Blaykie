@@ -109,6 +109,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
+    var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
+    var discardCount by rememberSaveable { mutableIntStateOf(0) }
 
     fun accept(loaded: Loaded) {
         session = loaded.session; project = loaded.project; blockCards = loaded.cards
@@ -144,6 +146,18 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         }
     }
     fun finishEditor(): Boolean = syncEditor(false)
+    fun undoSession(draftBlock: Int? = null) {
+        val current = session ?: return
+        when (val result = sessions.undo(current, draftBlock)) {
+            is UndoResult.Success -> {
+                project = result.project; session = result.session
+                if (draftBlock != null) field = TextFieldValue(result.session.draft!!.text)
+                message = ""; reloadCards()
+            }
+            UndoResult.Empty -> message = "Nothing to undo."
+            UndoResult.Failed -> message = "Could not save the session. Undo was not applied."
+        }
+    }
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
@@ -195,6 +209,18 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             loading = false
         }
     }
+    fun performDiscardAction(action: String) {
+        when (action) {
+            "open" -> picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+            "end" -> { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }
+        }
+    }
+    fun requestDiscardAction(action: String) {
+        val current = session; val p = project
+        val count = if (current != null && p != null) sessions.unexportedEdits(current, p) else 0
+        if (count > 0) { discardCount = count; discardAction = action }
+        else performDiscardAction(action)
+    }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
     LaunchedEffect(exportState.phase) {
         if (exportState.phase == ExportPhase.CHOOSE && exportController.chooserLaunched()) {
@@ -216,13 +242,19 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
+    if (discardAction != null) AlertDialog(
+        onDismissRequest = { discardAction = null },
+        title = { Text("Discard $discardCount unexported edits?") },
+        confirmButton = { TextButton(onClick = { val action = discardAction; discardAction = null; if (action != null) performDiscardAction(action) }) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
+    )
     when (screen) {
         Screen.HOME -> Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Blaykie", style = MaterialTheme.typography.headlineMedium)
-            Button(onClick = { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) }) { Text("Open a .docx") }
+            Button(onClick = { requestDiscardAction("open") }) { Text("Open a .docx") }
             if (session != null && project != null) {
                 Button(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }) { Text("Continue") }
-                TextButton(onClick = { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }) { Text("End session") }
+                TextButton(onClick = { requestDiscardAction("end") }) { Text("End session") }
             }
             TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Settings") }
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
@@ -230,12 +262,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize().padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { navigate(Screen.HOME) }) { Text("Close") }
-                TextButton(onClick = {
-                    val p = project; val s = session
-                    if (p != null && s != null && p.undo()) {
-                        persist(s.copy(edits = s.edits.dropLast(1), draft = null)); reloadCards()
-                    } else message = "Nothing to undo."
-                }) { Text("Undo") }
+                TextButton(onClick = { undoSession() }) { Text("Undo") }
                 TextButton(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
             Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.titleLarge)
@@ -284,13 +311,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 }) { Text("Insert citation") }
                 TextButton(onClick = {
                     val currentBlock = session?.draft?.block
-                    if (currentBlock != null && finishEditor()) {
-                        val p = project; val s = session
-                        if (p != null && s != null && p.undo()) {
-                            val text = p.blockText(currentBlock); field = TextFieldValue(text)
-                            persist(s.copy(edits = s.edits.dropLast(1), draft = Draft(currentBlock, text))); reloadCards()
-                        } else { session?.let { persist(it.copy(draft = Draft(currentBlock, field.text))) }; message = "Nothing to undo." }
-                    }
+                    if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
                 }) { Text("Undo") }
             }
             Text("Select text to cut, copy or paste. Changes are applied on Done.", style = MaterialTheme.typography.bodyMedium)

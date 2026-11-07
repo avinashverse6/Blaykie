@@ -33,7 +33,7 @@ internal data class ExportState(
     val message: String = "", val needsKey: Boolean = false, val omitted: Int = 0,
     val shareFile: File? = null,
 ) { override fun toString() = "ExportState(redacted)" }
-private data class Prepared(val project: DocxProject, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean)
+private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean)
 internal class ExportController(private val context: Context, private val sessions: SessionStore, private val accounts: AccountStore) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutable = MutableStateFlow(ExportState())
@@ -72,7 +72,7 @@ internal class ExportController(private val context: Context, private val sessio
                         client = null
                     }
                     if (cancelled) return@withContext Pair(null, "Lookup cancelled.")
-                    Pair(Prepared(project, session.uri, exportName(session.fileName), omitted, omitted > 0 && project.presentKeys().size == omitted && project.hasBlaykieBibliography()), "")
+                    Pair(Prepared(project, read.session, session.uri, exportName(session.fileName), omitted, omitted > 0 && project.presentKeys().size == omitted && project.hasBlaykieBibliography()), "")
                 } catch (e: Exception) { Pair(null, exportError(e, stage)) }
             }
             client = null
@@ -98,6 +98,9 @@ internal class ExportController(private val context: Context, private val sessio
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 var stage = FailureStage.PRIVATE
+                var outputOpened = false
+                val savedName = try { context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } } catch (_: Exception) { null }
+                val destinationName = savedName?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: work.name
                 try {
                     val source = Uri.parse(work.sourceUri)
                     fun identity(value: Uri): Pair<String, String>? = try {
@@ -108,13 +111,20 @@ internal class ExportController(private val context: Context, private val sessio
                     val file = File(File(context.cacheDir, CACHE_FOLDER), work.name)
                     writeVerifiedExport(work.project, file, line, work.omitted > 0, sameSource,
                         beforeCopy = { stage = FailureStage.DESTINATION }, destination = {
-                            context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")
+                            (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }
                         })
-                    val savedName = try { context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null } } catch (_: Exception) { null }
+                    val tracked = sessions.recordExport(work.session)
                     val saved = if (savedName.isNullOrBlank()) "Saved." else "Saved as $savedName."
-                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + if (work.omitted > 0) " ${work.omitted} reference(s) not found." + if (work.oldBibliographyRetained) " The existing bibliography remains unchanged." else " They were omitted from the new list." else "")
+                    val warning = if (tracked) "" else " Export tracking could not be saved; edits may still be treated as unexported."
+                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + (if (work.omitted > 0) " ${work.omitted} reference(s) not found." + if (work.oldBibliographyRetained) " The existing bibliography remains unchanged." else " They were omitted from the new list." else "") + warning)
                 } catch (_: SourceDestinationConflict) { Pair(null, "Choose a different file. The original is never changed.") }
-                catch (e: Exception) { Pair(null, exportError(e, stage)) }
+                catch (e: Exception) {
+                    val message = if (stage == FailureStage.DESTINATION && outputOpened) failedCopyMessage(e, destinationName) {
+                        if (DocumentsContract.isDocumentUri(context, uri)) DocumentsContract.deleteDocument(context.contentResolver, uri)
+                        else context.contentResolver.delete(uri, null, null) > 0
+                    } else exportError(e, stage)
+                    Pair(null, message)
+                }
             }
             prepared = null
             mutable.value = mutable.value.copy(phase = if (result.first == null) ExportPhase.IDLE else ExportPhase.DONE, message = result.second, shareFile = result.first)

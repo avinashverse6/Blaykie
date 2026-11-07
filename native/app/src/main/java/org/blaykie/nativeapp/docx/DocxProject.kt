@@ -8,6 +8,12 @@ import java.util.zip.ZipEntry
 private val tagPattern = Regex("<(/?)([A-Za-z_][\\w:.\\-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*?)(/?)>")
 private val textPattern = Regex("<w:t(?:\\s[^>]*)?>(.*?)</w:t>", RegexOption.DOT_MATCHES_ALL)
 private val bookmarkPattern = Regex("w:name=\"BLK_([A-Z0-9]+)_(\\d+)\"")
+private val emptyBookmarkPattern = Regex("<w:bookmarkStart w:id=\"(\\d+)\" w:name=\"BLK_[A-Z0-9]+_\\d+\"/><w:bookmarkEnd w:id=\"\\1\"/>")
+private fun dropEmptyBookmarks(xml: String): String {
+    var result = xml
+    while (emptyBookmarkPattern.containsMatchIn(result)) result = emptyBookmarkPattern.replace(result, "")
+    return result
+}
 private const val OBJECT = "\uFFFC"
 
 private data class Element(val tag: String, val start: Int, val end: Int)
@@ -293,7 +299,7 @@ class DocxProject(private val source: File) {
         var from = start
         if (tidy && from > 0 && from <= para.text.length && para.text[from - 1] == ' ' && (end == para.text.length || (end in para.text.indices && para.text[end] in " .,;:!?)"))) from--
         val updated = if (from == end) blocks[block].xml else para.replace(from, end, "")
-        val cleaned = Regex("<w:bookmarkStart w:id=\"(\\d+)\" w:name=\"BLK_[A-Z0-9]+_\\d+\"/><w:bookmarkEnd w:id=\"\\1\"/>").replace(updated, "")
+        val cleaned = dropEmptyBookmarks(updated)
         val old = snapshot()
         removed += end - from
         change(block, cleaned, old)
@@ -312,7 +318,7 @@ class DocxProject(private val source: File) {
             val para = Paragraph(xml)
             val replacement = makeRun(para.format(change.start, change.end), change.text)
             xml = para.replace(change.start, change.end, replacement)
-            xml = Regex("<w:bookmarkStart w:id=\"(\\d+)\" w:name=\"BLK_[A-Z0-9]+_\\d+\"/><w:bookmarkEnd w:id=\"\\1\"/>").replace(xml, "")
+            xml = dropEmptyBookmarks(xml)
             removedCount += change.end - change.start; addedCount += change.text.length
         }
         if (Paragraph(xml).text != newText) throw NotEditable("That change could not be applied exactly.")

@@ -1,5 +1,10 @@
 package org.blaykie.nativeapp.docx
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -43,6 +48,26 @@ class DocxProjectTest {
     }
     private fun resource(name: String): ByteArray = javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 
+    @Test fun pythonGoldenDeletingMultiCitationRemovesAllReferencesAndMatchesExport() {
+        val fixture = Json.parseToJsonElement(resource("nested-delete-golden.json").toString(Charsets.UTF_8)) as JsonObject
+        fun value(name: String) = (fixture[name] as JsonPrimitive).content
+        val items = (fixture["items"] as JsonArray).map { value ->
+            val item = value as JsonObject
+            ZoteroItem((item["key"] as JsonPrimitive).content, item["data"] as JsonObject).citationItem()
+        }
+        val source = File(temp.root, "original.docx").apply { writeBytes(resource("m4c/source.docx")) }
+        val bytes = source.readBytes(); val project = DocxProject(source); val before = value("before")
+        assertEquals(before, project.blockText(1))
+        project.insertCitation(1, before.length, before.length, items)
+        assertEquals(value("inserted"), project.blockText(1)); assertEquals(setOf("ONE1", "TWO2"), project.presentKeys())
+        assertTrue(project.applyTextEdit(1, before))
+        assertEquals(value("after"), project.blockText(1)); assertTrue(project.presentKeys().isEmpty())
+        val exported = output(); project.export(exported)
+        val xml = zipContent(exported).getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertEquals(value("document_xml"), xml); assertFalse(xml.contains("BLK_BIBLIOGRAPHY")); assertArrayEquals(bytes, source.readBytes())
+        assertTrue(project.undo()); assertEquals(setOf("ONE1", "TWO2"), project.presentKeys())
+        assertTrue(project.undo()); assertTrue(project.presentKeys().isEmpty())
+    }
     @Test fun insertCitation() {
         val project = DocxProject(makeDocx())
         assertEquals(1, project.insertCitation(0, first.length, first.length, listOf(item)))

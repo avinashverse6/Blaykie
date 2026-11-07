@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.session
 
 import java.io.File
+import java.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -47,6 +48,44 @@ class SessionStoreTest {
         assertEquals("unfinished draft", restored.session.draft!!.text)
         assertEquals("alpha BRAVO charlie delta echo", restored.project.blockText(0))
         assertTrue(restored.project.undo()); assertEquals("alpha bravo charlie delta echo", restored.project.blockText(0))
+    }
+    @Test fun failedUndoSaveLeavesOriginalProjectAndSessionUntouched() {
+        val store = SessionStore(temp.root); val ready = opened(store)
+        val source = File(temp.root, "session-sources/${ready.session.sourceName}"); val bytes = source.readBytes()
+        val changed = "alpha BRAVO charlie delta echo"
+        assertTrue(ready.project.applyTextEdit(0, changed))
+        val session = ready.session.copy(edits = listOf(EditOperation(0, changed)), draft = Draft(0, changed))
+        store.save(session)
+        val result = undoTransaction(session, 0, store::read) { throw IOException("simulated save failure") }
+        assertSame(UndoResult.Failed, result)
+        assertEquals(changed, ready.project.blockText(0)); assertEquals(session.edits, (store.read() as SessionRead.Ready).session.edits)
+        assertEquals(session.draft, (store.read() as SessionRead.Ready).session.draft); assertArrayEquals(bytes, source.readBytes())
+        val success = store.undo(session, 0) as UndoResult.Success
+        assertEquals("alpha bravo charlie delta echo", success.project.blockText(0))
+        assertEquals(success.project.blockText(0), success.session.draft!!.text)
+        assertTrue(success.session.edits.isEmpty()); assertTrue((store.read() as SessionRead.Ready).session.edits.isEmpty())
+        assertArrayEquals(bytes, source.readBytes())
+    }
+    @Test fun exportRevisionCountsNewUndoneAndDraftChangesAndSurvivesRestart() {
+        val store = SessionStore(temp.root); val ready = opened(store); val p = ready.project
+        assertEquals(0, store.unexportedEdits(ready.session, p))
+        val firstText = "alpha BRAVO charlie delta echo"
+        assertTrue(p.applyTextEdit(0, firstText))
+        val first = ready.session.copy(edits = listOf(EditOperation(0, firstText))); store.save(first)
+        assertEquals(1, store.unexportedEdits(first, p)); assertTrue(store.recordExport(first))
+        assertEquals(0, SessionStore(temp.root).unexportedEdits(first, p))
+        val draft = first.copy(draft = Draft(0, "$firstText!"))
+        assertEquals(1, store.unexportedEdits(draft, p))
+        val undone = store.undo(first) as UndoResult.Success
+        assertEquals(1, store.unexportedEdits(undone.session, undone.project))
+        val replacement = "ALPHA bravo charlie delta echo"
+        assertTrue(undone.project.applyTextEdit(0, replacement))
+        val branched = undone.session.copy(edits = listOf(EditOperation(0, replacement)))
+        assertEquals(2, store.unexportedEdits(branched, undone.project))
+        assertEquals(0, unexportedCount(emptyList(), emptyList()))
+        val fresh = opened(store)
+        assertEquals(0, store.unexportedEdits(fresh.session, fresh.project))
+        store.end(); assertFalse(File(temp.root, "export-revision.json").exists())
     }
     @Test fun corruptSessionAndMissingSourceAreInvalid() {
         val store = SessionStore(temp.root); val ready = opened(store)

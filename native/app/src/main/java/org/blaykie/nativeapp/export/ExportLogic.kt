@@ -61,3 +61,10 @@ internal fun writeVerifiedExport(project: DocxProject, file: File, line: String,
     beforeCopy()
     destination().use { target -> file.inputStream().use { it.copyTo(target) }; target.flush() }
 }
+
+internal fun failedCopyMessage(error: Throwable, name: String, deletePartial: () -> Boolean): String {
+    val reason = exportError(error, FailureStage.DESTINATION).removeSuffix(" The file may be incomplete.")
+    val removed = try { deletePartial() } catch (_: Exception) { false }
+    return if (removed) "$reason The incomplete file was deleted."
+    else "$reason A partial file named \"$name\" may remain."
+}

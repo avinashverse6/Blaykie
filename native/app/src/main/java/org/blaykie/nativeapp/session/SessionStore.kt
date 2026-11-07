@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.session
 
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -21,10 +22,37 @@ sealed class SessionRead {
     object Invalid : SessionRead()
 }
 
+internal sealed class UndoResult {
+    data class Success(val session: Session, val project: DocxProject) : UndoResult()
+    object Empty : UndoResult()
+    object Failed : UndoResult()
+}
+
+/** Undo a freshly replayed copy; publish it only after its new session is saved. */
+internal fun undoTransaction(session: Session, draftBlock: Int?, load: () -> SessionRead, save: (Session) -> Unit): UndoResult {
+    if (session.edits.isEmpty()) return UndoResult.Empty
+    return try {
+        val ready = load() as? SessionRead.Ready ?: return UndoResult.Failed
+        if (ready.session.sourceName != session.sourceName || ready.session.edits != session.edits || ready.session.draft != session.draft) return UndoResult.Failed
+        if (!ready.project.undo()) return UndoResult.Failed
+        val draft = draftBlock?.let { Draft(it, ready.project.blockText(it)) }
+        val updated = session.copy(edits = session.edits.dropLast(1), draft = draft)
+        save(updated)
+        UndoResult.Success(updated, ready.project)
+    } catch (_: Exception) { UndoResult.Failed }
+}
+
+@Serializable private data class ExportRevision(val sourceName: String, val operations: List<String>)
+internal fun unexportedCount(current: List<String>, exported: List<String>): Int {
+    val common = current.zip(exported).takeWhile { it.first == it.second }.size
+    return current.size + exported.size - 2 * common
+}
+
 /** All paths and content are confined to the application's private files directory. */
 class SessionStore(private val root: File) {
     private val sources = File(root, "session-sources")
     private val metadata = File(root, "session.json")
+    private val exportRevision = File(root, "export-revision.json")
     private val json = Json { ignoreUnknownKeys = true }
     private fun source(name: String): File {
         require(Regex("[a-f0-9-]+\\.docx").matches(name))
@@ -62,6 +90,34 @@ class SessionStore(private val root: File) {
         }
         check(temp.renameTo(metadata)) { "Could not save session" }
     }
+    @Synchronized internal fun undo(session: Session, draftBlock: Int? = null): UndoResult =
+        undoTransaction(session, draftBlock, ::read, ::save)
+    private fun fingerprints(session: Session): List<String> = session.edits.map { edit ->
+        MessageDigest.getInstance("SHA-256").digest(json.encodeToString(edit).toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+    }
+    /** True only after the destination copy has completed successfully. */
+    @Synchronized internal fun recordExport(session: Session): Boolean = try {
+        val current = read() as? SessionRead.Ready
+        if (current == null || current.session.sourceName != session.sourceName) false
+        else {
+            val record = ExportRevision(session.sourceName, fingerprints(session))
+            val temp = File(root, "export-revision.json.tmp")
+            temp.outputStream().use { out -> out.write(json.encodeToString(record).toByteArray(Charsets.UTF_8)); out.fd.sync() }
+            check(temp.renameTo(exportRevision))
+            true
+        }
+    } catch (_: Exception) { false }
+    @Synchronized internal fun unexportedEdits(session: Session, project: DocxProject): Int {
+        val exported = try {
+            if (!exportRevision.exists()) emptyList()
+            else json.decodeFromString<ExportRevision>(exportRevision.readText()).let {
+                if (it.sourceName == session.sourceName) it.operations else emptyList()
+            }
+        } catch (_: Exception) { return maxOf(1, session.edits.size) }
+        val draftChanged = session.draft?.let { it.text != project.blockText(it.block) } == true
+        return unexportedCount(fingerprints(session), exported) + if (draftChanged) 1 else 0
+    }
     /** Copies first and commits metadata only after the new document parses. */
     @Synchronized fun open(uri: String, name: String, copy: (File) -> Unit): SessionRead.Ready {
         sources.mkdirs()
@@ -78,6 +134,7 @@ class SessionStore(private val root: File) {
     }
     @Synchronized fun end() {
         metadata.delete(); File(root, "session.json.tmp").delete()
+        exportRevision.delete(); File(root, "export-revision.json.tmp").delete()
         sources.listFiles()?.forEach { it.delete() }
         sources.delete()
     }
