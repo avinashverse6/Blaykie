@@ -9,13 +9,20 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModelProvider
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,8 +35,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -79,12 +90,21 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settings by settingsStore.settings.collectAsState(initial = Settings())
             val dark = when (settings.theme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
+            SideEffect {
+                val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                    else SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.BLACK)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
             val density = LocalDensity.current
             val scaled = remember(density, settings.textSize) { Density(density.density, density.fontScale * settings.textSize.scale) }
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                     Surface(Modifier.fillMaxSize()) {
-                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch, exportController) }
+                        // Insets are consumed by systemBarsPadding before imePadding, so the
+                        // navigation bar is not added a second time when the IME is visible.
+                        Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
+                            AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch, exportController) }
+                        }
                     }
                 }
             }
@@ -92,7 +112,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
     val accountState by account.state.collectAsState()
@@ -106,6 +126,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var project by remember { mutableStateOf<DocxProject?>(null) }
     var blockCards by remember { mutableStateOf<List<CardData>>(emptyList()) }
     var field by remember { mutableStateOf(TextFieldValue()) }
+    // The draft text is already persisted in the session; save only its selection in
+    // instance state, avoiding a second copy of a potentially very long paragraph.
+    var selectionBlock by rememberSaveable { mutableIntStateOf(-1) }
+    var selectionStart by rememberSaveable { mutableIntStateOf(0) }
+    var selectionEnd by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
@@ -115,7 +140,13 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun accept(loaded: Loaded) {
         session = loaded.session; project = loaded.project; blockCards = loaded.cards
         val draft = loaded.session.draft
-        if (draft != null) field = TextFieldValue(draft.text)
+        if (draft != null) {
+            val restoreSelection = screen == Screen.EDITOR && selectionBlock == draft.block
+            val start = if (restoreSelection) selectionStart.coerceIn(0, draft.text.length) else 0
+            val end = if (restoreSelection) selectionEnd.coerceIn(0, draft.text.length) else 0
+            field = TextFieldValue(draft.text, selection = TextRange(start, end))
+            selectionBlock = draft.block; selectionStart = start; selectionEnd = end
+        }
     }
     fun persist(value: Session): Boolean = try {
         sessions.save(value); session = value; true
@@ -140,6 +171,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: NotEditable) {
             val original = p.blockText(draft.block)
             field = TextFieldValue(original)
+            selectionStart = 0; selectionEnd = 0
             persist(s.copy(draft = Draft(draft.block, original)))
             message = "That edit touches protected content."
             false
@@ -151,7 +183,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         when (val result = sessions.undo(current, draftBlock)) {
             is UndoResult.Success -> {
                 project = result.project; session = result.session
-                if (draftBlock != null) field = TextFieldValue(result.session.draft!!.text)
+                if (draftBlock != null) {
+                    field = TextFieldValue(result.session.draft!!.text)
+                    selectionBlock = draftBlock; selectionStart = 0; selectionEnd = 0
+                }
                 message = ""; reloadCards()
             }
             UndoResult.Empty -> message = "Nothing to undo."
@@ -273,6 +308,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                     Card(onClick = {
                         if (card.kind != "table" && card.kind != "other") {
                             field = TextFieldValue(card.text)
+                            selectionBlock = card.index; selectionStart = 0; selectionEnd = 0
                             session?.let { if (persist(it.copy(draft = Draft(card.index, card.text)))) { message = ""; navigate(Screen.EDITOR) } }
                         }
                     }, enabled = card.kind != "table" && card.kind != "other", modifier = Modifier.fillMaxWidth()) {
@@ -301,21 +337,20 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 }
             })
         } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Paragraph ${session?.draft?.block ?: ""}", style = MaterialTheme.typography.titleLarge)
-            Row {
-                TextButton(onClick = { if (finishEditor()) navigate(Screen.DOCUMENT) }) { Text("Done") }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.Center) {
+                Text("Paragraph ${session?.draft?.block ?: ""}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.CenterVertically))
+                TextButton(onClick = { if (finishEditor()) navigate(Screen.DOCUMENT) }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Done") }
                 TextButton(onClick = {
                     val draft = session?.draft
                     val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
                     if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
-                }) { Text("Insert citation") }
+                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Insert citation") }
                 TextButton(onClick = {
                     val currentBlock = session?.draft?.block
                     if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
-                }) { Text("Undo") }
+                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Undo") }
             }
-            Text("Select text to cut, copy or paste. Changes are applied on Done.", style = MaterialTheme.typography.bodyMedium)
-            OutlinedTextField(value = field, onValueChange = { next ->
+            ParagraphTextField(value = field, onValueChange = { next ->
                 // Normalize only newly inserted line breaks and tabs, not existing document content.
                 val old = field.text; val fresh = next.text
                 var prefix = 0
@@ -325,6 +360,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 val inserted = fresh.substring(prefix, fresh.length - suffix).replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
                 val text = fresh.substring(0, prefix) + inserted + fresh.substring(fresh.length - suffix)
                 field = if (fresh == text) next else next.copy(text = text, selection = androidx.compose.ui.text.TextRange(next.selection.start.coerceAtMost(text.length), next.selection.end.coerceAtMost(text.length)), composition = null)
+                selectionBlock = session?.draft?.block ?: -1
+                selectionStart = field.selection.start; selectionEnd = field.selection.end
                 if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
             }, modifier = Modifier.fillMaxWidth().weight(1f))
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
@@ -341,6 +378,42 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Back") }
             TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Last crash", crashText)) }) { Text("Copy") }
             Text(crashText, modifier = Modifier.verticalScroll(rememberScrollState()))
+        }
+    }
+}
+
+/** A bounded viewport around an intrinsically tall text field. Keeping the scroll
+ * outside the field lets us reveal the cursor again when only the IME size changes. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldValue) -> Unit, modifier: Modifier = Modifier) {
+    val scroll = rememberScrollState()
+    val requester = remember { BringIntoViewRequester() }
+    var focused by remember { mutableStateOf(false) }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val density = LocalDensity.current
+    val outline = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+    BoxWithConstraints(modifier.border(if (focused) 2.dp else 1.dp, outline, RoundedCornerShape(4.dp))) {
+        val viewportHeight = constraints.maxHeight
+        val minTextHeight = (maxHeight - 24.dp).coerceAtLeast(0.dp)
+        LaunchedEffect(value.selection, layout, viewportHeight, focused) {
+            val result = layout
+            if (focused && result != null && result.layoutInput.text.text == value.text) {
+                val caret = result.getCursorRect(value.selection.end.coerceIn(0, value.text.length))
+                val margin = with(density) { 12.dp.toPx() }
+                requester.bringIntoView(caret.copy(top = caret.top - margin, bottom = caret.bottom + margin))
+            }
+        }
+        Box(Modifier.fillMaxSize().imeNestedScroll().verticalScroll(scroll).padding(12.dp)) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth().heightIn(min = minTextHeight)
+                    .bringIntoViewRequester(requester).onFocusChanged { focused = it.isFocused },
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                onTextLayout = { layout = it },
+            )
         }
     }
 }
