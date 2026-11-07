@@ -143,6 +143,58 @@ private class Paragraph(private val xml: String) {
     }
 }
 
+/** The non-junk SequenceMatcher algorithm used by Python's apply_text_edit. */
+private data class Match(val a: Int, val b: Int, val size: Int)
+private data class TextChange(val start: Int, val end: Int, val text: String)
+private fun textChanges(old: String, updated: String): List<TextChange> {
+    val positions = mutableMapOf<Char, MutableList<Int>>()
+    updated.forEachIndexed { index, char -> positions.getOrPut(char) { mutableListOf() }.add(index) }
+    data class Range(val a0: Int, val a1: Int, val b0: Int, val b1: Int)
+    val queue = mutableListOf(Range(0, old.length, 0, updated.length))
+    val matches = mutableListOf<Match>()
+    while (queue.isNotEmpty()) {
+        val range = queue.removeAt(queue.lastIndex)
+        var best = Match(range.a0, range.b0, 0)
+        var previous = emptyMap<Int, Int>()
+        for (i in range.a0 until range.a1) {
+            val current = mutableMapOf<Int, Int>()
+            for (j in positions[old[i]].orEmpty()) {
+                if (j < range.b0) continue
+                if (j >= range.b1) break
+                val size = (previous[j - 1] ?: 0) + 1
+                current[j] = size
+                if (size > best.size) best = Match(i - size + 1, j - size + 1, size)
+            }
+            previous = current
+        }
+        if (best.size > 0) {
+            matches += best
+            if (range.a0 < best.a && range.b0 < best.b) queue += Range(range.a0, best.a, range.b0, best.b)
+            if (best.a + best.size < range.a1 && best.b + best.size < range.b1) queue += Range(best.a + best.size, range.a1, best.b + best.size, range.b1)
+        }
+    }
+    val merged = mutableListOf<Match>()
+    for (match in matches.sortedWith(compareBy<Match> { it.a }.thenBy { it.b })) {
+        val last = merged.lastOrNull()
+        if (last != null && last.a + last.size == match.a && last.b + last.size == match.b) merged[merged.lastIndex] = last.copy(size = last.size + match.size)
+        else merged += match
+    }
+    merged += Match(old.length, updated.length, 0)
+    val changes = mutableListOf<TextChange>()
+    var a = 0; var b = 0
+    for (match in merged) {
+        if (a < match.a || b < match.b) {
+            val change = TextChange(a, match.a, updated.substring(b, match.b))
+            val last = changes.lastOrNull()
+            if (last != null && change.start - last.end < 4) {
+                changes[changes.lastIndex] = TextChange(last.start, change.end, last.text + old.substring(last.end, change.start) + change.text)
+            } else changes += change
+        }
+        a = match.a + match.size; b = match.b + match.size
+    }
+    return changes
+}
+
 private data class Block(val tag: String, val gap: String, var xml: String)
 data class Citation(val number: Int, val keys: List<String>, val text: String)
 private data class Snapshot(
@@ -235,6 +287,29 @@ class DocxProject(private val source: File) {
         val old = snapshot()
         removed += end - from
         change(block, cleaned, old)
+    }
+    /** Atomically apply all paragraph changes as one undoable operation. */
+    fun applyTextEdit(block: Int, newText: String): Boolean {
+        val original = paragraph(block).text
+        if (original == newText) return false
+        val changes = textChanges(original, newText)
+        if (changes.any { change -> change.text.any { it == '\n' || it == '\r' || it == '\t' } }) {
+            throw NotEditable("Line breaks and tabs cannot be typed here.")
+        }
+        var xml = blocks[block].xml
+        var removedCount = 0; var addedCount = 0
+        for (change in changes.asReversed()) {
+            val para = Paragraph(xml)
+            val replacement = makeRun(para.format(change.start, change.end), change.text)
+            xml = para.replace(change.start, change.end, replacement)
+            xml = Regex("<w:bookmarkStart w:id=\"(\\d+)\" w:name=\"BLK_[A-Z0-9]+_\\d+\"/><w:bookmarkEnd w:id=\"\\1\"/>").replace(xml, "")
+            removedCount += change.end - change.start; addedCount += change.text.length
+        }
+        if (Paragraph(xml).text != newText) throw NotEditable("That change could not be applied exactly.")
+        val old = snapshot()
+        removed += removedCount; added += addedCount
+        change(block, xml, old)
+        return true
     }
     fun replaceText(block: Int, start: Int, end: Int, text: String) {
         require(!text.any { it == '\n' || it == '\r' || it == '\t' })

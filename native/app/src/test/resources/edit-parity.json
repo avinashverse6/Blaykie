@@ -1,0 +1,17 @@
+{
+  "single": "alpha BRAVO charlie delta echo",
+  "singleSummary": [
+    5,
+    5
+  ],
+  "multi": "ALPHA bravo charlie delta ECHO",
+  "multiSummary": [
+    9,
+    9
+  ],
+  "replay": "ALPHA bravo charlie delta ECHO",
+  "undo": true,
+  "afterUndo": "alpha bravo charlie delta echo",
+  "protected": "rejected",
+  "protectedAfter": "before LOCKED after"
+}
