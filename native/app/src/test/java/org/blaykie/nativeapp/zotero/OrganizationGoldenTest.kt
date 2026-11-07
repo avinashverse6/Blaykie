@@ -36,6 +36,17 @@ class OrganizationGoldenTest {
         }
         val ordered = CitationFormatting.ordered(golden.keys("orderKeys").map { items.getValue(it) }).map { it.key }
         if (ordered != golden.keys("order")) errors += "order: expected ${golden.keys("order")} actual $ordered"
+        for (value in golden.getValue("combined") as JsonArray) {
+            val c = value as JsonObject; val group = c.keys("keys").map { items.getValue(it) }
+            val citation = CitationFormatting.inText(group)
+            val narrative = CitationFormatting.citationText(group, "narrative")
+            val references = CitationFormatting.referenceList(group)
+            val order = CitationFormatting.ordered(group).map { it.key }
+            if (citation != c.str("parenthetical")) errors += "combined citation: expected ${c.str("parenthetical")} actual $citation"
+            if (narrative != c.str("narrative")) errors += "combined narrative: expected ${c.str("narrative")} actual $narrative"
+            if (references != c.str("references")) errors += "combined references: expected ${c.str("references")} actual $references"
+            if (order != c.keys("order")) errors += "combined order: expected ${c.keys("order")} actual $order"
+        }
         assertTrue(errors.joinToString("\n"), errors.isEmpty())
     }
 

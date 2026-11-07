@@ -2512,6 +2512,62 @@
           }
         ]
       }
+    },
+    {
+      "key": "unicode-a",
+      "data": {
+        "itemType": "report",
+        "title": "First",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ]
+      }
+    },
+    {
+      "key": "unicode-b",
+      "data": {
+        "itemType": "report",
+        "title": "Second",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "कताब स्वास्थ्य संस्था"
+          }
+        ]
+      }
+    },
+    {
+      "key": "suffix-a",
+      "data": {
+        "itemType": "report",
+        "title": "Beta",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ]
+      }
+    },
+    {
+      "key": "suffix-b",
+      "data": {
+        "itemType": "report",
+        "title": "Alpha",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ]
+      }
     }
   ],
   "cases": [
@@ -5709,5 +5765,48 @@
     "sortorg",
     "sortperson",
     "sortperson2"
+  ],
+  "combined": [
+    {
+      "keys": [
+        "sortorg",
+        "sortperson",
+        "sortperson2"
+      ],
+      "parenthetical": "(Smith, 2020; World Health Organization, 2020; Zimmer, 2020)",
+      "narrative": "Smith (2020); World Health Organization (2020); Zimmer (2020)",
+      "references": "Smith, A. (2020). B.\n\nWorld Health Organization. (2020). A.\n\nZimmer, Z. (2020). C.",
+      "order": [
+        "sortperson",
+        "sortorg",
+        "sortperson2"
+      ]
+    },
+    {
+      "keys": [
+        "unicode-a",
+        "unicode-b"
+      ],
+      "parenthetical": "(कताब स्वास्थ्य संस्था, 2020; किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "कताब स्वास्थ्य संस्था (2020); किताब स्वास्थ्य संस्था (2020)",
+      "references": "कताब स्वास्थ्य संस्था. (2020). Second.\n\nकिताब स्वास्थ्य संस्था. (2020). First.",
+      "order": [
+        "unicode-b",
+        "unicode-a"
+      ]
+    },
+    {
+      "keys": [
+        "suffix-a",
+        "suffix-b"
+      ],
+      "parenthetical": "(World Health Organization, 2020a, 2020b)",
+      "narrative": "World Health Organization (2020a); World Health Organization (2020b)",
+      "references": "World Health Organization. (2020a). Alpha.\n\nWorld Health Organization. (2020b). Beta.",
+      "order": [
+        "suffix-b",
+        "suffix-a"
+      ]
+    }
   ]
 }

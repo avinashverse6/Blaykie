@@ -193,7 +193,7 @@ internal object CitationFormatting {
     }
     internal fun suffixes(items: List<CitationItem>): Map<String, String> {
         val groups = items.distinctBy { it.key }.groupBy { item ->
-            val authorKey = item.authors.map { sortKey(it.last) to sortKey(it.first) }
+            val authorKey = item.authors.map { (if (it.group) pythonSortKey(it.last) else sortKey(it.last)) to sortKey(it.first) }
             Triple(if (authorKey.isEmpty()) listOf("title" to titleSort(item)) else authorKey, year(item), item.authors.isEmpty())
         }
         val result = mutableMapOf<String, String>()
