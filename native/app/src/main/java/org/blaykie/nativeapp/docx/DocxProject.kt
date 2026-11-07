@@ -260,7 +260,7 @@ class DocxProject(private val source: File) {
     fun editSummary(): Pair<Int, Int> = removed to added
     private fun snapshot() = Snapshot(blocks.map { it.xml }, known.toMap(), nextCitation, nextBookmark, citationOperations.toList(), removed, added)
     private fun change(index: Int, xml: String, previous: Snapshot) { blocks[index].xml = xml; history += previous }
-    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>): Int {
+    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = ""): Int {
         val chosen = items.distinctBy { it.key }
         require(chosen.isNotEmpty()) { "Choose at least one reference." }
         val para = paragraph(block)
@@ -271,10 +271,11 @@ class DocxProject(private val source: File) {
         val ids = chosen.indices.map { nextBookmark + it }
         val rpr = para.format(start, end)
         val marks = chosen.zip(ids).joinToString("") { (item, id) -> "<w:bookmarkStart w:id=\"$id\" w:name=\"BLK_${itemKey(item)}_$nextCitation\"/>" }
-        val replacement = makeRun(rpr, lead) + marks + makeRun(rpr, CitationFormatting.inText(chosen)) + ids.reversed().joinToString("") { "<w:bookmarkEnd w:id=\"$it\"/>" } + makeRun(rpr, trail)
+        val citationText = CitationFormatting.citationText(chosen, style, page, prefix)
+        val replacement = makeRun(rpr, lead) + marks + makeRun(rpr, citationText) + ids.reversed().joinToString("") { "<w:bookmarkEnd w:id=\"$it\"/>" } + makeRun(rpr, trail)
         val newXml = para.replace(start, end, replacement)
         val old = snapshot(); chosen.forEach { known[itemKey(it)] = it }; val number = nextCitation++
-        citationOperations.add(Citation(number, chosen.map { it.key }, CitationFormatting.inText(chosen)))
+        citationOperations.add(Citation(number, chosen.map { it.key }, citationText))
         nextBookmark += chosen.size; change(block, newXml, old)
         return number
     }

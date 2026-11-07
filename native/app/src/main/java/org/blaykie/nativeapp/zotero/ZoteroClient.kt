@@ -21,6 +21,7 @@ sealed class ZoteroResult<out T> {
     object EmptyLibrary : ZoteroResult<Nothing>()
     object InvalidKey : ZoteroResult<Nothing>()
     object NetworkFailure : ZoteroResult<Nothing>()
+    object Cancelled : ZoteroResult<Nothing>()
     object MalformedJson : ZoteroResult<Nothing>()
     class RateLimited(val retryAfterSeconds: Long) : ZoteroResult<Nothing>()
     class HttpError(val status: Int) : ZoteroResult<Nothing>()
@@ -71,6 +72,18 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
     }
     private val json = Json { ignoreUnknownKeys = true }
     private var pendingWaitSeconds = 0L
+    private val cancellationLock = Any()
+    @Volatile private var cancelled = false
+    private var activeCall: Call? = null
+    private var waitingThread: Thread? = null
+
+    fun cancel() {
+        synchronized(cancellationLock) {
+            cancelled = true
+            activeCall?.cancel()
+            waitingThread?.interrupt()
+        }
+    }
 
     private fun retryDelay(vararg headers: String?): Long = headers.mapNotNull { value ->
         val text = value?.trim() ?: return@mapNotNull null
@@ -91,25 +104,44 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
             Request.Builder().url(url).header("Zotero-API-Key", apiKey).header("Zotero-API-Version", "3").build()
         } catch (_: IllegalArgumentException) { return ZoteroResult.InvalidKey }
         for (attempt in 0..MAX_RETRIES) {
+            if (cancelled) return ZoteroResult.Cancelled
             if (pendingWaitSeconds > 0) {
-                try { sleep(pendingWaitSeconds * 1000) } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt(); return ZoteroResult.NetworkFailure
+                synchronized(cancellationLock) {
+                    if (cancelled) return ZoteroResult.Cancelled
+                    waitingThread = Thread.currentThread()
                 }
+                try { sleep(pendingWaitSeconds * 1000) } catch (_: InterruptedException) {
+                    if (cancelled) { Thread.interrupted(); return ZoteroResult.Cancelled }
+                    Thread.currentThread().interrupt(); return ZoteroResult.NetworkFailure
+                } finally { synchronized(cancellationLock) { waitingThread = null } }
                 pendingWaitSeconds = 0
             }
-            val response = try { calls.newCall(request).execute() } catch (_: IOException) { return ZoteroResult.NetworkFailure }
-            val delay = retryDelay(response.header("Backoff"), response.header("Retry-After"))
-            if (response.code == 429 || (response.code == 503 && delay > 0)) {
-                response.close()
-                if (attempt == MAX_RETRIES) return ZoteroResult.RateLimited(delay)
-                pendingWaitSeconds = maxOf(delay, 1)
-                continue
-            }
-            response.use {
-                if (it.code == 401 || it.code == 403) return ZoteroResult.InvalidKey
-                if (!it.isSuccessful) return ZoteroResult.HttpError(it.code)
-                pendingWaitSeconds = delay
-                return try { ZoteroResult.Success(it.body?.string() ?: "") } catch (_: IOException) { ZoteroResult.NetworkFailure }
+            val call = synchronized(cancellationLock) {
+                if (cancelled) null else calls.newCall(request).also { activeCall = it }
+            } ?: return ZoteroResult.Cancelled
+            try {
+                val response = try { call.execute() } catch (_: IOException) {
+                    return if (cancelled) ZoteroResult.Cancelled else ZoteroResult.NetworkFailure
+                }
+                val delay = retryDelay(response.header("Backoff"), response.header("Retry-After"))
+                if (response.code == 429 || (response.code == 503 && delay > 0)) {
+                    response.close()
+                    if (cancelled) return ZoteroResult.Cancelled
+                    if (attempt == MAX_RETRIES) return ZoteroResult.RateLimited(delay)
+                    pendingWaitSeconds = maxOf(delay, 1)
+                    continue
+                }
+                response.use {
+                    if (cancelled) return ZoteroResult.Cancelled
+                    if (it.code == 401 || it.code == 403) return ZoteroResult.InvalidKey
+                    if (!it.isSuccessful) return ZoteroResult.HttpError(it.code)
+                    pendingWaitSeconds = delay
+                    return try { ZoteroResult.Success(it.body?.string() ?: "") } catch (_: IOException) {
+                        if (cancelled) ZoteroResult.Cancelled else ZoteroResult.NetworkFailure
+                    }
+                }
+            } finally {
+                synchronized(cancellationLock) { if (activeCall === call) activeCall = null }
             }
         }
         return ZoteroResult.NetworkFailure
@@ -119,6 +151,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         is ZoteroResult.EmptyLibrary -> result
         is ZoteroResult.InvalidKey -> result
         is ZoteroResult.NetworkFailure -> result
+        is ZoteroResult.Cancelled -> result
         is ZoteroResult.MalformedJson -> result
         is ZoteroResult.RateLimited -> result
         is ZoteroResult.HttpError -> result
@@ -152,6 +185,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
                 is ZoteroResult.EmptyLibrary -> return page
                 is ZoteroResult.InvalidKey -> return page
                 is ZoteroResult.NetworkFailure -> return page
+                is ZoteroResult.Cancelled -> return page
                 is ZoteroResult.MalformedJson -> return page
                 is ZoteroResult.RateLimited -> return page
                 is ZoteroResult.HttpError -> return page
@@ -170,6 +204,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
                 is ZoteroResult.EmptyLibrary -> return page
                 is ZoteroResult.InvalidKey -> return page
                 is ZoteroResult.NetworkFailure -> return page
+                is ZoteroResult.Cancelled -> return page
                 is ZoteroResult.MalformedJson -> return page
                 is ZoteroResult.RateLimited -> return page
                 is ZoteroResult.HttpError -> return page

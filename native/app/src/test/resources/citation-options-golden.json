@@ -1,0 +1,284 @@
+{
+  "cases": [
+    {
+      "name": "parenthetical",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        }
+      ],
+      "style": "parenthetical",
+      "page": "",
+      "prefix": "",
+      "expected": "(Lovelace, 2020)"
+    },
+    {
+      "name": "parenthetical_page",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        }
+      ],
+      "style": "parenthetical",
+      "page": "12-14",
+      "prefix": "",
+      "expected": "(Lovelace, 2020, pp. 12–14)"
+    },
+    {
+      "name": "parenthetical_prefix",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        }
+      ],
+      "style": "parenthetical",
+      "page": "15",
+      "prefix": "see",
+      "expected": "(see Lovelace, 2020, p. 15)"
+    },
+    {
+      "name": "narrative_page_prefix",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        }
+      ],
+      "style": "narrative",
+      "page": "15",
+      "prefix": "see",
+      "expected": "Lovelace (2020, p. 15)"
+    },
+    {
+      "name": "multiple_page_prefix",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        },
+        {
+          "key": "TWO2",
+          "data": {
+            "itemType": "book",
+            "title": "A thoughtful book",
+            "creators": [
+              {
+                "firstName": "Amy",
+                "lastName": "Adams",
+                "creatorType": "author"
+              },
+              {
+                "firstName": "Ben",
+                "lastName": "Brown",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2019",
+            "publisher": "Example Press",
+            "edition": "2"
+          }
+        },
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        }
+      ],
+      "style": "parenthetical",
+      "page": "15",
+      "prefix": "see",
+      "expected": "(see Adams & Brown, 2019; Lovelace, 2020)"
+    },
+    {
+      "name": "unicode_narrative",
+      "items": [
+        {
+          "key": "INDIA6",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Language research",
+            "creators": [
+              {
+                "firstName": "आशा",
+                "lastName": "शर्मा",
+                "creatorType": "author"
+              },
+              {
+                "firstName": "આશા",
+                "lastName": "પટેલ",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2023",
+            "publicationTitle": "Journal of Testing"
+          }
+        }
+      ],
+      "style": "narrative",
+      "page": "8",
+      "prefix": "see",
+      "expected": "शर्मा and પટેલ (2023, p. 8)"
+    },
+    {
+      "name": "unicode_multiple",
+      "items": [
+        {
+          "key": "ONE1",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Citation studies in practice",
+            "creators": [
+              {
+                "firstName": "Ada",
+                "lastName": "Lovelace",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2020",
+            "publicationTitle": "Journal of Testing",
+            "volume": "12",
+            "issue": "3",
+            "pages": "1-10",
+            "DOI": "10.1234/test.2020"
+          }
+        },
+        {
+          "key": "INDIA6",
+          "data": {
+            "itemType": "journalArticle",
+            "title": "Language research",
+            "creators": [
+              {
+                "firstName": "आशा",
+                "lastName": "शर्मा",
+                "creatorType": "author"
+              },
+              {
+                "firstName": "આશા",
+                "lastName": "પટેલ",
+                "creatorType": "author"
+              }
+            ],
+            "date": "2023",
+            "publicationTitle": "Journal of Testing"
+          }
+        }
+      ],
+      "style": "parenthetical",
+      "page": "",
+      "prefix": "",
+      "expected": "(Lovelace, 2020; शर्मा & પટેલ, 2023)"
+    }
+  ],
+  "selection": {
+    "block": 1,
+    "start": 6,
+    "end": 15,
+    "before": "First paragraph about citations.",
+    "after": "First paragraph (Lovelace, 2020) about citations.",
+    "citation": "(Lovelace, 2020)"
+  },
+  "supplementary": {
+    "before": "A 😀 sample text.",
+    "codepoint_position": 3,
+    "after": "A 😀 (Lovelace, 2020) sample text."
+  }
+}

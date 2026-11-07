@@ -40,6 +40,9 @@ import org.blaykie.nativeapp.account.AccountSection
 import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
+import org.blaykie.nativeapp.citation.CitationSearchController
+import org.blaykie.nativeapp.citation.CitationSearchScreen
+import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
@@ -63,7 +66,9 @@ class MainActivity : ComponentActivity() {
         CrashLog.install(filesDir)
         val settingsStore = SettingsStore(applicationContext)
         val sessions = SessionStore(filesDir)
-        val account = ViewModelProvider(this, AccountController.Factory(AccountStore(filesDir, AndroidKeyCipher())))[AccountController::class.java]
+        val accountStore = AccountStore(filesDir, AndroidKeyCipher())
+        val account = ViewModelProvider(this, AccountController.Factory(accountStore))[AccountController::class.java]
+        val citationSearch = ViewModelProvider(this, CitationSearchController.Factory(accountStore))[CitationSearchController::class.java]
         setContent {
             val settings by settingsStore.settings.collectAsState(initial = Settings())
             val dark = when (settings.theme) { ThemeMode.System -> isSystemInDarkTheme(); ThemeMode.Light -> false; ThemeMode.Dark -> true }
@@ -72,7 +77,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                     Surface(Modifier.fillMaxSize()) {
-                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account) }
+                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account, citationSearch) }
                     }
                 }
             }
@@ -82,8 +87,9 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController) {
     val accountState by account.state.collectAsState()
+    val searchState by citationSearch.state.collectAsState()
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
@@ -112,13 +118,13 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             loading = false
         }
     }
-    fun finishEditor(): Boolean {
+    fun syncEditor(keepDraft: Boolean): Boolean {
         val p = project ?: return false
         val s = session ?: return false
         val draft = s.draft ?: return true
         return try {
             val changed = p.applyTextEdit(draft.block, field.text)
-            val updated = s.copy(edits = if (changed) s.edits + EditOperation(draft.block, field.text) else s.edits, draft = null)
+            val updated = s.copy(edits = if (changed) s.edits + EditOperation(draft.block, field.text) else s.edits, draft = if (keepDraft) Draft(draft.block, field.text) else null)
             if (!persist(updated)) { if (changed) p.undo(); false }
             else { reloadCards(); message = ""; true }
         } catch (_: NotEditable) {
@@ -129,6 +135,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             false
         }
     }
+    fun finishEditor(): Boolean = syncEditor(false)
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
@@ -138,7 +145,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             Screen.HOME -> Unit
         }
     }
-    BackHandler(enabled = screen != Screen.HOME) { back() }
+    BackHandler(enabled = screen != Screen.HOME) { if (searchState.open) citationSearch.close() else back() }
+    LaunchedEffect(accountState.account, searchState.open) {
+        if (searchState.open) citationSearch.refreshAccount()
+    }
     LaunchedEffect(Unit) {
         val restored = withContext(Dispatchers.IO) {
             when (val r = sessions.read()) {
@@ -219,10 +229,32 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 }
             }
         }
-        Screen.EDITOR -> Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Screen.EDITOR -> if (searchState.open) {
+            CitationSearchScreen(searchState, citationSearch, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) }, onInsert = {
+                val p = project; val s = session; val chosen = searchState.selectedItems()
+                if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
+                else if (p != null && s != null) {
+                    try {
+                        p.insertCitation(searchState.block, searchState.position, searchState.position, chosen, searchState.style, searchState.page.trim(), searchState.prefix.trim())
+                        val operation = EditOperation(block = searchState.block, type = "citation", position = searchState.position, items = chosen, style = searchState.style, page = searchState.page.trim(), prefix = searchState.prefix.trim())
+                        if (!persist(s.copy(edits = s.edits + operation, draft = null))) p.undo()
+                        else {
+                            val citation = p.citations().last().text
+                            citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
+                            message = "Citation added: " + citation.take(50)
+                        }
+                    } catch (_: NotEditable) { citationSearch.message("This spot is protected.") }
+                }
+            })
+        } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Paragraph ${session?.draft?.block ?: ""}", style = MaterialTheme.typography.titleLarge)
             Row {
                 TextButton(onClick = { if (finishEditor()) navigate(Screen.DOCUMENT) }) { Text("Done") }
+                TextButton(onClick = {
+                    val draft = session?.draft
+                    val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
+                    if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
+                }) { Text("Insert citation") }
                 TextButton(onClick = {
                     val currentBlock = session?.draft?.block
                     if (currentBlock != null && finishEditor()) {

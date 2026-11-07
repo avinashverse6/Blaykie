@@ -1,7 +1,11 @@
 package org.blaykie.nativeapp.docx
 
+import kotlinx.serialization.Serializable
+
 /** Citation data shared by the DOCX core and Zotero client. */
+@Serializable
 data class CitationAuthor(val first: String = "", val last: String, val group: Boolean = false)
+@Serializable
 data class CitationItem(
     val key: String,
     val title: String,
@@ -43,6 +47,7 @@ internal object CitationFormatting {
         if (item.date.contains("in press", true) || item.date.contains("forthcoming", true)) return "in press"
         return Regex("\\b(1\\d{3}|20\\d{2})\\b").find(item.date)?.value ?: "n.d."
     }
+    fun displayYear(item: CitationItem): String = year(item)
     private fun sortKey(value: String): String {
         val normalized = java.text.Normalizer.normalize(value.lowercase(), java.text.Normalizer.Form.NFKD)
             .filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
@@ -55,13 +60,13 @@ internal object CitationFormatting {
             .thenBy { year(it).toIntOrNull() ?: if (year(it) == "in press") 99999 else 0 }
             .thenBy { titleSort(it) }
     )
-    private fun label(item: CitationItem): String = when (item.authors.size) {
+    private fun label(item: CitationItem, joiner: String = "&"): String = when (item.authors.size) {
         0 -> {
             val title = titleCase(item.title.ifBlank { "Untitled" }).split(Regex("\\s+")).take(6).joinToString(" ").trimEnd('.', ',', ':', ';')
             if (item.itemType in setOf("journalArticle", "bookSection", "newspaperArticle", "magazineArticle", "blogPost", "conferencePaper", "encyclopediaArticle", "dictionaryEntry", "preprint", "forumPost")) "\"$title\"" else title
         }
         1 -> item.authors[0].last
-        2 -> "${item.authors[0].last} & ${item.authors[1].last}"
+        2 -> "${item.authors[0].last} $joiner ${item.authors[1].last}"
         else -> "${item.authors[0].last} et al."
     }
     private fun suffixes(items: List<CitationItem>): Map<String, String> {
@@ -75,9 +80,9 @@ internal object CitationFormatting {
         }
         return result
     }
-    fun inText(items: List<CitationItem>): String {
+    fun inText(items: List<CitationItem>, context: List<CitationItem> = items): String {
         if (items.isEmpty()) return ""
-        val suffixes = suffixes(items)
+        val suffixes = suffixes(context)
         val groups = linkedMapOf<String, MutableList<String>>()
         for (item in ordered(items)) {
             val suffix = suffixes[item.key].orEmpty()
@@ -88,6 +93,26 @@ internal object CitationFormatting {
             val joined = years.joinToString(", ")
             if (label.endsWith('"')) "${label.dropLast(1)},\" $joined" else "$label, $joined"
         }
+    }
+
+    fun citationText(items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = "", context: List<CitationItem> = items): String {
+        val chosen = items.distinctBy { it.key }
+        if (chosen.isEmpty()) return ""
+        val pages = page.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
+        val pageText = if (pages.isEmpty()) "" else (if ('–' in pages || ',' in pages) "pp. " else "p. ") + pages
+        if (style == "narrative") {
+            val suffixes = suffixes(context)
+            return ordered(chosen).joinToString("; ") { item ->
+                val suffix = suffixes[item.key].orEmpty()
+                val yr = year(item) + (if (suffix.isNotEmpty() && year(item) in setOf("n.d.", "in press")) "-" else "") + suffix
+                val locator = if (chosen.size == 1 && pageText.isNotEmpty()) ", $pageText" else ""
+                "${label(item, "and")} ($yr$locator)"
+            }
+        }
+        var inner = inText(chosen, context).removePrefix("(").removeSuffix(")")
+        if (chosen.size == 1 && pageText.isNotEmpty()) inner += ", $pageText"
+        if (prefix.isNotEmpty()) inner = prefix.trim() + " " + inner
+        return "($inner)"
     }
 
     fun referenceList(items: List<CitationItem>): String {
