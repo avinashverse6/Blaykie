@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.zotero.KeyPermissions
 import org.blaykie.nativeapp.zotero.ZoteroClient
 
-internal enum class AccountRoute { LOADING, FIRST_RUN, APP, ACCOUNT, KEY }
+internal enum class AccountRoute { LOADING, FIRST_RUN, APP, KEY }
 internal data class AccountSummary(val userId: Long, val lastFour: String, val permissions: KeyPermissions) {
     override fun toString() = "AccountSummary(redacted)"
 }
@@ -24,6 +24,12 @@ internal data class AccountState(
     val warning: Boolean = false,
     val message: String = "",
 )
+internal fun redactedKeySuffix(key: String): String = if (key.length > 4) key.takeLast(4) else ""
+
+internal fun removalResult(state: AccountState, removed: Boolean): AccountState =
+    if (removed) state.copy(route = AccountRoute.FIRST_RUN, checking = false, account = null, message = "")
+    else state.copy(checking = false, message = "Could not remove the key. Please try again.")
+
 internal class AccountController(private val store: AccountStore, private val logic: AccountLogic) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = VerificationGate()
@@ -43,9 +49,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         }
     }
     private fun summary(secret: AccountSecret): AccountSummary = AccountSummary(secret.verified.userId,
-        if (secret.key.length > 4) secret.key.takeLast(4) else "", secret.verified.permissions)
-    fun openAccount() { mutable.value = mutable.value.copy(route = AccountRoute.ACCOUNT, message = "") }
-    fun closeAccount() { mutable.value = mutable.value.copy(route = AccountRoute.APP, message = "") }
+        redactedKeySuffix(secret.key), secret.verified.permissions)
     fun openKey(fromFirst: Boolean) {
         fromFirstRun = fromFirst; pending = null
         mutable.value = mutable.value.copy(route = AccountRoute.KEY, warning = false, message = "")
@@ -53,7 +57,7 @@ internal class AccountController(private val store: AccountStore, private val lo
     fun cancelKey() {
         if (mutable.value.checking) return
         pending = null
-        mutable.value = mutable.value.copy(route = if (fromFirstRun) AccountRoute.FIRST_RUN else AccountRoute.ACCOUNT, warning = false, message = "")
+        mutable.value = mutable.value.copy(route = if (fromFirstRun) AccountRoute.FIRST_RUN else AccountRoute.APP, warning = false, message = "")
     }
     fun skip() {
         scope.launch {
@@ -87,7 +91,7 @@ internal class AccountController(private val store: AccountStore, private val lo
             val saved = withContext(Dispatchers.IO) { logic.save(secret) }
             pending = null
             mutable.value = if (saved) mutable.value.copy(checking = false, warning = false,
-                route = if (fromFirstRun) AccountRoute.APP else AccountRoute.ACCOUNT, account = summary(secret), message = "")
+                route = AccountRoute.APP, account = summary(secret), message = "")
             else mutable.value.copy(checking = false, warning = false, message = "Could not save the key securely. Please try again.")
         }
     }
@@ -96,8 +100,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         mutable.value = mutable.value.copy(checking = true, message = "")
         scope.launch {
             val removed = withContext(Dispatchers.IO) { store.remove() }
-            mutable.value = if (removed) mutable.value.copy(checking = false, account = null, message = "Key removed from this phone.")
-            else mutable.value.copy(checking = false, message = "Could not remove the key. Please try again.")
+            mutable.value = removalResult(mutable.value, removed)
         }
     }
     override fun onCleared() { pending = null; scope.cancel() }

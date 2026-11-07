@@ -55,6 +55,21 @@ class AccountTest {
         val cipher = FakeCipher(); val store = AccountStore(temp.root, cipher)
         assertTrue(store.save(AccountSecret(secret, verified))); assertTrue(store.remove())
         assertNull(cipher.material); assertFalse(File(temp.root, "account.enc").exists()); assertSame(AccountRead.Missing, store.read())
+        val previous = AccountState(route = AccountRoute.APP, account = AccountSummary(123, redactedKeySuffix(secret), permissions), checking = true)
+        val after = removalResult(previous, true)
+        assertEquals(AccountRoute.FIRST_RUN, after.route); assertNull(after.account); assertFalse(after.checking)
+        val failed = removalResult(previous, false)
+        assertEquals(AccountRoute.APP, failed.route); assertEquals(previous.account, failed.account); assertFalse(failed.checking)
+    }
+    @Test fun displayedKeySuffixNeverExposesShortKeysOrMoreThanFourCharacters() {
+        assertEquals("", redactedKeySuffix(""))
+        assertEquals("", redactedKeySuffix("abc"))
+        assertEquals("", redactedKeySuffix("abcd"))
+        assertEquals("bcde", redactedKeySuffix("abcde"))
+        assertEquals(secret.takeLast(4), redactedKeySuffix(secret))
+        val summary = AccountSummary(123, redactedKeySuffix(secret), permissions)
+        assertFalse(summary.toString().contains(secret))
+        assertFalse(AccountState(account = summary).toString().contains(secret))
     }
     @Test fun missingOrInvalidKeystoreIsUnavailableAndCanBeReplaced() {
         val cipher = FakeCipher(); val store = AccountStore(temp.root, cipher)

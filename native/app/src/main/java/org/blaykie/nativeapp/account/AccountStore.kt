@@ -80,8 +80,8 @@ class AccountStore(private val root: File, private val cipher: SecretCipher) {
         val temporaryRemoved = !temporary.exists() || temporary.delete()
         val filesRemoved = accountRemoved && temporaryRemoved
         val keyRemoved = try { cipher.removeKey(); true } catch (_: Exception) { false }
-        skippedFile.delete()
-        return filesRemoved && keyRemoved
+        val skipRemoved = !skippedFile.exists() || skippedFile.delete()
+        return filesRemoved && keyRemoved && skipRemoved
     }
     @Synchronized fun skip(): Boolean = try { root.mkdirs(); skippedFile.writeText("1"); true } catch (_: Exception) { false }
     @Synchronized fun hasSkipped(): Boolean = skippedFile.isFile

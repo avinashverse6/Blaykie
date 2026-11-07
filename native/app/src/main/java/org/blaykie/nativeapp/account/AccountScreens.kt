@@ -19,7 +19,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun AccountGate(activity: Activity, controller: AccountController, content: @Composable (onAccount: () -> Unit) -> Unit) {
+internal fun AccountGate(activity: Activity, controller: AccountController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
     val holder = rememberSaveableStateHolder()
     DisposableEffect(activity, state.route) {
@@ -31,16 +31,12 @@ internal fun AccountGate(activity: Activity, controller: AccountController, cont
     }
     when (state.route) {
         AccountRoute.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() }
-        AccountRoute.APP -> holder.SaveableStateProvider("application") { content { controller.openAccount() } }
+        AccountRoute.APP -> holder.SaveableStateProvider("application") { content() }
         AccountRoute.FIRST_RUN -> {
             BackHandler { }
             FirstRunScreen(state, onOpenBrowser = {
                 try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.zotero.org/settings/keys/new"))) } catch (_: Exception) { }
             }, onKey = { controller.openKey(true) }, onSkip = { controller.skip() })
-        }
-        AccountRoute.ACCOUNT -> {
-            BackHandler { controller.closeAccount() }
-            AccountScreen(state, onBack = { controller.closeAccount() }, onChange = { controller.openKey(false) }, onRemove = { controller.remove() })
         }
         AccountRoute.KEY -> {
             BackHandler { controller.cancelKey() }
@@ -93,12 +89,11 @@ private fun KeyScreen(state: AccountState, onSave: (String) -> Unit, onCancel: (
 }
 
 @Composable
-private fun AccountScreen(state: AccountState, onBack: () -> Unit, onChange: () -> Unit, onRemove: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Account", style = MaterialTheme.typography.headlineMedium)
-        TextButton(onClick = onBack) { Text("Back") }
+internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Account", style = MaterialTheme.typography.titleMedium)
         val account = state.account
-        if (account == null) Text("No key saved. Add a key to use Zotero features.")
+        if (account == null) Text("No key saved")
         else {
             Text("User ID: ${account.userId}")
             Text(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}")

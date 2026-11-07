@@ -36,6 +36,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.account.AccountController
 import org.blaykie.nativeapp.account.AccountGate
+import org.blaykie.nativeapp.account.AccountSection
+import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.docx.DocxProject
@@ -70,7 +72,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalDensity provides scaled) {
                 MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                     Surface(Modifier.fillMaxSize()) {
-                        AccountGate(this, account) { openAccount -> AppScreens(this, settingsStore, settings, sessions, openAccount) }
+                        AccountGate(this, account) { AppScreens(this, settingsStore, settings, sessions, account) }
                     }
                 }
             }
@@ -80,7 +82,8 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, onAccount: () -> Unit) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController) {
+    val accountState by account.state.collectAsState()
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
@@ -246,7 +249,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }, modifier = Modifier.fillMaxWidth().weight(1f))
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
-        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, onBack = { navigate(Screen.HOME) }, onAccount = onAccount, onCrash = {
+        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
             navigate(Screen.LAST_CRASH)
         })
@@ -260,11 +263,12 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
 }
 
 @Composable
-private fun SettingsScreen(settings: Settings, store: SettingsStore, onBack: () -> Unit, onAccount: () -> Unit, onCrash: () -> Unit) {
+private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onCrash: () -> Unit) {
     val scope = rememberCoroutineScope()
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
         TextButton(onClick = onBack) { Text("Back") }
         Text("Settings", style = MaterialTheme.typography.headlineMedium)
+        AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey)
         Text("Theme", Modifier.padding(top = 24.dp), style = MaterialTheme.typography.titleMedium)
         Column(Modifier.selectableGroup()) {
             ThemeMode.entries.forEach { mode ->
@@ -281,7 +285,6 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, onBack: () 
                 }
             }
         }
-        TextButton(onClick = onAccount) { Text("Account") }
         TextButton(onClick = onCrash) { Text("Last crash") }
     }
 }
