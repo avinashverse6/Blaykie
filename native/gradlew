@@ -253,7 +253,7 @@ eval "set -- $(
 status=$?
 cat "$APP_HOME/ci-diagnostic.log"
 if [ "$status" -ne 0 ]; then
-    grep -E '(^e: |^\* What went wrong:|^> |^Caused by:|^FAILURE:)' "$APP_HOME/ci-diagnostic.log" | tail -40 | while IFS= read -r line; do
+    grep -E '(^e: |^\* What went wrong:|^> [^T]|^Caused by:|^FAILURE:| error:)'  "$APP_HOME/ci-diagnostic.log" | tail -40 | while IFS= read -r line; do
         printf '::error::%s\n' "$line"
     done
 fi
