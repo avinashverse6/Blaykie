@@ -110,4 +110,12 @@ Bug reports and suggestions are welcome. Please open an issue.
 
 ## License
 
-Released under the [MIT License](LICENSE). Blaykie is not affiliated with Zotero.
+Copyright (C) 2026 avinashverse6
+
+Licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Versions released before this license change were MIT-licensed and remain MIT-licensed for those versions. The last commit on main carrying the MIT license was `2971cc3c3bcb86b497cf19e5d5c32263a1c02b6d` (2026-11-07 07:08:43 +05:30).
+
+For other license requests, please use this repository's GitHub page.
+
+Blaykie is not affiliated with Zotero.
