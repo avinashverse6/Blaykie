@@ -49,16 +49,15 @@ class CslSpikeTest {
                 catch (t: Throwable) { failure.set(t) }
             }, "csl-test-small-stack", 1024L * 1024L).apply { isDaemon = true; start() }
             worker.join(120_000)
-            if (worker.isAlive) {
-                println("SMALL_STACK ${target.label}: timed out after 120 s")
-                worker.interrupt(); worker.join(2_000)
-            }
-            synchronized(events) {
-                events.filter { it.status != "start" }.forEach {
-                    println("SMALL_STACK ${target.label}: ${it.stage} ${it.status} ${it.ms} ms heap=${it.heapBytes} ${it.detail}")
+            val timedOut = worker.isAlive
+            if (timedOut) { worker.interrupt(); worker.join(2_000) }
+            val details = synchronized(events) {
+                events.filter { it.status != "start" }.joinToString("; ") {
+                    "${it.stage} ${it.status} ${it.ms}ms heap=${it.heapBytes} ${it.detail}"
                 }
             }
-            failure.get()?.let { println("SMALL_STACK ${target.label}: ${it.javaClass.name}: ${it.message.orEmpty().take(200)}") }
+            val error = failure.get()?.let { " error=${it.javaClass.name}: ${it.message.orEmpty().take(100)}" }.orEmpty()
+            println("SMALL_STACK ${target.label}: ${if (timedOut) "TIMEOUT 120s" else "finished"}; $details$error")
             if (worker.isAlive) {
                 println("SMALL_STACK: worker did not stop; remaining stages skipped")
                 break
