@@ -44,11 +44,26 @@ jobs:
           licenses = [(x.findtext('p:name', namespaces=ns), x.findtext('p:url', namespaces=ns)) for x in root.findall('p:licenses/p:license', ns)]
           print('Rhino version:', version)
           print('Rhino POM licenses:', licenses)
+          print('::notice::Rhino POM version ' + str(version) + ', licenses ' + str(licenses))
           assert version == '1.7.15' and licenses, 'Missing or unexpected Rhino POM metadata'
           PYCODE
       - name: Run unit tests and build debug APK
         working-directory: native
-        run: ./gradlew testDebugUnitTest assembleDebug
+        run: |
+          set +e
+          ./gradlew testDebugUnitTest assembleDebug > /tmp/blaykie-gradle.log 2>&1
+          status=$?
+          cat /tmp/blaykie-gradle.log
+          if [ "$status" -ne 0 ]; then
+            python3 - <<'PYCODE'
+          import re
+          lines = open('/tmp/blaykie-gradle.log').read().splitlines()
+          matches = [line for line in lines if re.search(r'(^e: |FAILED|Exception|Error|error:|What went wrong|failure)', line, re.I)]
+          for line in matches[-40:]:
+              print('::error::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYCODE
+          fi
+          exit "$status"
       - name: Verify release isolation and compare APK sizes
         working-directory: native
         run: |
