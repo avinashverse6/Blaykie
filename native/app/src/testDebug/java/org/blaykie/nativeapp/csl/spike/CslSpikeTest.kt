@@ -26,8 +26,8 @@ class CslSpikeTest {
         println("Kotlin narrative: ${CitationFormatting.citationText(items.take(1), "narrative")}")
         println("COMPARISON TABLE: item | CSL APA bibliography | Kotlin APA bibliography")
         items.forEachIndexed { i, item ->
-            val one = CslSpike.run(asset("citeproc.js"), asset("apa.csl"), asset("locales-en-US.xml"), kotlinx.serialization.json.JsonArray(listOf(CslSpike.fixtures(5)[i])))
-            println("${types[i]} | ${one.bibliography.single()} | ${CitationFormatting.referenceList(listOf(item))}")
+            val entry = result.bibliography.single { it.contains("Example title ${i+1}", ignoreCase = true) }
+            println("${types[i]} | $entry | ${CitationFormatting.referenceList(listOf(item))}")
         }
         println("CSL bibliography:\n${result.bibliography.joinToString("\n")}")
         println("Kotlin bibliography:\n${CitationFormatting.referenceList(items)}")

@@ -45,6 +45,7 @@ android {
     }
     testOptions {
         unitTests.all {
+            it.maxHeapSize = "2048m"
             it.testLogging {
                 events("failed", "standardOut")
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
