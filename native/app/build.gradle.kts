@@ -70,13 +70,3 @@ dependencies {
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("junit:junit:4.13.2")
 }
-
-// Temporary CI verification: exercise release tests and the unsigned build alongside debug tests.
-tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
-    dependsOn("testReleaseUnitTest", "assembleRelease")
-    doLast {
-        check(file("build/outputs/apk/release/app-release-unsigned.apk").isFile) {
-            "Expected an unsigned release APK when signing credentials are absent"
-        }
-    }
-}
