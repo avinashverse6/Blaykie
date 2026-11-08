@@ -52,3 +52,81 @@ object CslSpike {
         } finally { Context.exit() }
     }
 }
+
+/** Independent diagnostic runs; every requested stage repeats its prerequisites. */
+object StagedSpike {
+    enum class Target(val label: String, val count: Int = 0) {
+        CONTEXT("Rhino context"), SCRIPT("Load/evaluate citeproc.js"), ENGINE("Create CSL engine"),
+        ONE("Render 1 item", 1), FIVE("Render 5 items", 5), FIFTY("Render 50 items", 50), THREE_HUNDRED("Render 300 items", 300)
+    }
+    data class Event(val stage: String, val status: String, val ms: Long, val heapBytes: Long, val detail: String = "")
+    private fun heap(): Long = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+    fun run(target: Target, load: (String) -> String, report: (Event) -> Unit) {
+        fun <T> step(name: String, work: () -> T): T {
+            val start = System.nanoTime()
+            report(Event(name, "start", 0, heap()))
+            try {
+                val result = work()
+                report(Event(name, "done", (System.nanoTime() - start) / 1_000_000, heap()))
+                return result
+            } catch (t: Throwable) {
+                report(Event(name, "error", (System.nanoTime() - start) / 1_000_000, heap(), "${t.javaClass.name}: ${t.message.orEmpty().replace('\n', ' ').take(240)}"))
+                throw t
+            }
+        }
+        // Interpreted mode is required on Android. The observer permits cooperative cancellation.
+        val factory = object : org.mozilla.javascript.ContextFactory() {
+            override fun makeContext(): Context = super.makeContext().apply {
+                optimizationLevel = -1
+                languageVersion = Context.VERSION_ES6
+                instructionObserverThreshold = 10_000
+            }
+            override fun observeInstructionCount(cx: Context, instructionCount: Int) {
+                if (Thread.currentThread().isInterrupted) throw InterruptedException("Diagnostic run interrupted by watchdog")
+            }
+        }
+        var entered = false
+        try {
+            val cx = step(Target.CONTEXT.label) {
+                factory.enterContext().also {
+                    entered = true
+                    report(Event(Target.CONTEXT.label, "info", 0, heap(), "${it.implementationVersion}; optimization level ${it.optimizationLevel}"))
+                }
+            }
+            if (target == Target.CONTEXT) return
+            val scope = step(Target.SCRIPT.label) {
+                val s = cx.initStandardObjects()
+                cx.evaluateString(s, load("citeproc.js"), "citeproc.js", 1, null)
+                s
+            }
+            if (target == Target.SCRIPT) return
+            step(Target.ENGINE.label) {
+                ScriptableObject.putProperty(scope, "spikeStyle", load("apa.csl"))
+                ScriptableObject.putProperty(scope, "spikeLocale", load("locales-en-US.xml"))
+                cx.evaluateString(scope, """
+                    var lookup = {}, ids = [];
+                    var sys = {retrieveLocale:function(){return String(spikeLocale);}, retrieveItem:function(id){return lookup[id];}};
+                    var engine = new CSL.Engine(sys, String(spikeStyle), 'en-US');
+                    engine.setOutputFormat('text');
+                """.trimIndent(), "engine.js", 1, null)
+            }
+            if (target == Target.ENGINE) return
+            step(target.label) {
+                ScriptableObject.putProperty(scope, "spikeItems", CslSpike.fixtures(target.count).toString())
+                val output = cx.evaluateString(scope, """
+                    var records = JSON.parse(String(spikeItems));
+                    records.forEach(function(item){lookup[item.id]=item;ids.push(item.id);});
+                    engine.updateItems(ids);
+                    var citation = engine.makeCitationCluster(ids.slice(0,5).map(function(id){return {id:id};}));
+                    var bibliography = engine.makeBibliography();
+                    JSON.stringify({citation:citation, count:bibliography[1].length});
+                """.trimIndent(), "render.js", 1, null).toString()
+                val result = Json.parseToJsonElement(output).jsonObject
+                check(result.getValue("citation").jsonPrimitive.content.isNotBlank())
+                check(result.getValue("count").jsonPrimitive.int == target.count)
+            }
+        } finally {
+            if (entered) Context.exit()
+        }
+    }
+}

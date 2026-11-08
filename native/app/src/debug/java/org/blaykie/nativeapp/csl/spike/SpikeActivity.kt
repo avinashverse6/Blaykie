@@ -1,49 +1,116 @@
 package org.blaykie.nativeapp.csl.spike
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.os.Bundle
 import android.os.Debug
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.util.Log
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
-import kotlin.concurrent.thread
+import java.util.concurrent.atomic.AtomicBoolean
 
-/** A separate launcher exists only in debug; no normal app UI is modified. */
+/** Independent debug-only diagnostics, with no interaction with the normal app. */
 class SpikeActivity : Activity() {
+    private val handler = Handler(Looper.getMainLooper())
+    private val lines = mutableListOf<String>()
+    private var worker: Thread? = null
+    private var started = 0L
+    private var current = ""
+    private var timedOut = AtomicBoolean(false)
+    private lateinit var status: TextView
+    private lateinit var output: TextView
+    private val tag = "BlaykieCslSpike"
+    private val ticker = object : Runnable {
+        override fun run() {
+            val running = worker
+            if (running != null && running.isAlive && !timedOut.get()) {
+                val elapsed = SystemClock.elapsedRealtime() - started
+                status.text = "Stage: $current — ${elapsed / 1000} s"
+                if (elapsed >= 120_000 && timedOut.compareAndSet(false, true)) {
+                    val line = "stage $current timed out after 120 s; ${elapsed} ms; ${memory()}"
+                    addLine(line)
+                    status.text = "$line. Waiting for the engine thread to stop."
+                    running.interrupt()
+                }
+            }
+            handler.postDelayed(this, 1000)
+        }
+    }
+    private fun memory(): String {
+        val heap = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+        return "heap=$heap bytes, PSS=${Debug.getPss() * 1024L} bytes (snapshots, not peaks)"
+    }
+    private fun addLine(line: String) {
+        lines.add(line); output.text = lines.joinToString("\n")
+        Log.i(tag, line)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val view = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
-        val result = TextView(this).apply { text = "CSL spike: run on a real phone. Times include local fixture generation where specified." }
-        val button = Button(this).apply { text = "Run 50 and 300 item benchmark" }
-        view.addView(button); view.addView(result); setContentView(view)
-        button.setOnClickListener {
-            button.isEnabled = false; result.text = "Running…"
-            thread {
-                try {
-                    fun asset(name: String) = assets.open("csl/$name").bufferedReader().use { it.readText() }
-                    val js = asset("citeproc.js"); val style = asset("apa.csl"); val locale = asset("locales-en-US.xml")
-                    val text = buildString {
-                        appendLine("Memory is process PSS and JVM heap; samples are snapshots, not peak memory.")
-                        for (count in listOf(50, 300)) {
-                            val fixtures = CslSpike.fixtures(count)
-                            val beforePss = Debug.getPss() * 1024L
-                            val heapBefore = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
-                            val start = System.nanoTime()
-                            val rendered = CslSpike.run(js, style, locale, fixtures)
-                            val totalMs = (System.nanoTime() - start) / 1_000_000
-                            val afterPss = Debug.getPss() * 1024L
-                            val heapAfter = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
-                            appendLine("$count items: fresh engine total $totalMs ms; render ${rendered.renderMs} ms; initialization approx ${totalMs-rendered.renderMs} ms; PSS $beforePss → $afterPss bytes; heap $heapBefore → $heapAfter bytes; ${rendered.bibliography.size} references.")
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(24, 24, 24, 24) }
+        status = TextView(this).apply { text = "Select one diagnostic stage. Each run repeats its prerequisites." }
+        output = TextView(this)
+        body.addView(status)
+        val copy = Button(this).apply { text = "Copy results" }
+        copy.setOnClickListener {
+            (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("CSL spike results", lines.joinToString("\n")))
+        }
+        body.addView(copy)
+        StagedSpike.Target.values().forEach { target ->
+            body.addView(Button(this).apply { text = target.label; setOnClickListener { start(target) } })
+        }
+        body.addView(output)
+        setContentView(ScrollView(this).apply { addView(body) })
+        addLine("Device=${android.os.Build.MODEL}; Android=${android.os.Build.VERSION.RELEASE}; Rhino interpreted mode requested; thread stack=32 MiB")
+        handler.post(ticker)
+    }
+    private fun start(target: StagedSpike.Target) {
+        if (worker?.isAlive == true) {
+            status.text = "Previous engine thread is still running or stopping; please wait."
+            return
+        }
+        timedOut = AtomicBoolean(false)
+        val timeoutFlag = timedOut
+        current = target.label
+        started = SystemClock.elapsedRealtime()
+        addLine("Requested ${target.label}; each stage has a 120 s watchdog")
+        val task = Runnable {
+            try {
+                StagedSpike.run(target, { name -> assets.open("csl/$name").bufferedReader().use { it.readText() } }) { event ->
+                    handler.post {
+                        if (!timeoutFlag.get()) {
+                            if (event.status == "start") {
+                                current = event.stage
+                                started = SystemClock.elapsedRealtime()
+                                status.text = "Stage: $current — 0 s"
+                            } else {
+                                val line = "${event.stage}: ${event.status}; ${event.ms} ms; stage heap=${event.heapBytes} bytes; ${memory()}${if (event.detail.isNotEmpty()) "; ${event.detail}" else ""}"
+                                addLine(line)
+                            }
                         }
-                        appendLine("First run after process launch approximates cold start; repeat runs are warm. Device and Android version must be recorded separately.")
                     }
-                    runOnUiThread { result.text = text; button.isEnabled = true }
-                } catch (e: OutOfMemoryError) {
-                    runOnUiThread { result.text = "Spike exhausted available memory: ${e.message}"; button.isEnabled = true }
-                } catch (e: Exception) {
-                    runOnUiThread { result.text = "Spike failed: ${e.stackTraceToString()}"; button.isEnabled = true }
+                }
+                handler.post { if (!timeoutFlag.get()) status.text = "Completed ${target.label}." }
+            } catch (t: Throwable) {
+                handler.post {
+                    if (!timeoutFlag.get()) {
+                        // The stage callback records the failure; this also covers failures outside a stage.
+                        val line = "${target.label}: stopped; ${t.javaClass.name}: ${t.message.orEmpty().replace('\n', ' ').take(240)}; ${memory()}"
+                        addLine(line); status.text = line
+                    }
                 }
             }
         }
+        worker = Thread(null, task, "CSL-spike-engine", 32L * 1024 * 1024).apply { isDaemon = true; start() }
+    }
+    override fun onDestroy() {
+        handler.removeCallbacks(ticker)
+        worker?.interrupt()
+        super.onDestroy()
     }
 }
