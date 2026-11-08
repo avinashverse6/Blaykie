@@ -10,10 +10,17 @@ class CslSpikeTest {
     private fun asset(name: String) = requireNotNull(javaClass.classLoader?.getResourceAsStream("csl/$name")) { "Missing asset: $name" }.bufferedReader().use { it.readText() }
     @Test fun renderFiveAndCompareExistingApa() {
         val result = CslSpike.run(asset("citeproc.js"), asset("apa.csl"), asset("locales-en-US.xml"), CslSpike.fixtures(5))
-        assertTrue(result.parenthetical.isNotBlank())
+        assertEquals("(Author0, 2020; Author1, 2021; Author2, 2022; Author3, 2023; शर्मा, 2020)", result.parenthetical)
+        assertEquals("Author0", result.authorOnly)
+        assertEquals("(2020)", result.suppressAuthor)
         assertTrue(result.authorOnly.isNotBlank()); assertTrue(result.suppressAuthor.isNotBlank())
         assertTrue(result.authorOnly.contains("Author0")); assertTrue(result.suppressAuthor.contains("2020"))
         assertEquals(5, result.bibliography.size)
+        assertTrue(result.bibliography.contains("Author0, A. (2020). Example title 1. Example Journal, 2, 10–20."))
+        assertTrue(result.bibliography.contains("Author1, A. (2021). Example title 2. Example Press."))
+        assertTrue(result.bibliography.contains("Author2, A. (2022). Example title 3. https://example.org/page"))
+        assertTrue(result.bibliography.contains("Author3, A. (2023). Example title 4. Example Press."))
+        assertTrue(result.bibliography.contains("शर्माअनिता. (2020). Example title 5. Example Journal, 2, 10–20."))
         val types = listOf("journalArticle", "book", "webpage", "report", "journalArticle")
         val items = types.mapIndexed { i, type -> CitationItem(key="item$i", title="Example title ${i+1}",
             authors=listOf(CitationAuthor(if (i == 4) "अनिता" else "Alex", if (i == 4) "शर्मा" else "Author$i")),

@@ -38,6 +38,8 @@ class SpikeActivity : Activity() {
                         appendLine("First run after process launch approximates cold start; repeat runs are warm. Device and Android version must be recorded separately.")
                     }
                     runOnUiThread { result.text = text; button.isEnabled = true }
+                } catch (e: OutOfMemoryError) {
+                    runOnUiThread { result.text = "Spike exhausted available memory: ${e.message}"; button.isEnabled = true }
                 } catch (e: Exception) {
                     runOnUiThread { result.text = "Spike failed: ${e.stackTraceToString()}"; button.isEnabled = true }
                 }
