@@ -1,0 +1,9 @@
+blocks=0:heading1,1:paragraph,2:paragraph,3:table,4:paragraph,5:other
+text0=Research overview
+text1=First paragraph about citations.
+text2=Second paragraph with enough words to edit later on.
+text3=Alpha | Beta
+text4=Split across runs.
+text5=
+citation=First paragraph about citations. (Lovelace, 2020)
+reference=Lovelace, A. (2020). Citation Studies in Practice. Journal of Testing, 12(3), 1–10. https://doi.org/10.1234/test.2020

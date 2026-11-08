@@ -1,0 +1,5812 @@
+{
+  "items": [
+    {
+      "key": "journalArticle-same",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-normalized",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-different",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-mixed",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-hindi",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-gujarati",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-accent",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "journalArticle-indicDifferent",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-same",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "World Health Organization",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-normalized",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "WORLD-HEALTH ORGANIZATION",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-different",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-mixed",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-hindi",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publisher": "विश्व स्वास्थ्य संगठन",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-gujarati",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publisher": "વિશ્વ આરોગ્ય સંસ્થા",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-accent",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publisher": "SANTE-HEALTH",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "book-indicDifferent",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publisher": "कताब स्वास्थ्य संस्था",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-same",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "World Health Organization",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-normalized",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "WORLD-HEALTH ORGANIZATION",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-different",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "Ministry of Health",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-mixed",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "Ministry of Health",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-hindi",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "विश्व स्वास्थ्य संगठन",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-gujarati",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "વિશ્વ આરોગ્ય સંસ્થા",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-accent",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "SANTE-HEALTH",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "bookSection-indicDifferent",
+      "data": {
+        "itemType": "bookSection",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Erin",
+            "lastName": "Editor"
+          }
+        ],
+        "bookTitle": "Health handbook",
+        "publisher": "कताब स्वास्थ्य संस्था",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-same",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "World Health Organization",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-normalized",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "WORLD-HEALTH ORGANIZATION",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-different",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "Department of Health"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-mixed",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-hindi",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publisher": "विश्व स्वास्थ्य संगठन",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-gujarati",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publisher": "વિશ્વ આરોગ્ય સંસ્થા",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-accent",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "Santé Health"
+          }
+        ],
+        "publisher": "SANTE-HEALTH",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "editedBook-indicDifferent",
+      "data": {
+        "itemType": "book",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "editor",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publisher": "कताब स्वास्थ्य संस्था",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-same",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "institution": "World Health Organization",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-normalized",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "institution": "WORLD-HEALTH ORGANIZATION",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-different",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "institution": "Ministry of Health",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-mixed",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "institution": "Ministry of Health",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-hindi",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "institution": "विश्व स्वास्थ्य संगठन",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-gujarati",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "institution": "વિશ્વ આરોગ્ય સંસ્થા",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-accent",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "institution": "SANTE-HEALTH",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "report-indicDifferent",
+      "data": {
+        "itemType": "report",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "institution": "कताब स्वास्थ्य संस्था",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-same",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "institution": "World Health Organization",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-normalized",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "institution": "WORLD-HEALTH ORGANIZATION",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-different",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "institution": "Ministry of Health",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-mixed",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "institution": "Ministry of Health",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-hindi",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "institution": "विश्व स्वास्थ्य संगठन",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-gujarati",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "institution": "વિશ્વ આરોગ્ય સંસ્થા",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-accent",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "institution": "SANTE-HEALTH",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "document-indicDifferent",
+      "data": {
+        "itemType": "document",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "institution": "कताब स्वास्थ्य संस्था",
+        "reportNumber": "42",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "thesis-same",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "university": "World Health Organization",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-normalized",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "university": "WORLD-HEALTH ORGANIZATION",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-different",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "university": "Ministry of Health",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-mixed",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "university": "Ministry of Health",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-hindi",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "university": "विश्व स्वास्थ्य संगठन",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-gujarati",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "university": "વિશ્વ આરોગ્ય સંસ્થા",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-accent",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "university": "SANTE-HEALTH",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "thesis-indicDifferent",
+      "data": {
+        "itemType": "thesis",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "university": "कताब स्वास्थ्य संस्था",
+        "thesisType": "PhD"
+      }
+    },
+    {
+      "key": "webpage-same",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "websiteTitle": "World Health Organization",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-normalized",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "websiteTitle": "WORLD-HEALTH ORGANIZATION",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-different",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "websiteTitle": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-mixed",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "websiteTitle": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-hindi",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "websiteTitle": "विश्व स्वास्थ्य संगठन",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-gujarati",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "websiteTitle": "વિશ્વ આરોગ્ય સંસ્થા",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-accent",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "websiteTitle": "SANTE-HEALTH",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "webpage-indicDifferent",
+      "data": {
+        "itemType": "webpage",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "websiteTitle": "कताब स्वास्थ्य संस्था",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-same",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "blogTitle": "World Health Organization",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-normalized",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "blogTitle": "WORLD-HEALTH ORGANIZATION",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-different",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "blogTitle": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-mixed",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "blogTitle": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-hindi",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "blogTitle": "विश्व स्वास्थ्य संगठन",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-gujarati",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "blogTitle": "વિશ્વ આરોગ્ય સંસ્થા",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-accent",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "blogTitle": "SANTE-HEALTH",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "blogPost-indicDifferent",
+      "data": {
+        "itemType": "blogPost",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "blogTitle": "कताब स्वास्थ्य संस्था",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-same",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-normalized",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-different",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-mixed",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-hindi",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-gujarati",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-accent",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferencePaper-indicDifferent",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "conferenceName": "Health conference",
+        "place": "Rajkot",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-same",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "World Health Organization",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-normalized",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "WORLD-HEALTH ORGANIZATION",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-different",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "Ministry of Health",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-mixed",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "Ministry of Health",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-hindi",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "विश्व स्वास्थ्य संगठन",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-gujarati",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "વિશ્વ આરોગ્ય સંસ્થા",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-accent",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "SANTE-HEALTH",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "conferenceProceedings-indicDifferent",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "proceedingsTitle": "Conference proceedings",
+        "publisher": "कताब स्वास्थ्य संस्था",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-same",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "repository": "World Health Organization",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-normalized",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "repository": "WORLD-HEALTH ORGANIZATION",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-different",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "repository": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-mixed",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "repository": "Ministry of Health",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-hindi",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "repository": "विश्व स्वास्थ्य संगठन",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-gujarati",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "repository": "વિશ્વ આરોગ્ય સંસ્થા",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-accent",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "repository": "SANTE-HEALTH",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "preprint-indicDifferent",
+      "data": {
+        "itemType": "preprint",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "repository": "कताब स्वास्थ्य संस्था",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-same",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-normalized",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-different",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-mixed",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-hindi",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-gujarati",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-accent",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "magazineArticle-indicDifferent",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-same",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-normalized",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-different",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-mixed",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-hindi",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-gujarati",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-accent",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "newspaperArticle-indicDifferent",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-same",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-normalized",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-different",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-mixed",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-hindi",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-gujarati",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-accent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericJournal-indicDifferent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publicationTitle": "Journal Of Health",
+        "volume": "5",
+        "issue": "2",
+        "pages": "12-15",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-same",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "World Health Organization",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-normalized",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "publisher": "WORLD-HEALTH ORGANIZATION",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-different",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-mixed",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "publisher": "Ministry of Health",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-hindi",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "publisher": "विश्व स्वास्थ्य संगठन",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-gujarati",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "publisher": "વિશ્વ આરોગ્ય સંસ્થા",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-accent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "publisher": "SANTE-HEALTH",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBook-indicDifferent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "publisher": "कताब स्वास्थ्य संस्था",
+        "edition": "2",
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-same",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-normalized",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-different",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Department of Health"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-mixed",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-hindi",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "विश्व स्वास्थ्य संगठन"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-gujarati",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "વિશ્વ આરોગ્ય સંસ્થા"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-accent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Santé Health"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "genericBare-indicDifferent",
+      "data": {
+        "itemType": "artwork",
+        "title": "Health report",
+        "date": "2020-03-04",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ],
+        "url": "https://example.org/item"
+      }
+    },
+    {
+      "key": "sortorg",
+      "data": {
+        "itemType": "report",
+        "title": "A",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ]
+      }
+    },
+    {
+      "key": "sortperson",
+      "data": {
+        "itemType": "report",
+        "title": "B",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Amy",
+            "lastName": "Smith"
+          }
+        ]
+      }
+    },
+    {
+      "key": "sortperson2",
+      "data": {
+        "itemType": "report",
+        "title": "C",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Zoe",
+            "lastName": "Zimmer"
+          }
+        ]
+      }
+    },
+    {
+      "key": "unicode-a",
+      "data": {
+        "itemType": "report",
+        "title": "First",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "किताब स्वास्थ्य संस्था"
+          }
+        ]
+      }
+    },
+    {
+      "key": "unicode-b",
+      "data": {
+        "itemType": "report",
+        "title": "Second",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "कताब स्वास्थ्य संस्था"
+          }
+        ]
+      }
+    },
+    {
+      "key": "suffix-a",
+      "data": {
+        "itemType": "report",
+        "title": "Beta",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ]
+      }
+    },
+    {
+      "key": "suffix-b",
+      "data": {
+        "itemType": "report",
+        "title": "Alpha",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "World Health Organization"
+          }
+        ]
+      }
+    }
+  ],
+  "cases": [
+    {
+      "key": "journalArticle-same",
+      "type": "Journal article",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "journalArticle-normalized",
+      "type": "Journal article",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "journalArticle-different",
+      "type": "Journal article",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "journalArticle-mixed",
+      "type": "Journal article",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "journalArticle-hindi",
+      "type": "Journal article",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "journalArticle-gujarati",
+      "type": "Journal article",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "journalArticle-accent",
+      "type": "Journal article",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "journalArticle-indicDifferent",
+      "type": "Journal article",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "book-same",
+      "type": "Book",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (2nd ed.).",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "book-normalized",
+      "type": "Book",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (2nd ed.).",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "book-different",
+      "type": "Book",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "book-mixed",
+      "type": "Book",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "book-hindi",
+      "type": "Book",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report (2nd ed.).",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "book-gujarati",
+      "type": "Book",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report (2nd ed.).",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "book-accent",
+      "type": "Book",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report (2nd ed.).",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "book-indicDifferent",
+      "type": "Book",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). कताब स्वास्थ्य संस्था.",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report (2nd ed.). कताब स्वास्थ्य संस्था.",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "bookSection-same",
+      "type": "Book chapter",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "bookSection-normalized",
+      "type": "Book chapter",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "bookSection-different",
+      "type": "Book chapter",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "bookSection-mixed",
+      "type": "Book chapter",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "bookSection-hindi",
+      "type": "Book chapter",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "bookSection-gujarati",
+      "type": "Book chapter",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "bookSection-accent",
+      "type": "Book chapter",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "bookSection-indicDifferent",
+      "type": "Book chapter",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Health handbook",
+          true
+        ],
+        [
+          " (pp. 12–15). कताब स्वास्थ्य संस्था. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. In E. Editor (Ed.), Health handbook (pp. 12–15). कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "editedBook-same",
+      "type": "Edited book",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). World Health Organization.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization (Ed.). (2020). Health report (2nd ed.). World Health Organization.",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "editedBook-normalized",
+      "type": "Edited book",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). WORLD-HEALTH ORGANIZATION.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization (Ed.). (2020). Health report (2nd ed.). WORLD-HEALTH ORGANIZATION.",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "editedBook-different",
+      "type": "Edited book",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "Department of Health (Ed.). (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "editedBook-mixed",
+      "type": "Edited book",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (Eds.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (Eds.). (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "editedBook-hindi",
+      "type": "Edited book",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). विश्व स्वास्थ्य संगठन.",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन (Ed.). (2020). Health report (2nd ed.). विश्व स्वास्थ्य संगठन.",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "editedBook-gujarati",
+      "type": "Edited book",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). વિશ્વ આરોગ્ય સંસ્થા.",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા (Ed.). (2020). Health report (2nd ed.). વિશ્વ આરોગ્ય સંસ્થા.",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "editedBook-accent",
+      "type": "Edited book",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). SANTE-HEALTH.",
+          false
+        ]
+      ],
+      "reference": "Santé Health (Ed.). (2020). Health report (2nd ed.). SANTE-HEALTH.",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "editedBook-indicDifferent",
+      "type": "Edited book",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था (Ed.). (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). कताब स्वास्थ्य संस्था.",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था (Ed.). (2020). Health report (2nd ed.). कताब स्वास्थ्य संस्था.",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "report-same",
+      "type": "Report",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "report-normalized",
+      "type": "Report",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "report-different",
+      "type": "Report",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report (Report No. 42). Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "report-mixed",
+      "type": "Report",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report (Report No. 42). Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "report-hindi",
+      "type": "Report",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "report-gujarati",
+      "type": "Report",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "report-accent",
+      "type": "Report",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "report-indicDifferent",
+      "type": "Report",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). कताब स्वास्थ्य संस्था. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report (Report No. 42). कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "document-same",
+      "type": "Document",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "document-normalized",
+      "type": "Document",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "document-different",
+      "type": "Document",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report (Report No. 42). Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "document-mixed",
+      "type": "Document",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report (Report No. 42). Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "document-hindi",
+      "type": "Document",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "document-gujarati",
+      "type": "Document",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "document-accent",
+      "type": "Document",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report (Report No. 42). https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "document-indicDifferent",
+      "type": "Document",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (Report No. 42). कताब स्वास्थ्य संस्था. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report (Report No. 42). कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "thesis-same",
+      "type": "Thesis",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation].",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report [Unpublished doctoral dissertation].",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "thesis-normalized",
+      "type": "Thesis",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation].",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report [Unpublished doctoral dissertation].",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "thesis-different",
+      "type": "Thesis",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation]. Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report [Unpublished doctoral dissertation]. Ministry of Health.",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "thesis-mixed",
+      "type": "Thesis",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation]. Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report [Unpublished doctoral dissertation]. Ministry of Health.",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "thesis-hindi",
+      "type": "Thesis",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation].",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report [Unpublished doctoral dissertation].",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "thesis-gujarati",
+      "type": "Thesis",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation].",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report [Unpublished doctoral dissertation].",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "thesis-accent",
+      "type": "Thesis",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation].",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report [Unpublished doctoral dissertation].",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "thesis-indicDifferent",
+      "type": "Thesis",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Unpublished doctoral dissertation]. कताब स्वास्थ्य संस्था.",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report [Unpublished doctoral dissertation]. कताब स्वास्थ्य संस्था.",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "webpage-same",
+      "type": "Webpage",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "webpage-normalized",
+      "type": "Webpage",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "webpage-different",
+      "type": "Webpage",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020, March 4). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "webpage-mixed",
+      "type": "Webpage",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020, March 4). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "webpage-hindi",
+      "type": "Webpage",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "webpage-gujarati",
+      "type": "Webpage",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "webpage-accent",
+      "type": "Webpage",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020, March 4). Health report. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "webpage-indicDifferent",
+      "type": "Webpage",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          ". कताब स्वास्थ्य संस्था. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "blogPost-same",
+      "type": "Blog post",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "World Health Organization",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. World Health Organization. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "blogPost-normalized",
+      "type": "Blog post",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "WORLD-HEALTH ORGANIZATION",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. WORLD-HEALTH ORGANIZATION. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "blogPost-different",
+      "type": "Blog post",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Ministry of Health",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020, March 4). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "blogPost-mixed",
+      "type": "Blog post",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Ministry of Health",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020, March 4). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "blogPost-hindi",
+      "type": "Blog post",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "विश्व स्वास्थ्य संगठन",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. विश्व स्वास्थ्य संगठन. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "blogPost-gujarati",
+      "type": "Blog post",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. વિશ્વ આરોગ્ય સંસ્થા. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "blogPost-accent",
+      "type": "Blog post",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "SANTE-HEALTH",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020, March 4). Health report. SANTE-HEALTH. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "blogPost-indicDifferent",
+      "type": "Blog post",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "कताब स्वास्थ्य संस्था",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "conferencePaper-same",
+      "type": "Conference presentation",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "conferencePaper-normalized",
+      "type": "Conference presentation",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "conferencePaper-different",
+      "type": "Conference presentation",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "conferencePaper-mixed",
+      "type": "Conference presentation",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "conferencePaper-hindi",
+      "type": "Conference presentation",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "conferencePaper-gujarati",
+      "type": "Conference presentation",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "conferencePaper-accent",
+      "type": "Conference presentation",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "conferencePaper-indicDifferent",
+      "type": "Conference presentation",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020, March 4). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020, March 4). Health report [Paper presentation]. Health conference, Rajkot. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "conferenceProceedings-same",
+      "type": "Conference proceedings",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. In Conference proceedings (pp. 12–15). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "conferenceProceedings-normalized",
+      "type": "Conference proceedings",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. In Conference proceedings (pp. 12–15). https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "conferenceProceedings-different",
+      "type": "Conference proceedings",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. In Conference proceedings (pp. 12–15). Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "conferenceProceedings-mixed",
+      "type": "Conference proceedings",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). Ministry of Health. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. In Conference proceedings (pp. 12–15). Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "conferenceProceedings-hindi",
+      "type": "Conference proceedings",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. In Conference proceedings (pp. 12–15). https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "conferenceProceedings-gujarati",
+      "type": "Conference proceedings",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. In Conference proceedings (pp. 12–15). https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "conferenceProceedings-accent",
+      "type": "Conference proceedings",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. In Conference proceedings (pp. 12–15). https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "conferenceProceedings-indicDifferent",
+      "type": "Conference proceedings",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. In ",
+          false
+        ],
+        [
+          "Conference proceedings",
+          true
+        ],
+        [
+          " (pp. 12–15). कताब स्वास्थ्य संस्था. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. In Conference proceedings (pp. 12–15). कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "preprint-same",
+      "type": "Preprint",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "World Health Organization",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. World Health Organization. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "preprint-normalized",
+      "type": "Preprint",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "WORLD-HEALTH ORGANIZATION",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. WORLD-HEALTH ORGANIZATION. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "preprint-different",
+      "type": "Preprint",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "Ministry of Health",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "preprint-mixed",
+      "type": "Preprint",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. ",
+          false
+        ],
+        [
+          "Ministry of Health",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. Ministry of Health. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "preprint-hindi",
+      "type": "Preprint",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. ",
+          false
+        ],
+        [
+          "विश्व स्वास्थ्य संगठन",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. विश्व स्वास्थ्य संगठन. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "preprint-gujarati",
+      "type": "Preprint",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. ",
+          false
+        ],
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. વિશ્વ આરોગ્ય સંસ્થા. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "preprint-accent",
+      "type": "Preprint",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "SANTE-HEALTH",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. SANTE-HEALTH. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "preprint-indicDifferent",
+      "type": "Preprint",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. ",
+          false
+        ],
+        [
+          "कताब स्वास्थ्य संस्था",
+          true
+        ],
+        [
+          ". https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. कताब स्वास्थ्य संस्था. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "magazineArticle-same",
+      "type": "Magazine article",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "magazineArticle-normalized",
+      "type": "Magazine article",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "magazineArticle-different",
+      "type": "Magazine article",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "magazineArticle-mixed",
+      "type": "Magazine article",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "magazineArticle-hindi",
+      "type": "Magazine article",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "magazineArticle-gujarati",
+      "type": "Magazine article",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "magazineArticle-accent",
+      "type": "Magazine article",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "magazineArticle-indicDifferent",
+      "type": "Magazine article",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "newspaperArticle-same",
+      "type": "Newspaper article",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "newspaperArticle-normalized",
+      "type": "Newspaper article",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "newspaperArticle-different",
+      "type": "Newspaper article",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "newspaperArticle-mixed",
+      "type": "Newspaper article",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "newspaperArticle-hindi",
+      "type": "Newspaper article",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "newspaperArticle-gujarati",
+      "type": "Newspaper article",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "newspaperArticle-accent",
+      "type": "Newspaper article",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "newspaperArticle-indicDifferent",
+      "type": "Newspaper article",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), pp. 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020, March 4). Health report. Journal of Health, 5(2), pp. 12–15. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "genericJournal-same",
+      "type": "Generic: periodical",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericJournal-normalized",
+      "type": "Generic: periodical",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericJournal-different",
+      "type": "Generic: periodical",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "genericJournal-mixed",
+      "type": "Generic: periodical",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "genericJournal-hindi",
+      "type": "Generic: periodical",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "genericJournal-gujarati",
+      "type": "Generic: periodical",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "genericJournal-accent",
+      "type": "Generic: periodical",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "genericJournal-indicDifferent",
+      "type": "Generic: periodical",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. ",
+          false
+        ],
+        [
+          "Journal of Health",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "5",
+          true
+        ],
+        [
+          "(2), 12–15. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. Journal of Health, 5(2), 12–15. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "genericBook-same",
+      "type": "Generic: publisher",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (2nd ed.).",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericBook-normalized",
+      "type": "Generic: publisher",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report (2nd ed.).",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericBook-different",
+      "type": "Generic: publisher",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "genericBook-mixed",
+      "type": "Generic: publisher",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). Ministry of Health.",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report (2nd ed.). Ministry of Health.",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "genericBook-hindi",
+      "type": "Generic: publisher",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report (2nd ed.).",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "genericBook-gujarati",
+      "type": "Generic: publisher",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report (2nd ed.).",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "genericBook-accent",
+      "type": "Generic: publisher",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.).",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report (2nd ed.).",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "genericBook-indicDifferent",
+      "type": "Generic: publisher",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). ",
+          false
+        ],
+        [
+          "Health report",
+          true
+        ],
+        [
+          " (2nd ed.). कताब स्वास्थ्य संस्था.",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report (2nd ed.). कताब स्वास्थ्य संस्था.",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    },
+    {
+      "key": "genericBare-same",
+      "type": "Generic: bare",
+      "variant": "same",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericBare-normalized",
+      "type": "Generic: bare",
+      "variant": "normalized",
+      "reference_parts": [
+        [
+          "World Health Organization. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization. (2020). Health report. https://example.org/item",
+      "parenthetical": "(World Health Organization, 2020)",
+      "narrative": "World Health Organization (2020)"
+    },
+    {
+      "key": "genericBare-different",
+      "type": "Generic: bare",
+      "variant": "different",
+      "reference_parts": [
+        [
+          "Department of Health. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Department of Health. (2020). Health report. https://example.org/item",
+      "parenthetical": "(Department of Health, 2020)",
+      "narrative": "Department of Health (2020)"
+    },
+    {
+      "key": "genericBare-mixed",
+      "type": "Generic: bare",
+      "variant": "mixed",
+      "reference_parts": [
+        [
+          "World Health Organization, & Patel, A. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "World Health Organization, & Patel, A. (2020). Health report. https://example.org/item",
+      "parenthetical": "(World Health Organization & Patel, 2020)",
+      "narrative": "World Health Organization and Patel (2020)"
+    },
+    {
+      "key": "genericBare-hindi",
+      "type": "Generic: bare",
+      "variant": "hindi",
+      "reference_parts": [
+        [
+          "विश्व स्वास्थ्य संगठन. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "विश्व स्वास्थ्य संगठन. (2020). Health report. https://example.org/item",
+      "parenthetical": "(विश्व स्वास्थ्य संगठन, 2020)",
+      "narrative": "विश्व स्वास्थ्य संगठन (2020)"
+    },
+    {
+      "key": "genericBare-gujarati",
+      "type": "Generic: bare",
+      "variant": "gujarati",
+      "reference_parts": [
+        [
+          "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "વિશ્વ આરોગ્ય સંસ્થા. (2020). Health report. https://example.org/item",
+      "parenthetical": "(વિશ્વ આરોગ્ય સંસ્થા, 2020)",
+      "narrative": "વિશ્વ આરોગ્ય સંસ્થા (2020)"
+    },
+    {
+      "key": "genericBare-accent",
+      "type": "Generic: bare",
+      "variant": "accent",
+      "reference_parts": [
+        [
+          "Santé Health. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "Santé Health. (2020). Health report. https://example.org/item",
+      "parenthetical": "(Santé Health, 2020)",
+      "narrative": "Santé Health (2020)"
+    },
+    {
+      "key": "genericBare-indicDifferent",
+      "type": "Generic: bare",
+      "variant": "indicDifferent",
+      "reference_parts": [
+        [
+          "किताब स्वास्थ्य संस्था. (2020). Health report. https://example.org/item",
+          false
+        ]
+      ],
+      "reference": "किताब स्वास्थ्य संस्था. (2020). Health report. https://example.org/item",
+      "parenthetical": "(किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "किताब स्वास्थ्य संस्था (2020)"
+    }
+  ],
+  "order": [
+    "sortperson",
+    "sortorg",
+    "sortperson2"
+  ],
+  "orderKeys": [
+    "sortorg",
+    "sortperson",
+    "sortperson2"
+  ],
+  "combined": [
+    {
+      "keys": [
+        "sortorg",
+        "sortperson",
+        "sortperson2"
+      ],
+      "parenthetical": "(Smith, 2020; World Health Organization, 2020; Zimmer, 2020)",
+      "narrative": "Smith (2020); World Health Organization (2020); Zimmer (2020)",
+      "references": "Smith, A. (2020). B.\n\nWorld Health Organization. (2020). A.\n\nZimmer, Z. (2020). C.",
+      "order": [
+        "sortperson",
+        "sortorg",
+        "sortperson2"
+      ]
+    },
+    {
+      "keys": [
+        "unicode-a",
+        "unicode-b"
+      ],
+      "parenthetical": "(कताब स्वास्थ्य संस्था, 2020; किताब स्वास्थ्य संस्था, 2020)",
+      "narrative": "कताब स्वास्थ्य संस्था (2020); किताब स्वास्थ्य संस्था (2020)",
+      "references": "कताब स्वास्थ्य संस्था. (2020). Second.\n\nकिताब स्वास्थ्य संस्था. (2020). First.",
+      "order": [
+        "unicode-b",
+        "unicode-a"
+      ]
+    },
+    {
+      "keys": [
+        "suffix-a",
+        "suffix-b"
+      ],
+      "parenthetical": "(World Health Organization, 2020a, 2020b)",
+      "narrative": "World Health Organization (2020a); World Health Organization (2020b)",
+      "references": "World Health Organization. (2020a). Alpha.\n\nWorld Health Organization. (2020b). Beta.",
+      "order": [
+        "suffix-b",
+        "suffix-a"
+      ]
+    }
+  ]
+}

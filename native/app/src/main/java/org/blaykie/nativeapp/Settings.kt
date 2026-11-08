@@ -1,0 +1,33 @@
+package org.blaykie.nativeapp
+
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.map
+
+private val Context.settingsStore by preferencesDataStore(name = "settings")
+
+enum class ThemeMode { System, Light, Dark }
+enum class TextSize(val scale: Float) { Small(0.85f), Normal(1f), Large(1.15f) }
+
+data class Settings(val theme: ThemeMode = ThemeMode.System, val textSize: TextSize = TextSize.Normal)
+
+internal fun parseSettings(theme: String?, textSize: String?): Settings = Settings(
+    theme = ThemeMode.entries.firstOrNull { it.name == theme } ?: ThemeMode.System,
+    textSize = TextSize.entries.firstOrNull { it.name == textSize } ?: TextSize.Normal,
+)
+
+class SettingsStore(private val context: Context) {
+    private val themeKey = stringPreferencesKey("theme")
+    private val textSizeKey = stringPreferencesKey("text_size")
+    val settings = context.settingsStore.data.map { parseSettings(it[themeKey], it[textSizeKey]) }
+
+    suspend fun setTheme(theme: ThemeMode) {
+        context.settingsStore.edit { it[themeKey] = theme.name }
+    }
+
+    suspend fun setTextSize(size: TextSize) {
+        context.settingsStore.edit { it[textSizeKey] = size.name }
+    }
+}

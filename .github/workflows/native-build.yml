@@ -1,0 +1,50 @@
+name: Build native Android APK
+
+on:
+  push:
+    branches: ['**']
+    tags-ignore: ['v*']
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Inspect Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms"
+          ls "$ANDROID_HOME/build-tools"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35"
+          fi
+      - name: Run unit tests and build debug APK
+        working-directory: native
+        run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-test-reports
+          path: |
+            native/app/build/reports/tests
+            native/app/build/test-results
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blaykie-native-debug
+          path: native/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

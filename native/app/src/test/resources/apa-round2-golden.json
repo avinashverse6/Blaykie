@@ -1,0 +1,1238 @@
+{
+  "items": [
+    {
+      "key": "SMITHA",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Alpha",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Alice",
+            "lastName": "Smith"
+          }
+        ]
+      }
+    },
+    {
+      "key": "SMITHB",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Beta",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Bob",
+            "lastName": "Smith"
+          }
+        ]
+      }
+    },
+    {
+      "key": "SORT2",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "A first title",
+        "date": "2019",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Alice",
+            "lastName": "Smith"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Zoe",
+            "lastName": "Zed"
+          }
+        ]
+      }
+    },
+    {
+      "key": "SORT1",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Z last title",
+        "date": "2022",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Alice",
+            "lastName": "Smith"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Amy",
+            "lastName": "Adams"
+          }
+        ]
+      }
+    },
+    {
+      "key": "SORT3",
+      "data": {
+        "itemType": "journalArticle",
+        "title": "Extra author",
+        "date": "2018",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Alice",
+            "lastName": "Smith"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Amy",
+            "lastName": "Adams"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Cara",
+            "lastName": "Clark"
+          }
+        ]
+      }
+    },
+    {
+      "key": "HINDI",
+      "data": {
+        "itemType": "webpage",
+        "title": "हिंदी शोध",
+        "date": "2101-01-02",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "आशा",
+            "lastName": "शर्मा"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "આશા",
+            "lastName": "પટેલ"
+          }
+        ],
+        "websiteTitle": "शोध संस्था",
+        "url": "https://example.org/hindi"
+      }
+    },
+    {
+      "key": "MAG1",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "Monthly advances",
+        "date": "2023-04-15",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Ada",
+            "lastName": "Lovelace"
+          }
+        ],
+        "publicationTitle": "Journal Of Research",
+        "volume": "12",
+        "issue": "3",
+        "pages": "15-18",
+        "DOI": "doi:10.123/abc",
+        "url": "https://example.org/ignored"
+      }
+    },
+    {
+      "key": "MAG2",
+      "data": {
+        "itemType": "magazineArticle",
+        "title": "No author notes",
+        "date": "April 7, 2022",
+        "creators": [],
+        "publicationTitle": "Science And Tech",
+        "url": "https://example.org/mag"
+      }
+    },
+    {
+      "key": "NEWS1",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Three people",
+        "date": "May 12, 2024",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Asha",
+            "lastName": "Patel"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Bina",
+            "lastName": "Shah"
+          },
+          {
+            "creatorType": "author",
+            "firstName": "Chirag",
+            "lastName": "Desai"
+          }
+        ],
+        "publicationTitle": "The Times Of India",
+        "pages": "A12-A14",
+        "url": "https://example.org/news"
+      }
+    },
+    {
+      "key": "NEWS2",
+      "data": {
+        "itemType": "newspaperArticle",
+        "title": "Article identifier",
+        "date": "2020/02/32",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Eve",
+            "lastName": "Reader"
+          }
+        ],
+        "publicationTitle": "News And World",
+        "pages": "12345",
+        "extra": "DOI: 10.123/found"
+      }
+    },
+    {
+      "key": "WEB1",
+      "data": {
+        "itemType": "webpage",
+        "title": "A useful page",
+        "date": "2023-04-15",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Ada",
+            "lastName": "Lovelace"
+          }
+        ],
+        "websiteType": "Fact sheet",
+        "websiteTitle": "Public Health",
+        "url": "https://example.org/web",
+        "DOI": "10.1/ignored"
+      }
+    },
+    {
+      "key": "WEB2",
+      "data": {
+        "itemType": "webpage",
+        "title": "A title without a named author",
+        "date": "",
+        "creators": [],
+        "websiteTitle": "Open Library",
+        "url": "https://example.org/nodate"
+      }
+    },
+    {
+      "key": "WEB3",
+      "data": {
+        "itemType": "webpage",
+        "title": "Blocked database",
+        "date": "2022-09",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Hana",
+            "lastName": "Patel"
+          }
+        ],
+        "websiteTitle": "University",
+        "url": "https://www.proquest.com/item"
+      }
+    },
+    {
+      "key": "BLOG1",
+      "data": {
+        "itemType": "blogPost",
+        "title": "A blog post",
+        "date": "2020-05-12",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Nisha",
+            "lastName": "Patel"
+          }
+        ],
+        "blogTitle": "Research Notes",
+        "url": "https://example.org/blog",
+        "DOI": "10.2/ignored"
+      }
+    },
+    {
+      "key": "BLOG2",
+      "data": {
+        "itemType": "blogPost",
+        "title": "No author, no date",
+        "date": "",
+        "creators": [],
+        "websiteTitle": "An Alternative Blog",
+        "url": "https://example.org/blog2"
+      }
+    },
+    {
+      "key": "REPORT1",
+      "data": {
+        "itemType": "report",
+        "title": "Important results",
+        "date": "2021",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Uma",
+            "lastName": "Shah"
+          }
+        ],
+        "reportNumber": "42",
+        "reportType": "technical report",
+        "institution": "Institute",
+        "DOI": "10.55/report",
+        "url": "https://example.org/ignored"
+      }
+    },
+    {
+      "key": "REPORT2",
+      "data": {
+        "itemType": "report",
+        "title": "Unnumbered research",
+        "date": "n.d.",
+        "creators": [],
+        "reportType": "Working Paper",
+        "publisher": "Example Press",
+        "url": "https://example.org/report"
+      }
+    },
+    {
+      "key": "REPORT3",
+      "data": {
+        "itemType": "report",
+        "title": "Already labelled",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Institute"
+          }
+        ],
+        "reportNumber": "Report 123",
+        "institution": "Institute"
+      }
+    },
+    {
+      "key": "THESIS1",
+      "data": {
+        "itemType": "thesis",
+        "title": "Study of languages",
+        "date": "2022",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Rina",
+            "lastName": "Patel"
+          }
+        ],
+        "thesisType": "Ph.D.",
+        "university": "Example University",
+        "url": "https://example.org/thesis",
+        "archive": "Repository",
+        "DOI": "10.5/thesis"
+      }
+    },
+    {
+      "key": "THESIS2",
+      "data": {
+        "itemType": "thesis",
+        "title": "Unpublished research",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Rina",
+            "lastName": "Patel"
+          }
+        ],
+        "thesisType": "master's thesis",
+        "university": "Example University"
+      }
+    },
+    {
+      "key": "THESIS3",
+      "data": {
+        "itemType": "thesis",
+        "title": "Thesis via doi alone",
+        "date": "2019",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Jay",
+            "lastName": "Shah"
+          }
+        ],
+        "thesisType": "MSc",
+        "institution": "Institute",
+        "DOI": "10.6/ignored"
+      }
+    },
+    {
+      "key": "CONF1",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Conference talk",
+        "date": "2024-10-02",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Maya",
+            "lastName": "Shah"
+          }
+        ],
+        "conferenceName": "World Conference",
+        "place": "Rajkot",
+        "url": "https://example.org/talk"
+      }
+    },
+    {
+      "key": "CONF2",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "Published conference paper",
+        "date": "2020",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Maya",
+            "lastName": "Shah"
+          },
+          {
+            "creatorType": "editor",
+            "firstName": "Eve",
+            "lastName": "Editor"
+          }
+        ],
+        "proceedingsTitle": "Proceedings of Science",
+        "publisher": "Publisher",
+        "edition": "second",
+        "volume": "2",
+        "pages": "3-7",
+        "DOI": "https://doi.org/10.7/conf"
+      }
+    },
+    {
+      "key": "CONF3",
+      "data": {
+        "itemType": "conferencePaper",
+        "title": "No conference data",
+        "date": "",
+        "creators": [],
+        "publisher": "Publisher",
+        "url": "https://example.org/conf"
+      }
+    },
+    {
+      "key": "PRE1",
+      "data": {
+        "itemType": "preprint",
+        "title": "Early research",
+        "date": "forthcoming",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "આશા",
+            "lastName": "પટેલ"
+          }
+        ],
+        "repository": "arXiv",
+        "DOI": "10.8/preprint",
+        "url": "https://example.org/ignored"
+      }
+    },
+    {
+      "key": "PRE2",
+      "data": {
+        "itemType": "preprint",
+        "title": "Unsigned preprint",
+        "date": "n.d.",
+        "creators": [],
+        "repository": "Repository",
+        "url": "https://example.org/preprint"
+      }
+    },
+    {
+      "key": "SUF1",
+      "data": {
+        "itemType": "report",
+        "title": "Beta",
+        "date": "n.d.",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Nora",
+            "lastName": "Nolan"
+          }
+        ],
+        "publisher": "Institute"
+      }
+    },
+    {
+      "key": "SUF2",
+      "data": {
+        "itemType": "report",
+        "title": "Alpha",
+        "date": "n.d.",
+        "creators": [
+          {
+            "creatorType": "author",
+            "firstName": "Nora",
+            "lastName": "Nolan"
+          }
+        ],
+        "publisher": "Institute"
+      }
+    },
+    {
+      "key": "BARE",
+      "data": {
+        "itemType": "webpage",
+        "title": "Future without month",
+        "date": "2101",
+        "creators": [],
+        "url": "https://example.org/future"
+      }
+    },
+    {
+      "key": "GROUP",
+      "data": {
+        "itemType": "webpage",
+        "title": "Group data",
+        "date": "2024-11-30",
+        "creators": [
+          {
+            "creatorType": "author",
+            "name": "Health Institute"
+          }
+        ],
+        "websiteTitle": "Health Institute",
+        "url": "https://example.org/group"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "key": "SMITHA",
+      "year": "2020",
+      "parenthetical": "(Smith, 2020)",
+      "narrative": "Smith (2020)",
+      "reference_parts": [
+        [
+          "Smith, A. (2020). Alpha.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SMITHB",
+      "year": "2020",
+      "parenthetical": "(Smith, 2020)",
+      "narrative": "Smith (2020)",
+      "reference_parts": [
+        [
+          "Smith, B. (2020). Beta.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SORT2",
+      "year": "2019",
+      "parenthetical": "(Smith & Zed, 2019)",
+      "narrative": "Smith and Zed (2019)",
+      "reference_parts": [
+        [
+          "Smith, A., & Zed, Z. (2019). A first title.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SORT1",
+      "year": "2022",
+      "parenthetical": "(Smith & Adams, 2022)",
+      "narrative": "Smith and Adams (2022)",
+      "reference_parts": [
+        [
+          "Smith, A., & Adams, A. (2022). Z last title.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SORT3",
+      "year": "2018",
+      "parenthetical": "(Smith et al., 2018)",
+      "narrative": "Smith et al. (2018)",
+      "reference_parts": [
+        [
+          "Smith, A., Adams, A., & Clark, C. (2018). Extra author.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "HINDI",
+      "year": "2101",
+      "parenthetical": "(शर्मा & પટેલ, 2101)",
+      "narrative": "शर्मा and પટેલ (2101)",
+      "reference_parts": [
+        [
+          "शर्मा, आ., & પટેલ, આ. (2101, January 2). ",
+          false
+        ],
+        [
+          "हिंदी शोध",
+          true
+        ],
+        [
+          ". शोध संस्था. https://example.org/hindi",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "MAG1",
+      "year": "2023",
+      "parenthetical": "(Lovelace, 2023)",
+      "narrative": "Lovelace (2023)",
+      "reference_parts": [
+        [
+          "Lovelace, A. (2023, April 15). Monthly advances. ",
+          false
+        ],
+        [
+          "Journal of Research",
+          true
+        ],
+        [
+          ", ",
+          false
+        ],
+        [
+          "12",
+          true
+        ],
+        [
+          "(3), 15–18. https://doi.org/10.123/abc",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "MAG2",
+      "year": "2022",
+      "parenthetical": "(\"No Author Notes,\" 2022)",
+      "narrative": "\"No Author Notes\" (2022)",
+      "reference_parts": [
+        [
+          "No author notes. (2022, April 7). ",
+          false
+        ],
+        [
+          "Science and Tech",
+          true
+        ],
+        [
+          ". https://example.org/mag",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "NEWS1",
+      "year": "2024",
+      "parenthetical": "(Patel et al., 2024)",
+      "narrative": "Patel et al. (2024)",
+      "reference_parts": [
+        [
+          "Patel, A., Shah, B., & Desai, C. (2024, May 12). Three people. ",
+          false
+        ],
+        [
+          "The Times of India",
+          true
+        ],
+        [
+          ", pp. A12–A14. https://example.org/news",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "NEWS2",
+      "year": "2020",
+      "parenthetical": "(Reader, 2020)",
+      "narrative": "Reader (2020)",
+      "reference_parts": [
+        [
+          "Reader, E. (2020, February). Article identifier. ",
+          false
+        ],
+        [
+          "News and World",
+          true
+        ],
+        [
+          ", Article 12345. https://doi.org/10.123/found",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "WEB1",
+      "year": "2023",
+      "parenthetical": "(Lovelace, 2023)",
+      "narrative": "Lovelace (2023)",
+      "reference_parts": [
+        [
+          "Lovelace, A. (2023, April 15). ",
+          false
+        ],
+        [
+          "A useful page",
+          true
+        ],
+        [
+          " [Fact sheet]. Public Health. https://example.org/web",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "WEB2",
+      "year": "n.d.",
+      "parenthetical": "(A Title Without a Named Author, n.d.)",
+      "narrative": "A Title Without a Named Author (n.d.)",
+      "reference_parts": [
+        [
+          "A title without a named author",
+          true
+        ],
+        [
+          ". (n.d.). Open Library. https://example.org/nodate",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "WEB3",
+      "year": "2022",
+      "parenthetical": "(Patel, 2022)",
+      "narrative": "Patel (2022)",
+      "reference_parts": [
+        [
+          "Patel, H. (2022, September). ",
+          false
+        ],
+        [
+          "Blocked database",
+          true
+        ],
+        [
+          ". University.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "BLOG1",
+      "year": "2020",
+      "parenthetical": "(Patel, 2020)",
+      "narrative": "Patel (2020)",
+      "reference_parts": [
+        [
+          "Patel, N. (2020, May 12). A blog post. ",
+          false
+        ],
+        [
+          "Research Notes",
+          true
+        ],
+        [
+          ". https://example.org/blog",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "BLOG2",
+      "year": "n.d.",
+      "parenthetical": "(\"No Author, No Date,\" n.d.)",
+      "narrative": "\"No Author, No Date\" (n.d.)",
+      "reference_parts": [
+        [
+          "No author, no date. (n.d.). ",
+          false
+        ],
+        [
+          "An Alternative Blog",
+          true
+        ],
+        [
+          ". https://example.org/blog2",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "REPORT1",
+      "year": "2021",
+      "parenthetical": "(Shah, 2021)",
+      "narrative": "Shah (2021)",
+      "reference_parts": [
+        [
+          "Shah, U. (2021). ",
+          false
+        ],
+        [
+          "Important results",
+          true
+        ],
+        [
+          " (Technical Report No. 42). Institute. https://doi.org/10.55/report",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "REPORT2",
+      "year": "n.d.",
+      "parenthetical": "(Unnumbered Research, n.d.)",
+      "narrative": "Unnumbered Research (n.d.)",
+      "reference_parts": [
+        [
+          "Unnumbered research",
+          true
+        ],
+        [
+          " [Working Paper]. (n.d.). Example Press. https://example.org/report",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "REPORT3",
+      "year": "2020",
+      "parenthetical": "(Institute, 2020)",
+      "narrative": "Institute (2020)",
+      "reference_parts": [
+        [
+          "Institute. (2020). ",
+          false
+        ],
+        [
+          "Already labelled",
+          true
+        ],
+        [
+          " (Report 123).",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "THESIS1",
+      "year": "2022",
+      "parenthetical": "(Patel, 2022)",
+      "narrative": "Patel (2022)",
+      "reference_parts": [
+        [
+          "Patel, R. (2022). ",
+          false
+        ],
+        [
+          "Study of languages",
+          true
+        ],
+        [
+          " [Doctoral dissertation, Example University]. Repository. https://doi.org/10.5/thesis",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "THESIS2",
+      "year": "2020",
+      "parenthetical": "(Patel, 2020)",
+      "narrative": "Patel (2020)",
+      "reference_parts": [
+        [
+          "Patel, R. (2020). ",
+          false
+        ],
+        [
+          "Unpublished research",
+          true
+        ],
+        [
+          " [Unpublished master's thesis]. Example University.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "THESIS3",
+      "year": "2019",
+      "parenthetical": "(Shah, 2019)",
+      "narrative": "Shah (2019)",
+      "reference_parts": [
+        [
+          "Shah, J. (2019). ",
+          false
+        ],
+        [
+          "Thesis via doi alone",
+          true
+        ],
+        [
+          " [Unpublished master's thesis]. Institute.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "CONF1",
+      "year": "2024",
+      "parenthetical": "(Shah, 2024)",
+      "narrative": "Shah (2024)",
+      "reference_parts": [
+        [
+          "Shah, M. (2024, October 2). ",
+          false
+        ],
+        [
+          "Conference talk",
+          true
+        ],
+        [
+          " [Paper presentation]. World Conference, Rajkot. https://example.org/talk",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "CONF2",
+      "year": "2020",
+      "parenthetical": "(Shah, 2020)",
+      "narrative": "Shah (2020)",
+      "reference_parts": [
+        [
+          "Shah, M. (2020). Published conference paper. In E. Editor (Ed.), ",
+          false
+        ],
+        [
+          "Proceedings of Science",
+          true
+        ],
+        [
+          " (2nd ed., Vol. 2, pp. 3–7). Publisher. https://doi.org/10.7/conf",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "CONF3",
+      "year": "n.d.",
+      "parenthetical": "(\"No Conference Data,\" n.d.)",
+      "narrative": "\"No Conference Data\" (n.d.)",
+      "reference_parts": [
+        [
+          "No conference data. (n.d.). Publisher. https://example.org/conf",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "PRE1",
+      "year": "in press",
+      "parenthetical": "(પટેલ, in press)",
+      "narrative": "પટેલ (in press)",
+      "reference_parts": [
+        [
+          "પટેલ, આ. (in press). Early research. ",
+          false
+        ],
+        [
+          "arXiv",
+          true
+        ],
+        [
+          ". https://doi.org/10.8/preprint",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "PRE2",
+      "year": "n.d.",
+      "parenthetical": "(\"Unsigned Preprint,\" n.d.)",
+      "narrative": "\"Unsigned Preprint\" (n.d.)",
+      "reference_parts": [
+        [
+          "Unsigned preprint. (n.d.). ",
+          false
+        ],
+        [
+          "Repository",
+          true
+        ],
+        [
+          ". https://example.org/preprint",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SUF1",
+      "year": "n.d.",
+      "parenthetical": "(Nolan, n.d.)",
+      "narrative": "Nolan (n.d.)",
+      "reference_parts": [
+        [
+          "Nolan, N. (n.d.). ",
+          false
+        ],
+        [
+          "Beta",
+          true
+        ],
+        [
+          ". Institute.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "SUF2",
+      "year": "n.d.",
+      "parenthetical": "(Nolan, n.d.)",
+      "narrative": "Nolan (n.d.)",
+      "reference_parts": [
+        [
+          "Nolan, N. (n.d.). ",
+          false
+        ],
+        [
+          "Alpha",
+          true
+        ],
+        [
+          ". Institute.",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "BARE",
+      "year": "n.d.",
+      "parenthetical": "(Future Without Month, n.d.)",
+      "narrative": "Future Without Month (n.d.)",
+      "reference_parts": [
+        [
+          "Future without month",
+          true
+        ],
+        [
+          ". (n.d.). https://example.org/future",
+          false
+        ]
+      ]
+    },
+    {
+      "key": "GROUP",
+      "year": "2024",
+      "parenthetical": "(Health Institute, 2024)",
+      "narrative": "Health Institute (2024)",
+      "reference_parts": [
+        [
+          "Health Institute. (2024, November 30). ",
+          false
+        ],
+        [
+          "Group data",
+          true
+        ],
+        [
+          ". https://example.org/group",
+          false
+        ]
+      ]
+    }
+  ],
+  "combined": [
+    {
+      "keys": [
+        "SMITHB",
+        "SMITHA"
+      ],
+      "order": [
+        "SMITHA",
+        "SMITHB"
+      ],
+      "parenthetical": "(A. Smith, 2020; B. Smith, 2020)",
+      "narrative": "A. Smith (2020); B. Smith (2020)",
+      "references": "Smith, A. (2020). Alpha.\n\nSmith, B. (2020). Beta."
+    },
+    {
+      "keys": [
+        "SORT2",
+        "SORT3",
+        "SORT1",
+        "SMITHA"
+      ],
+      "order": [
+        "SMITHA",
+        "SORT1",
+        "SORT3",
+        "SORT2"
+      ],
+      "parenthetical": "(Smith, 2020; Smith & Adams, 2022; Smith et al., 2018; Smith & Zed, 2019)",
+      "narrative": "Smith (2020); Smith and Adams (2022); Smith et al. (2018); Smith and Zed (2019)",
+      "references": "Smith, A. (2020). Alpha.\n\nSmith, A., & Adams, A. (2022). Z last title.\n\nSmith, A., Adams, A., & Clark, C. (2018). Extra author.\n\nSmith, A., & Zed, Z. (2019). A first title."
+    },
+    {
+      "keys": [
+        "SUF1",
+        "SUF2"
+      ],
+      "order": [
+        "SUF2",
+        "SUF1"
+      ],
+      "parenthetical": "(Nolan, n.d.-a, n.d.-b)",
+      "narrative": "Nolan (n.d.-a); Nolan (n.d.-b)",
+      "references": "Nolan, N. (n.d.-a). Alpha. Institute.\n\nNolan, N. (n.d.-b). Beta. Institute."
+    },
+    {
+      "keys": [
+        "HINDI",
+        "WEB2",
+        "NEWS1",
+        "GROUP"
+      ],
+      "order": [
+        "GROUP",
+        "NEWS1",
+        "WEB2",
+        "HINDI"
+      ],
+      "parenthetical": "(Health Institute, 2024; Patel et al., 2024; A Title Without a Named Author, n.d.; शर्मा & પટેલ, 2101)",
+      "narrative": "Health Institute (2024); Patel et al. (2024); A Title Without a Named Author (n.d.); शर्मा and પટેલ (2101)",
+      "references": "Health Institute. (2024, November 30). Group data. https://example.org/group\n\nPatel, A., Shah, B., & Desai, C. (2024, May 12). Three people. The Times of India, pp. A12–A14. https://example.org/news\n\nA title without a named author. (n.d.). Open Library. https://example.org/nodate\n\nशर्मा, आ., & પટેલ, આ. (2101, January 2). हिंदी शोध. शोध संस्था. https://example.org/hindi"
+    }
+  ],
+  "contexts": [
+    {
+      "key": "SMITHA",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "parenthetical",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "(see A. Smith, 2020, pp. 12–14)"
+    },
+    {
+      "key": "SMITHA",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "narrative",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "A. Smith (2020, pp. 12–14)"
+    },
+    {
+      "key": "SMITHB",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "parenthetical",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "(see B. Smith, 2020, pp. 12–14)"
+    },
+    {
+      "key": "SMITHB",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "narrative",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "B. Smith (2020, pp. 12–14)"
+    },
+    {
+      "key": "SUF1",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "parenthetical",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "(see Nolan, n.d.-b, pp. 12–14)"
+    },
+    {
+      "key": "SUF1",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "narrative",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "Nolan (n.d.-b, pp. 12–14)"
+    },
+    {
+      "key": "SUF2",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "parenthetical",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "(see Nolan, n.d.-a, pp. 12–14)"
+    },
+    {
+      "key": "SUF2",
+      "context": [
+        "SMITHA",
+        "SMITHB",
+        "SUF1",
+        "SUF2"
+      ],
+      "style": "narrative",
+      "page": "12-14",
+      "prefix": "see",
+      "expected": "Nolan (n.d.-a, pp. 12–14)"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "item": {
+    "key": "ONE1",
+    "data": {
+      "itemType": "journalArticle",
+      "title": "Citation studies in practice",
+      "creators": [
+        {
+          "firstName": "Ada",
+          "lastName": "Lovelace",
+          "creatorType": "author"
+        }
+      ],
+      "date": "2020",
+      "publicationTitle": "Journal of Testing",
+      "volume": "12",
+      "issue": "3",
+      "pages": "1-10",
+      "DOI": "10.1234/test.2020"
+    }
+  },
+  "insertion_block": 1,
+  "before": "नमस्ते ગુજરાતી paragraph about citations.",
+  "missing_before": [
+    "ONE1"
+  ],
+  "missing_after": [],
+  "warnings": {
+    "reference_headings": [
+      6
+    ],
+    "has_blaykie_bibliography": false,
+    "tracked_changes": true,
+    "zotero_fields": true
+  }
+}
