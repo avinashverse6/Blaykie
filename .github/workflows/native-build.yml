@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: Set up Java
@@ -31,9 +33,46 @@ jobs:
           if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35"
           fi
+      - name: Verify Rhino POM metadata
+        run: |
+          curl -fsSL https://repo.maven.apache.org/maven2/org/mozilla/rhino/1.7.15/rhino-1.7.15.pom -o /tmp/blaykie-rhino.pom
+          python3 - <<'PYCODE'
+          import xml.etree.ElementTree as ET
+          root = ET.parse('/tmp/blaykie-rhino.pom').getroot()
+          ns = {'p': 'http://maven.apache.org/POM/4.0.0'}
+          version = root.findtext('p:version', namespaces=ns)
+          licenses = [(x.findtext('p:name', namespaces=ns), x.findtext('p:url', namespaces=ns)) for x in root.findall('p:licenses/p:license', ns)]
+          print('Rhino version:', version)
+          print('Rhino POM licenses:', licenses)
+          assert version == '1.7.15' and licenses, 'Missing or unexpected Rhino POM metadata'
+          PYCODE
       - name: Run unit tests and build debug APK
         working-directory: native
         run: ./gradlew testDebugUnitTest assembleDebug
+      - name: Verify release isolation and compare APK sizes
+        working-directory: native
+        run: |
+          ./gradlew assembleRelease
+          python3 - <<'PYCODE'
+          import glob, zipfile
+          apk = glob.glob('app/build/outputs/apk/release/*.apk')[0]
+          with zipfile.ZipFile(apk) as z:
+              assets = [n for n in z.namelist() if n.startswith('assets/')]
+              print('Release APK assets:', *assets, sep='\n')
+              assert not any('csl/' in n.lower() or 'citeproc' in n.lower() for n in assets)
+              for name in z.namelist():
+                  if name.endswith('.dex'):
+                      data = z.read(name)
+                      assert b'org/blaykie/nativeapp/csl/spike' not in data
+                      assert b'org/mozilla/javascript/Context' not in data
+          print('Release isolation verified:', apk)
+          PYCODE
+          baseline=$(mktemp -d)
+          git archive ba3e3c3157d732dad2269f1b9c518ffa64922b5c native | tar -x -C "$baseline"
+          (cd "$baseline/native" && ./gradlew assembleDebug)
+          base=$(stat -c %s "$baseline/native/app/build/outputs/apk/debug/app-debug.apk")
+          spike=$(stat -c %s app/build/outputs/apk/debug/app-debug.apk)
+          echo "Baseline debug APK: $base bytes; spike debug APK: $spike bytes; increase: $((spike-base)) bytes"
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

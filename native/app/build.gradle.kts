@@ -46,11 +46,12 @@ android {
     testOptions {
         unitTests.all {
             it.testLogging {
-                events("failed")
+                events("failed", "standardOut")
                 exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
             }
         }
     }
+    sourceSets.getByName("test").resources.srcDir("src/debug/assets")
     buildFeatures { compose = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
     compileOptions {
@@ -61,6 +62,7 @@ android {
 }
 
 dependencies {
+    debugImplementation("org.mozilla:rhino:1.7.15")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.compose.ui:ui:1.7.3")
     implementation("androidx.compose.material3:material3:1.3.1")
