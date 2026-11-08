@@ -39,4 +39,32 @@ class CslSpikeTest {
         println("CSL bibliography:\n${result.bibliography.joinToString("\n")}")
         println("Kotlin bibliography:\n${CitationFormatting.referenceList(items)}")
     }
+    @Test fun diagnoseWithSmallJvmThreadStack() {
+        val files = listOf("citeproc.js", "apa.csl", "locales-en-US.xml").associateWith(::asset)
+        for (target in StagedSpike.Target.values()) {
+            val events = java.util.Collections.synchronizedList(mutableListOf<StagedSpike.Event>())
+            val failure = java.util.concurrent.atomic.AtomicReference<Throwable?>()
+            val worker = Thread(null, Runnable {
+                try { StagedSpike.run(target, { files.getValue(it) }) { events.add(it) } }
+                catch (t: Throwable) { failure.set(t) }
+            }, "csl-test-small-stack", 1024L * 1024L).apply { isDaemon = true; start() }
+            worker.join(120_000)
+            if (worker.isAlive) {
+                println("SMALL_STACK ${target.label}: timed out after 120 s")
+                worker.interrupt(); worker.join(2_000)
+            }
+            synchronized(events) {
+                events.filter { it.status != "start" }.forEach {
+                    println("SMALL_STACK ${target.label}: ${it.stage} ${it.status} ${it.ms} ms heap=${it.heapBytes} ${it.detail}")
+                }
+            }
+            failure.get()?.let { println("SMALL_STACK ${target.label}: ${it.javaClass.name}: ${it.message.orEmpty().take(200)}") }
+            if (worker.isAlive) {
+                println("SMALL_STACK: worker did not stop; remaining stages skipped")
+                break
+            }
+            System.gc()
+        }
+    }
+
 }
