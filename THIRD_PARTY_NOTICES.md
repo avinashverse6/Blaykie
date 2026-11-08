@@ -47,7 +47,7 @@ Versions are taken from `buildozer.spec`. “Unpinned” means the source config
 
 | Component | Declared version | SPDX license | Project |
 |---|---|---|---|
-| CPython / hostpython3 | 3.11.9 | Python-2.0 | https://github.com/python/cpython |
+| CPython / hostpython3 | 3.11.9 | PSF-2.0 (plus bundled third-party terms) | https://github.com/python/cpython |
 | Kivy | 2.3.1 | MIT | https://github.com/kivy/kivy |
 | Requests | 2.28.1 | Apache-2.0 | https://github.com/psf/requests |
 | urllib3 | 1.26.18 | MIT | https://github.com/urllib3/urllib3 |
@@ -72,6 +72,6 @@ Poppins font metadata credits the Poppins Project Authors, copyright 2020. The K
 
 ## Compatibility and missing license material
 
-Apache-2.0, MIT, BSD-3-Clause, Python-2.0, and MPL-2.0 are generally compatible with AGPL-3.0 when their applicable terms are met; MPL-covered files retain their own source and notice obligations. OFL-1.1 permits bundling fonts with software under other licenses, but the fonts themselves must remain under OFL-1.1 and retain the required notices. This is a technical inventory, not legal advice.
+Apache-2.0, MIT, BSD-3-Clause, PSF-2.0, and MPL-2.0 are generally compatible with AGPL-3.0 when their applicable terms are met; MPL-covered files retain their own source and notice obligations. OFL-1.1 permits bundling fonts with software under other licenses, but the fonts themselves must remain under OFL-1.1 and retain the required notices. This is a technical inventory, not legal advice.
 
 Still needed before distribution: exact OFL-1.1 license and copyright notices for the Poppins fonts; Apache-2.0 license text and any applicable upstream NOTICE files for bundled AndroidX/Compose, OkHttp, Kotlin and Material icons; applicable notices and licenses for all resolved transitive dependencies; and any notices/source required for the particular certifi CA bundle and other packaged Kivy components. The checked-in Gradle wrapper JAR is also an Apache-2.0-distributed binary. Verify root Kivy artwork provenance and the licensing of Android SDK components, native libraries and unpinned dependencies. Check the complete resolved APK contents and their exact versions before asserting full compatibility or compliance.
