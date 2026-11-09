@@ -59,6 +59,7 @@ class ExportTest {
         val project = DocxProject(source)
         val visible = (0 until project.blockCount).map(project::blockText)
         assertEquals(setOf("ONE1"), project.presentKeys())
+        assertEquals(1, project.legacyCitationCount())
         assertEquals(setOf("ONE1"), project.missingKeys())
         project.registerItems(listOf(item().citationItem()))
         assertTrue(project.missingKeys().isEmpty())
@@ -67,6 +68,7 @@ class ExportTest {
         val reopened = DocxProject(out)
         assertEquals(visible, (0 until reopened.blockCount).map(reopened::blockText))
         assertEquals(setOf("ONE1"), reopened.presentKeys())
+        assertEquals(1, reopened.legacyCitationCount())
         assertArrayEquals(original, source.readBytes())
     }
     @Test fun pythonGoldenWarnings() {

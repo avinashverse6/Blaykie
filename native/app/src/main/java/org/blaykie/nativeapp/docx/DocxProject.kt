@@ -270,6 +270,12 @@ class DocxProject(private val source: File) {
         return Paragraph(blocks[index].xml)
     }
     fun citations(): List<Citation> = citationOperations.toList()
+    /** Older BLK bookmarks carry an operation number but not the options needed to rebuild the citation. */
+    fun legacyCitationCount(): Int {
+        val sessionNumbers = citationOperations.map { it.number.toString() }.toSet()
+        return blocks.flatMap { block -> bookmarkPattern.findAll(block.xml).map { it.groupValues[2] }.toList() }
+            .filterNot { it in sessionNumbers }.toSet().size
+    }
     fun editSummary(): Pair<Int, Int> = removed to added
     private fun snapshot() = Snapshot(blocks.map { it.xml }, known.toMap(), nextCitation, nextBookmark, citationOperations.toList(), removed, added)
     private fun change(index: Int, xml: String, previous: Snapshot) { blocks[index].xml = xml; history += previous }

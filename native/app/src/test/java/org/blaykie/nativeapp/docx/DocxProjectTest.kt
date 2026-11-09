@@ -88,6 +88,7 @@ class DocxProjectTest {
         assertEquals(1, project.insertCitation(0, first.length, first.length, listOf(item)))
         assertEquals("$first (Lovelace, 2020)", project.blockText(0))
         assertEquals(setOf("ABCD2345"), project.presentKeys())
+        assertEquals(0, project.legacyCitationCount())
         assertEquals(listOf(Citation(1, listOf("ABCD2345"), "(Lovelace, 2020)")), project.citations())
     }
     @Test fun deleteRange() {
