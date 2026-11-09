@@ -45,6 +45,18 @@ class CitationRecordCodecTest {
         invalid { CitationRecordCodec.read("<blaykie-citations version=\"1\" style=\"apa-built-in\"><unknown/></blaykie-citations>".toByteArray()) }
         invalid { CitationRecordCodec.read(ByteArray(1_048_577)) }
     }
+    @Test fun preScanRejectsDtdEntityEncodingsAndExcessiveDepth() {
+        val cases = listOf(
+            "<!DOCTYPE blaykie-citations><blaykie-citations version=\"1\" style=\"apa-built-in\"/>",
+            "<!ENTITY x SYSTEM 'file:///etc/passwd'><blaykie-citations version=\"1\" style=\"apa-built-in\"/>",
+            "<!doctype blaykie-citations><blaykie-citations version=\"1\" style=\"apa-built-in\"/>",
+            "<blaykie-citations version=\"1\" style=\"apa-built-in\"><a><b><c><d/></c></b></a></blaykie-citations>",
+            "<blaykie-citations version=\"1\" style=\"apa-built-in\"><![CDATA[unsafe]]></blaykie-citations>"
+        )
+        cases.forEach { invalid { CitationRecordCodec.read(it.toByteArray()) } }
+        invalid { CitationRecordCodec.read(byteArrayOf(0xc3.toByte(), 0x28)) }
+        println("Citation codec JVM parser: ${CitationRecordCodec.parserClassName()}")
+    }
     @Test fun rejectsMismatchedItemKeyAndUnexpectedCredentialField() {
         val xml = CitationRecordCodec.write(CitationRecords(citations = listOf(record()))).toString(Charsets.UTF_8)
         invalid { CitationRecordCodec.read(xml.replace("<item key=\"ABCD2345\">", "<item key=\"WRONG\">").toByteArray()) }

@@ -1,9 +1,10 @@
 package org.blaykie.nativeapp.docx
 
-import java.io.ByteArrayInputStream
+import java.io.StringReader
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.UUID
-import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -12,7 +13,16 @@ import org.w3c.dom.Element
 import org.w3c.dom.Node
 import org.xml.sax.InputSource
 
-/** Round-1 record codec only. Not yet wired into DOCX export or import. */
+/**
+ * Experimental codec only; no DOCX integration yet.
+ * Stored: style; citation UUID, bookmark anchor, mode, locator, locator label and prefix;
+ * item key, title, author/editor first/last/group, date, publication title, volume, issue,
+ * pages, DOI, type, publisher, book title, edition, URL, editor-lead flag, website type/title,
+ * blog title, report number/type, institution, thesis type, university, archive, proceedings
+ * title, conference name, place and repository. Free-form extra is discarded except the DOI
+ * used by the formatter. There is no library/account ID or credential field. Bibliographic
+ * free text can itself contain sensitive content; this codec does not scan or redact it.
+ */
 internal data class StoredCitation(
     val id: String,
     val anchor: String,
@@ -91,23 +101,52 @@ internal object CitationRecordCodec {
         require(xml.size <= MAX_BYTES) { "Citation metadata too large" }
         return xml
     }
-    fun read(bytes: ByteArray): CitationRecords {
+    /** The input format permits UTF-8, ordinary elements and one optional XML declaration only. */
+    private fun prescan(bytes: ByteArray): String {
         require(bytes.size <= MAX_BYTES) { "Citation metadata too large" }
-        // Fail closed if a platform XML parser cannot enforce these protections.
-        val factory = DocumentBuilderFactory.newInstance().apply {
-            isNamespaceAware = true
-            isXIncludeAware = false
-            setExpandEntityReferences(false)
-            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        val text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString().removePrefix("\uFEFF")
+        require(!Regex("<!\\s*(DOCTYPE|ENTITY)\\b", RegexOption.IGNORE_CASE).containsMatchIn(text)) { "DTD or entity declaration forbidden" }
+        var i = 0
+        var depth = 0
+        var seenRoot = false
+        while (i < text.length) {
+            if (text[i] != '<') { i++; continue }
+            if (text.startsWith("<?xml", i) && !seenRoot && i == 0) {
+                val end = text.indexOf("?>", i + 5)
+                require(end >= 0) { "Unterminated XML declaration" }
+                i = end + 2; continue
+            }
+            require(!text.startsWith("<!", i) && !text.startsWith("<?", i)) { "Declarations and processing instructions forbidden" }
+            val closing = text.startsWith("</", i)
+            var end = i + 1
+            var quote = '\u0000'
+            while (end < text.length) {
+                val char = text[end]
+                if (quote != '\u0000') { if (char == quote) quote = '\u0000' }
+                else if (char == '\"' || char == '\'') quote = char
+                else if (char == '>') break
+                else require(char != '<') { "Invalid tag" }
+                end++
+            }
+            require(end < text.length && quote == '\u0000') { "Unterminated tag" }
+            val selfClosing = text.substring(i + 1, end).trimEnd().endsWith("/")
+            if (closing) { require(!selfClosing && depth > 0); depth-- }
+            else { seenRoot = true; depth++; require(depth <= 4) { "Metadata nesting too deep" }; if (selfClosing) depth-- }
+            i = end + 1
         }
+        require(seenRoot && depth == 0) { "Unbalanced metadata" }
+        return text
+    }
+    internal fun parserClassName(): String = DocumentBuilderFactory.newInstance().newDocumentBuilder().javaClass.name
+    fun read(bytes: ByteArray): CitationRecords {
+        val text = prescan(bytes)
+        // DTDs and declarations are rejected above before this parser sees the document.
+        val factory = DocumentBuilderFactory.newInstance().apply { isNamespaceAware = true }
         val builder = factory.newDocumentBuilder().apply {
             setEntityResolver { _, _ -> throw IllegalArgumentException("External entities are forbidden") }
         }
-        val doc = builder.parse(InputSource(ByteArrayInputStream(bytes)))
+        val doc = builder.parse(InputSource(StringReader(text)))
         require(doc.doctype == null)
         val root = doc.documentElement
         require(root.tagName == "blaykie-citations" && root.namespaceURI == null) { "Invalid metadata root" }
