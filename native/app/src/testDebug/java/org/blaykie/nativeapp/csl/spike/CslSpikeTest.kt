@@ -40,6 +40,7 @@ class CslSpikeTest {
         println("Kotlin bibliography:\n${CitationFormatting.referenceList(items)}")
     }
     @Test fun diagnoseWithSmallJvmThreadStack() {
+        println("Citation codec JVM parser: ${org.blaykie.nativeapp.docx.CitationRecordCodec.parserClassName()}")
         val files = listOf("citeproc.js", "apa.csl", "locales-en-US.xml").associateWith(::asset)
         for (target in StagedSpike.Target.values()) {
             val events = java.util.Collections.synchronizedList(mutableListOf<StagedSpike.Event>())

@@ -61,6 +61,7 @@ class SpikeActivity : Activity() {
             (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("CSL spike results", lines.joinToString("\n")))
         }
         body.addView(copy)
+        body.addView(Button(this).apply { text = "Run codec self-test"; setOnClickListener { CodecSelfTest.run().forEach(::addLine) } })
         StagedSpike.Target.values().forEach { target ->
             body.addView(Button(this).apply { text = target.label; setOnClickListener { start(target) } })
         }

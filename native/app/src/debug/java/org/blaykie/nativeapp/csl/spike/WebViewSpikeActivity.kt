@@ -68,6 +68,7 @@ class WebViewSpikeActivity : Activity() {
             text = "Copy results"
             setOnClickListener { (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("CSL WebView results", lines.joinToString("\n"))) }
         })
+        body.addView(Button(this).apply { text = "Run codec self-test"; setOnClickListener { CodecSelfTest.run().forEach(::line) } })
         Target.values().forEach { target -> body.addView(Button(this).apply { text = target.title; setOnClickListener { start(target) } }) }
         body.addView(output)
         setContentView(ScrollView(this).apply { addView(body) })
