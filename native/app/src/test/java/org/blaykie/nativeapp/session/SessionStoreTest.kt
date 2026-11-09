@@ -40,6 +40,19 @@ class SessionStoreTest {
         assertEquals(value(expected, "protected"), protected)
         assertEquals(value(expected, "protectedAfter"), p.blockText(1))
     }
+    @Test fun versionOneSessionRestoresTextEditsAndCanUndoAfterRestart() {
+        val store = SessionStore(temp.root)
+        val ready = opened(store)
+        // Version 1 stores text edits, without later citation-operation fields.
+        File(temp.root, "session.json").writeText(
+            """{"uri":"content://example/file","fileName":"paper.docx","sourceName":"${ready.session.sourceName}","version":1,"edits":[{"block":0,"text":"alpha BRAVO charlie delta echo"}]}"""
+        )
+        val restored = SessionStore(temp.root).read() as SessionRead.Ready
+        assertEquals(1, restored.session.version)
+        assertEquals("alpha BRAVO charlie delta echo", restored.project.blockText(0))
+        assertTrue(restored.project.undo())
+        assertEquals("alpha bravo charlie delta echo", restored.project.blockText(0))
+    }
     @Test fun savesDraftAndReplaysUndoHistory() {
         val store = SessionStore(temp.root); val ready = opened(store)
         ready.project.applyTextEdit(0, "alpha BRAVO charlie delta echo")

@@ -52,6 +52,23 @@ class ExportTest {
         try { project.export(source); fail("Source overwrite must be rejected") } catch (_: IllegalArgumentException) { }
         assertArrayEquals(before, source.readBytes())
     }
+    @Test fun legacyExportReopensWithSameVisibleTextAndRebuildsReferences() {
+        // This is a v1 bookmark-only golden file, not a generated metadata fixture.
+        val source = file("golden-match.docx")
+        val original = source.readBytes()
+        val project = DocxProject(source)
+        val visible = (0 until project.blockCount).map(project::blockText)
+        assertEquals(setOf("ONE1"), project.presentKeys())
+        assertEquals(setOf("ONE1"), project.missingKeys())
+        project.registerItems(listOf(item().citationItem()))
+        assertTrue(project.missingKeys().isEmpty())
+        val out = File(temp.root, "legacy-reexport.docx")
+        project.export(out)
+        val reopened = DocxProject(out)
+        assertEquals(visible, (0 until reopened.blockCount).map(reopened::blockText))
+        assertEquals(setOf("ONE1"), reopened.presentKeys())
+        assertArrayEquals(original, source.readBytes())
+    }
     @Test fun pythonGoldenWarnings() {
         val project = DocxProject(file("warnings.docx"))
         val expected = expect()["warnings"] as JsonObject
