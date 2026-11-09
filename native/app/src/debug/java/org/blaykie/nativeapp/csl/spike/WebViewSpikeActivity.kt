@@ -27,7 +27,7 @@ import java.io.ByteArrayInputStream
 /** Debug-only, detached WebView: all executable code and data are bundled locally. */
 class WebViewSpikeActivity : Activity() {
     private enum class Target(val title: String, val count: Int = 0) {
-        CREATE("WebView creation"), SCRIPT("Load citeproc.js"), ENGINE("Create CSL engine"),
+        ALL("Run all stages"), CREATE("WebView creation"), SCRIPT("Load citeproc.js"), ENGINE("Create CSL engine"),
         ONE("Render 1 item", 1), FIVE("Render 5 items", 5), FIFTY("Render 50 items", 50), THREE_HUNDRED("Render 300 items", 300)
     }
     private val handler = Handler(Looper.getMainLooper())
@@ -152,7 +152,7 @@ class WebViewSpikeActivity : Activity() {
     private fun evaluate(run: Int, script: String, callback: (JSONObject) -> Unit) {
         if (!active || run != generation) return
         try {
-            val wrapper = "JSON.stringify((function(){try { $script } catch(e) { return {ok:false,error:String(e && (e.stack || e.message) || e).slice(0,500)}; }})())"
+            val wrapper = WebViewLoader.wrap(script)
             web?.evaluateJavascript(wrapper) { raw ->
                 if (!active || run != generation) return@evaluateJavascript
                 try {
@@ -180,9 +180,17 @@ class WebViewSpikeActivity : Activity() {
                 fun send(index: Int) {
                     if (!active || run != generation) return
                     if (index == chunks.size) {
-                        evaluate(run, "(0,eval)(window.__cslChunks.join('')); delete window.__cslChunks; if(typeof CSL === 'undefined') throw new Error('CSL missing'); return {ok:true};") {
-                            done("citeproc.js evaluated from local asset")
-                            if (target == Target.SCRIPT) complete(target) else createEngine(target, run)
+                        line("Loader diagnosis: the previous indirect eval ran a strict-mode script in an eval-local scope; Node vm.runInContext ran it as a global script. This loader inserts a local script element.")
+                        line("Loader wrapper first 120 characters: ${WebViewLoader.wrap(WebViewLoader.body).take(120).replace('\n', ' ')}")
+                        evaluate(run, WebViewLoader.body) { result ->
+                            val detail = "received script length=${result.getInt("length")} UTF-16 code units; typeof CSL=${result.getString("csl")}; typeof window.CSL=${result.getString("windowCsl")}; typeof globalThis.CSL=${result.getString("globalCsl")}; script error=${result.optString("scriptError")}"
+                            line("Loader diagnostics: $detail")
+                            if (result.getString("windowCsl") != "object") {
+                                fail("CSL missing after global script load; $detail")
+                            } else {
+                                done("citeproc.js loaded at global scope; $detail")
+                                if (target == Target.SCRIPT) complete(target) else createEngine(target, run)
+                            }
                         }
                     } else evaluate(run, "window.__cslChunks.push(${JSONObject.quote(chunks[index])}); return {ok:true};") { send(index + 1) }
                 }
@@ -201,16 +209,17 @@ class WebViewSpikeActivity : Activity() {
                 window.engine.setOutputFormat('text'); return {ok:true};
             """.trimIndent()) {
                 done()
-                if (target == Target.ENGINE) complete(target) else render(target, run)
+                if (target == Target.ENGINE) complete(target) else render(if (target == Target.ALL) Target.ONE else target, run, target == Target.ALL)
             }
         } catch (t: Throwable) { fail(t) }
     }
-    private fun render(target: Target, run: Int) {
+    private fun render(target: Target, run: Int, runAll: Boolean) {
         begin(target.title)
         try {
             val items = CslSpike.fixtures(target.count).toString()
             evaluate(run, """
                 var records=JSON.parse(${JSONObject.quote(items)});
+                window.lookup={}; window.ids=[];
                 records.forEach(function(item){window.lookup[item.id]=item;window.ids.push(item.id);});
                 window.engine.updateItems(window.ids);
                 var cluster=window.engine.makeCitationCluster(window.ids.slice(0,5).map(function(id){return {id:id};}));
@@ -223,7 +232,13 @@ class WebViewSpikeActivity : Activity() {
                 require(bib.length() == target.count) { "Expected ${target.count} references, got ${bib.length()}" }
                 done("${bib.length()} references")
                 if (target == Target.FIVE) compare(message, bib)
-                complete(target)
+                val next = if (!runAll) null else when (target) {
+                    Target.ONE -> Target.FIVE
+                    Target.FIVE -> Target.FIFTY
+                    Target.FIFTY -> Target.THREE_HUNDRED
+                    else -> null
+                }
+                if (next != null) render(next, run, true) else complete(if (runAll) Target.ALL else target)
             }
         } catch (t: Throwable) { fail(t) }
     }
