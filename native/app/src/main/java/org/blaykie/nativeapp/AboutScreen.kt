@@ -25,7 +25,7 @@ internal object AboutInfo {
         AboutLibrary("AndroidX DataStore Preferences", "Apache-2.0", "https://github.com/androidx/androidx"),
         AboutLibrary("OkHttp", "Apache-2.0", "https://github.com/square/okhttp"),
         AboutLibrary("kotlinx.serialization JSON", "Apache-2.0", "https://github.com/Kotlin/kotlinx.serialization"),
-        AboutLibrary("Material Design icons", "Apache-2.0", "https://github.com/google/material-design-icons"),
+        AboutLibrary("Material Design settings, back and undo vector icons", "Apache-2.0", "https://github.com/google/material-design-icons"),
     )
 }
 
