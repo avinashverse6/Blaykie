@@ -11,7 +11,7 @@ Builds:
     commit: v1.0.1
     subdir: native/app
     gradle:
-      - yes
+      - "yes"
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
