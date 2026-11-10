@@ -1,0 +1,7 @@
+Blaykie helps you add citations and a reference list to a Word document on your Android device. Open a DOCX file, edit its paragraphs, find references in your personal Zotero library and export a new DOCX without changing the original.
+
+To search Zotero and recover references, you need a Zotero API key. Blaykie sends its own network requests only to api.zotero.org. Links you choose to open use your browser.
+
+The document is shown as paragraph cards rather than a page view. Tables can be read but not edited. Citation formatting is APA 7 only; complex documents and existing citation fields may have limitations.
+
+Blaykie is free software licensed under AGPL-3.0-or-later.
