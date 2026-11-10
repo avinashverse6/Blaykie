@@ -104,6 +104,12 @@ buildozer -v android debug
 
 The APK is written to the `bin/` folder. Set `android.archs` in `buildozer.spec` to build one processor type at a time.
 
+## Citation metadata privacy (experimental)
+
+The native citation-record codec is under development and is **not yet connected to DOCX export**. Its proposed records contain the document style; each citation's UUID, bookmark name, mode, page locator and label, and prefix; and each item's Zotero item key, title, author and editor first/last/group names, date, publication title, volume, issue, pages, DOI, item type, publisher, book title, edition, URL, editor-lead flag, website type/title, blog title, report number/type, institution, thesis type, university, archive, proceedings title, conference name, place and repository. It discards free-form Extra except for a DOI used by the formatter. There is no field for a Zotero account ID or API key.
+
+Bibliographic text and URLs can themselves contain sensitive information. Review the data you put in citations before sharing a document; the codec does not scan or redact free text.
+
 ## Contributing
 
 Bug reports and suggestions are welcome. Please open an issue.

@@ -238,7 +238,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             Screen.DOCUMENT -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
-            Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
+            Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
             Screen.HOME -> Unit
         }
     }
@@ -362,6 +362,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
                 Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
+            val legacyCount = project?.legacyCitationCount() ?: 0
+            if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
+                Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+            }
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
                 items(blockCards, key = { it.index }) { card ->
@@ -432,10 +436,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Screen.EXPORT -> project?.let { p ->
             ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
-        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onCrash = {
+        Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
             navigate(Screen.LAST_CRASH)
         })
+        Screen.ABOUT -> AboutScreen(onBack = { navigate(Screen.SETTINGS) })
         Screen.LAST_CRASH -> Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Last crash", style = MaterialTheme.typography.headlineMedium)
             TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Back") }
@@ -490,7 +495,7 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onCrash: () -> Unit) {
+private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onAbout: () -> Unit, onCrash: () -> Unit) {
     val scope = rememberCoroutineScope()
     var dialog by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
@@ -504,6 +509,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             SettingsRow("Text size", settings.textSize.name) { dialog = "size" }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            SettingsRow("About Blaykie", "") { onAbout() }
             SettingsRow("Last crash", "") { onCrash() }
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text("App version", style = MaterialTheme.typography.bodyLarge)

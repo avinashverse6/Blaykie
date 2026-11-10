@@ -52,6 +52,47 @@ class ExportTest {
         try { project.export(source); fail("Source overwrite must be rejected") } catch (_: IllegalArgumentException) { }
         assertArrayEquals(before, source.readBytes())
     }
+    @Test fun legacyExportReopensWithSameVisibleTextAndRebuildsReferences() {
+        // This is a v1 bookmark-only golden file, not a generated metadata fixture.
+        val source = file("golden-match.docx")
+        val original = source.readBytes()
+        val project = DocxProject(source)
+        val visible = (0 until project.blockCount).map(project::blockText)
+        assertEquals(setOf("ONE1"), project.presentKeys())
+        assertEquals(1, project.legacyCitationCount())
+        assertEquals(setOf("ONE1"), project.missingKeys())
+        project.registerItems(listOf(item().citationItem()))
+        assertTrue(project.missingKeys().isEmpty())
+        val out = File(temp.root, "legacy-reexport.docx")
+        project.export(out)
+        val reopened = DocxProject(out)
+        assertEquals(visible, (0 until reopened.blockCount).map(reopened::blockText))
+        assertEquals(setOf("ONE1"), reopened.presentKeys())
+        assertEquals(1, reopened.legacyCitationCount())
+        assertArrayEquals(original, source.readBytes())
+    }
+    @Test fun legacyTextWithDeletedBookmarkOpensAndExportsUnchanged() {
+        // A lost bookmark is indistinguishable from ordinary text; it must not be inferred.
+        val source = file("golden-match.docx")
+        val entries = contents(source).toMutableMap()
+        val xml = entries.getValue("word/document.xml").toString(Charsets.UTF_8)
+        val stripped = xml.replace("<w:bookmarkStart w:id=\"1\" w:name=\"BLK_ONE1_1\"/>", "")
+            .replace("<w:bookmarkEnd w:id=\"1\"/>", "")
+        assertNotEquals(xml, stripped)
+        entries["word/document.xml"] = stripped.toByteArray(Charsets.UTF_8)
+        val damaged = File(temp.root, "lost-bookmark.docx")
+        java.util.zip.ZipOutputStream(damaged.outputStream()).use { zip ->
+            entries.forEach { (name, bytes) -> zip.putNextEntry(java.util.zip.ZipEntry(name)); zip.write(bytes); zip.closeEntry() }
+        }
+        val project = DocxProject(damaged)
+        assertTrue(project.hasBlaykieBibliography())
+        assertEquals(0, project.legacyCitationCount())
+        assertTrue(project.presentKeys().isEmpty())
+        assertTrue((0 until project.blockCount).any { project.blockText(it).contains("(Lovelace, 2020)") })
+        val out = File(temp.root, "lost-bookmark-export.docx")
+        project.export(out)
+        assertEquals(stripped, contents(out).getValue("word/document.xml").toString(Charsets.UTF_8))
+    }
     @Test fun pythonGoldenWarnings() {
         val project = DocxProject(file("warnings.docx"))
         val expected = expect()["warnings"] as JsonObject

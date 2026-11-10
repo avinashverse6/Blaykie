@@ -140,10 +140,10 @@ class SessionStore(private val root: File) {
     }
 }
 
-enum class Screen { HOME, DOCUMENT, EDITOR, EXPORT, SETTINGS, LAST_CRASH }
+enum class Screen { HOME, DOCUMENT, EDITOR, EXPORT, SETTINGS, ABOUT, LAST_CRASH }
 fun backTarget(screen: Screen): Screen? = when (screen) {
     Screen.EDITOR, Screen.EXPORT -> Screen.DOCUMENT
     Screen.DOCUMENT, Screen.SETTINGS -> Screen.HOME
-    Screen.LAST_CRASH -> Screen.SETTINGS
+    Screen.ABOUT, Screen.LAST_CRASH -> Screen.SETTINGS
     Screen.HOME -> null
 }

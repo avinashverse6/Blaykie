@@ -1,0 +1,1 @@
+Version 1.0.1 prepares the native app for F-Droid, adds license and source information in Settings, and improves citation metadata notices.
