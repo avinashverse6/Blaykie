@@ -20,6 +20,9 @@ class AboutInfoTest {
         assertEquals("Licensed under AGPL-3.0-or-later", AboutInfo.license)
         assertEquals("https://github.com/avinashverse6/Blaykie", AboutInfo.source)
         assertArrayEquals(File(root, "LICENSE").readBytes(), File(root, "native/app/src/main/assets/${AboutInfo.licenseAsset}").readBytes())
+        val apache = File(root, "native/app/src/main/assets/${AboutInfo.apacheLicenseAsset}").readBytes()
+        val sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(apache).joinToString("") { "%02x".format(it.toInt() and 255) }
+        assertEquals("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", sha256)
         val notices = File(root, "THIRD_PARTY_NOTICES.md").readText()
         AboutInfo.libraries.forEach { library ->
             assertTrue("Missing ${library.name}", notices.contains(library.name))

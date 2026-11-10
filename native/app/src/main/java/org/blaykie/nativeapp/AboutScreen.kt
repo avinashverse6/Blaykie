@@ -4,8 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -18,6 +18,7 @@ internal object AboutInfo {
     const val source = "https://github.com/avinashverse6/Blaykie"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
     const val licenseAsset = "licenses/AGPL-3.0"
+    const val apacheLicenseAsset = "licenses/Apache-2.0"
     val libraries = listOf(
         AboutLibrary("AndroidX Activity Compose", "Apache-2.0", "https://github.com/androidx/androidx"),
         AboutLibrary("AndroidX Compose UI", "Apache-2.0", "https://github.com/androidx/androidx"),
@@ -25,6 +26,9 @@ internal object AboutInfo {
         AboutLibrary("AndroidX DataStore Preferences", "Apache-2.0", "https://github.com/androidx/androidx"),
         AboutLibrary("OkHttp", "Apache-2.0", "https://github.com/square/okhttp"),
         AboutLibrary("kotlinx.serialization JSON", "Apache-2.0", "https://github.com/Kotlin/kotlinx.serialization"),
+        AboutLibrary("Kotlin standard library", "Apache-2.0", "https://github.com/JetBrains/kotlin"),
+        AboutLibrary("Kotlin coroutines", "Apache-2.0", "https://github.com/Kotlin/kotlinx.coroutines"),
+        AboutLibrary("Okio", "Apache-2.0", "https://github.com/square/okio"),
         AboutLibrary("Material Design settings, back and undo vector icons", "Apache-2.0", "https://github.com/google/material-design-icons"),
     )
 }
@@ -34,6 +38,8 @@ internal object AboutInfo {
 internal fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val uri = LocalUriHandler.current
+    var showApache by rememberSaveable { mutableStateOf(false) }
+    val apacheText = remember { runCatching { context.assets.open(AboutInfo.apacheLicenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Apache-2.0 license text could not be loaded." } }
     val licenseText = remember { runCatching { context.assets.open(AboutInfo.licenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "License text could not be loaded." } }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("About") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } })
@@ -50,6 +56,8 @@ internal fun AboutScreen(onBack: () -> Unit) {
                 TextButton(onClick = { runCatching { uri.openUri(library.url) } }) { Text(library.url, style = MaterialTheme.typography.bodySmall) }
             }
             Text("Other transitive components and their notices require a distribution-specific audit.", style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { showApache = !showApache }) { Text(if (showApache) "Hide Apache-2.0 license text" else "Read Apache-2.0 license text") }
+            if (showApache) Text(apacheText, style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { runCatching { uri.openUri(AboutInfo.apacheLicense) } }) { Text("Apache-2.0 license (upstream)") }
             HorizontalDivider()
             Text("GNU Affero General Public License", style = MaterialTheme.typography.titleMedium)

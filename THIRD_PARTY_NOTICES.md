@@ -12,6 +12,9 @@ This inventory records dependencies explicitly declared in the repository, relev
 | AndroidX DataStore Preferences | 1.1.1 | Apache-2.0 | https://github.com/androidx/androidx |
 | OkHttp | 4.12.0 | Apache-2.0 | https://github.com/square/okhttp |
 | kotlinx.serialization JSON | 1.6.3 | Apache-2.0 | https://github.com/Kotlin/kotlinx.serialization |
+| Kotlin standard library | Transitive, not individually pinned | Apache-2.0 | https://github.com/JetBrains/kotlin |
+| Kotlin coroutines | Transitive, not individually pinned | Apache-2.0 | https://github.com/Kotlin/kotlinx.coroutines |
+| Okio | Transitive, not individually pinned | Apache-2.0 | https://github.com/square/okio |
 
 AndroidX Core, Lifecycle and other AndroidX/Compose libraries, Kotlin standard library, Kotlin coroutines, and Okio are also used directly or transitively. Their resolved versions are not pinned individually in the checked-in build files; inspect the Gradle runtime dependency graph for exact versions and license/notice information for a particular APK. Do not treat this inventory as a complete transitive SBOM.
 
