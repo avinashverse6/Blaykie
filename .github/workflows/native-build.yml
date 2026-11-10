@@ -100,6 +100,9 @@ jobs:
           spike=$(stat -c %s app/build/outputs/apk/debug/app-debug.apk)
           echo "Baseline debug APK: $base bytes; spike debug APK: $spike bytes; increase: $((spike-base)) bytes"
           echo "::notice::Baseline debug APK: $base bytes; spike debug APK: $spike bytes; increase: $((spike-base)) bytes"
+      - name: List release dependency and APK license and notice filenames
+        working-directory: native
+        run: python3 ci/list-release-licenses.py
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4

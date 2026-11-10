@@ -1,0 +1,11 @@
+// CI-only inventory task: resolve the app's release runtime artifacts, not test/debug artifacts.
+gradle.projectsEvaluated {
+    def app = gradle.rootProject.project(':app')
+    app.tasks.register('reportReleaseArtifactPaths') {
+        doLast {
+            app.configurations.getByName('releaseRuntimeClasspath').resolvedConfiguration.resolvedArtifacts.each { artifact ->
+                println("ARTIFACT\t${artifact.moduleVersion.id}\t${artifact.file.absolutePath}")
+            }
+        }
+    }
+}
