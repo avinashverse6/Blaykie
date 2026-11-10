@@ -57,7 +57,7 @@ android {
         }
     }
     sourceSets.getByName("test").resources.srcDir("src/debug/assets")
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
