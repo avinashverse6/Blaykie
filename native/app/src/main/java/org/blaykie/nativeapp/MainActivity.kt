@@ -65,6 +65,9 @@ import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.style.CitationStyleRow
 import org.blaykie.nativeapp.citation.style.CitationStyleSession
+import org.blaykie.nativeapp.citation.style.citationUsesCsl
+import org.blaykie.nativeapp.citation.style.citationOptionRestriction
+import org.blaykie.nativeapp.citation.style.renderCitationPreview
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
@@ -177,6 +180,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var crashText by remember { mutableStateOf("") }
     var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
     var discardCount by rememberSaveable { mutableIntStateOf(0) }
+    var inserting by remember { mutableStateOf(false) }
 
     fun accept(loaded: Loaded) {
         session = loaded.session; project = loaded.project; blockCards = loaded.cards
@@ -392,20 +396,45 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }
         }
         Screen.EDITOR -> if (searchState.open) {
-            CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) }, onInsert = {
-                val p = project; val s = session; val chosen = searchState.selectedItems()
+            CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
+                cslSelected = citationUsesCsl(session), restriction = citationOptionRestriction(context, session, searchState), inserting = inserting, onInsert = {
+                val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
                 if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
                 else if (p != null && s != null) {
-                    try {
-                        p.insertCitation(searchState.block, searchState.position, searchState.position, chosen, searchState.style, searchState.page.trim(), searchState.prefix.trim())
-                        val operation = EditOperation(block = searchState.block, type = "citation", position = searchState.position, items = chosen, style = searchState.style, page = searchState.page.trim(), prefix = searchState.prefix.trim())
-                        if (!persist(s.copy(edits = s.edits + operation, draft = null))) p.undo()
-                        else {
-                            val citation = p.citations().last().text
-                            citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
-                            message = "Citation added: " + citation.take(50)
+                    fun insert(preview: String?, fallback: Boolean) {
+                        val current = session
+                        if (current == null || current.sourceName != s.sourceName || project !== p || citationSearch.state.value != snapshot) {
+                            if (citationSearch.state.value.open) citationSearch.message("Selection changed. Please try again.")
+                            return
                         }
-                    } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
+                        try {
+                            p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, snapshot.page.trim(), snapshot.prefix.trim(), preview)
+                            val operation = EditOperation(block = snapshot.block, type = "citation", position = snapshot.position, items = chosen,
+                                style = snapshot.style, page = snapshot.page.trim(), prefix = snapshot.prefix.trim(), previewText = preview)
+                            if (!persist(current.copy(edits = current.edits + operation, draft = null))) p.undo()
+                            else {
+                                val citation = p.citations().last().text
+                                citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
+                                message = "Citation added: " + citation.take(50) + when {
+                                    fallback -> " — CSL unavailable; used built-in APA."
+                                    preview != null -> " — CSL preview; export uses built-in APA until B1b."
+                                    else -> ""
+                                }
+                            }
+                        } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
+                        catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
+                    }
+                    if (!citationUsesCsl(s)) insert(null, false)
+                    else if (!inserting && citationOptionRestriction(context, s, snapshot) == null) {
+                        inserting = true
+                        scope.launch {
+                            try {
+                                val existing = p.citations().flatMap { it.items }
+                                val preview = renderCitationPreview(context, s, snapshot, existing + chosen)
+                                insert(preview, preview == null)
+                            } finally { inserting = false }
+                        }
+                    }
                 }
             })
         } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
