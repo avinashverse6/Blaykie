@@ -12,6 +12,12 @@ import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.blaykie.nativeapp.csl.CslWebViewHost
+import org.blaykie.nativeapp.csl.CslHostState
+import org.blaykie.nativeapp.csl.CitationItemToCsl
+import org.blaykie.nativeapp.csl.narrativeAuthor
+import org.blaykie.nativeapp.csl.citationRestriction
+import org.blaykie.nativeapp.docx.CitationItem
+import org.blaykie.nativeapp.citation.SearchState
 import org.blaykie.nativeapp.csl.StyleChoice
 import org.blaykie.nativeapp.csl.StyleRegistry
 import org.blaykie.nativeapp.csl.styleChoices
@@ -66,6 +72,21 @@ private class StyleController(context: Context) : ViewModel() {
             }
         }
     }
+    suspend fun render(sessionKey: String, styleId: String, items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String? {
+        val web = host ?: return null
+        val actual = web.state as? CslHostState.Ready ?: return null
+        if (key != sessionKey || selected != styleId || actual.styleId != styleId || !state.value.ready) return null
+        if (state.value.choices.none { it.id == styleId && it.disabledReason == null }) return null
+        val response = try { web.render(CitationItemToCsl.request(items, context).copy(page = page, prefix = prefix)).getOrThrow() }
+        catch (_: Exception) {
+            state.value = state.value.copy(ready = false, preparing = false, failedStyle = styleId, message = "Citation style failed. Using built-in APA.")
+            return null
+        }
+        return if (mode == "narrative") {
+            val authors = items.single().authors
+            "${narrativeAuthor(response.author, response.andTerm, authors.size, authors.filter { it.group }.map { it.last })} ${response.suppress}"
+        } else response.cluster
+    }
     fun cancel() {
         generation++; host?.cancel(); job?.cancel(); selected = null
         state.value = state.value.copy(preparing = false, ready = false, message = "", failedStyle = null)
@@ -79,6 +100,23 @@ private class StyleController(context: Context) : ViewModel() {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T = StyleController(context.applicationContext) as T
     }
+}
+
+private fun controllerFor(context: Context): StyleController {
+    val activity = context as ComponentActivity
+    return ViewModelProvider(activity, StyleController.Factory(activity.applicationContext))[StyleController::class.java]
+}
+
+internal fun citationUsesCsl(session: Session?): Boolean = session?.debugCitationStyleId != null
+internal fun citationOptionRestriction(context: Context, session: Session?, search: SearchState): String? {
+    val styleId = session?.debugCitationStyleId ?: return null
+    val choice = controllerFor(context).state.value.choices.firstOrNull { it.id == styleId }
+    if (choice?.disabledReason != null) return choice.disabledReason
+    return citationRestriction(styleId, search.style, search.selectedItems().size, search.page, search.prefix)
+}
+internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>): String? {
+    val id = session.debugCitationStyleId ?: return null
+    return controllerFor(context).render(session.sourceName, id, search.selectedItems(), search.style, search.page.trim(), search.prefix.trim(), citationContext)
 }
 
 @Composable private fun controller(context: Context): StyleController {
@@ -127,5 +165,6 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             TextButton(onClick = { if (onStyleChange(null)) vm.cancel() }) { Text("Cancel") }
         }
         if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodySmall)
+        if (session?.edits?.any { it.previewText != null } == true) Text("CSL citations are previews; export uses built-in APA until B1b.", style = MaterialTheme.typography.bodySmall)
     }
 }

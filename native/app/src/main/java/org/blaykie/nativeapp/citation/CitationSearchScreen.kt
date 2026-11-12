@@ -16,7 +16,7 @@ import org.blaykie.nativeapp.docx.CitationFormatting
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-internal fun CitationSearchScreen(state: SearchState, controller: CitationSearchController, paragraph: String, onCancel: () -> Unit, onInsert: () -> Unit, onAddKey: () -> Unit) {
+internal fun CitationSearchScreen(state: SearchState, controller: CitationSearchController, paragraph: String, onCancel: () -> Unit, onInsert: () -> Unit, onAddKey: () -> Unit, cslSelected: Boolean = false, restriction: String? = null, inserting: Boolean = false) {
     BackHandler { onCancel() }
     // One scrollable viewport keeps the query and the bottom fields reachable when
     // the IME or a larger text size leaves little vertical space.
@@ -73,13 +73,14 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
                 val start = (position - 60).coerceAtLeast(0); val end = (position + 60).coerceAtMost(paragraph.length)
                 Text(paragraph.substring(start, position) + "|" + paragraph.substring(position, end), style = MaterialTheme.typography.bodyMedium)
                 val preview = state.preview()
-                Text(if (preview.isEmpty()) "Select one or more references." else "Will insert:  $preview", style = MaterialTheme.typography.bodyMedium)
+                Text(if (preview.isEmpty()) "Select one or more references." else if (cslSelected) "CSL preview is generated on insertion; export uses built-in APA until B1b." else "Will insert:  $preview", style = MaterialTheme.typography.bodyMedium)
+                if (restriction != null) Text(restriction, style = MaterialTheme.typography.bodySmall)
             }
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onCancel) { Text("Cancel") }
-                if (state.hasKey) Button(enabled = !state.loading, onClick = onInsert) { Text("Insert") }
+                if (state.hasKey) Button(enabled = !state.loading && !inserting && restriction == null, onClick = onInsert) { Text("Insert") }
             }
         }
     }
