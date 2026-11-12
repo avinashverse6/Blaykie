@@ -65,12 +65,16 @@ jobs:
           fi
           if [ "$status" -eq 0 ]; then
             python3 - <<'PYCODE'
-          import glob, xml.etree.ElementTree as ET
+          import base64, glob, zlib, xml.etree.ElementTree as ET
           for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*CslSpikeTest.xml'):
               root = ET.parse(path).getroot()
               text = root.findtext('system-out', '')
+              rows = [line for line in text.splitlines() if line.startswith('COMPARISON_ROW ')]
+              if rows:
+                  payload = base64.b64encode(zlib.compress('\n'.join(rows).encode('utf-8'))).decode('ascii')
+                  print('::notice::COMPARISON_ROWS ' + payload)
               for line in text.splitlines():
-                  if line.strip(): print('::notice::' + line.replace('%', '%25'))
+                  if line.strip() and not line.startswith('COMPARISON_ROW '): print('::notice::' + line.replace('%', '%25'))
           PYCODE
           fi
           exit "$status"
