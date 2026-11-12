@@ -59,11 +59,14 @@ internal class CslWebViewHost(context: Context) {
                     val styles = StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))
                     val style = styles.singleOrNull { it.id == styleId } ?: error("Citation style not found or ambiguous")
                     require(!style.dependent) { "Dependent styles need their parent style" }
-                    val styleText = when (style.source) {
-                        StyleSource.BUNDLED -> asset(style.asset)
-                        StyleSource.PRIVATE -> File(app.filesDir, "styles/${style.asset}").readText(Charsets.UTF_8)
+                    val styleBytes = when (style.source) {
+                        StyleSource.BUNDLED -> app.assets.open(style.asset)
+                        StyleSource.PRIVATE -> File(app.filesDir, "styles/${style.asset}").inputStream()
                     }
-                    val locale = asset("csl/locales-en-US.xml")
+                    val styleText = styleBytes.use { CslSafeXml.parse(it).first }
+                    val reread = StyleRegistry.read(style.asset, styleText.byteInputStream(Charsets.UTF_8), style.source)
+                    require(reread == style) { "Citation style changed during loading" }
+                    val locale = app.assets.open("csl/locales-en-US.xml").use { CslSafeXml.parse(it).first }
                     val script = asset("csl/citeproc.js")
                     WebView.setWebContentsDebuggingEnabled(false)
                     val web = WebView(app)

@@ -34,6 +34,22 @@ class StyleRegistryTest {
         assertEquals("author-date", StyleRegistry.read("test.csl", xml.byteInputStream()).citationFormat)
     }
 
+    @Test fun acceptsBundledLocaleAndRejectsUnsafeXml() {
+        val locale = requireNotNull(javaClass.classLoader?.getResourceAsStream("csl/locales-en-US.xml"))
+        val parsed = locale.use { CslSafeXml.parse(it) }
+        assertEquals("locale", parsed.second.documentElement.localName)
+        val bad = listOf(
+            "<!DOCTYPE style><style/>",
+            "<!ENTITY x 'bad'><style/>",
+            "<style>" + "x".repeat(CslSafeXml.MAX_BYTES) + "</style>",
+            "<style>" + "<x>".repeat(129) + "</x>".repeat(129) + "</style>"
+        )
+        bad.forEach { xml ->
+            try { StyleRegistry.read("bad.csl", xml.byteInputStream()); fail("Unsafe XML accepted") }
+            catch (expected: IllegalArgumentException) { }
+        }
+    }
+
     @Test fun rejectsMissingMetadataAndDoctype() {
         val invalid = listOf(
             """<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text"><info><title>Example</title></info></style>""",

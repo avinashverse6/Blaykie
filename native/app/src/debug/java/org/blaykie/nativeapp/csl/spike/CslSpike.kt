@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.csl.spike
 
 import kotlinx.serialization.json.*
+import org.blaykie.nativeapp.csl.CslSafeXml
 import org.mozilla.javascript.Context
 import org.mozilla.javascript.ScriptableObject
 
@@ -24,6 +25,8 @@ object CslSpike {
         }
     }
     fun run(js: String, style: String, locale: String, items: JsonArray): Result {
+        CslSafeXml.parse(style.byteInputStream(Charsets.UTF_8))
+        CslSafeXml.parse(locale.byteInputStream(Charsets.UTF_8))
         val cx = Context.enter()
         try {
             cx.optimizationLevel = -1
@@ -101,8 +104,8 @@ object StagedSpike {
             }
             if (target == Target.SCRIPT) return
             step(Target.ENGINE.label) {
-                ScriptableObject.putProperty(scope, "spikeStyle", load("apa.csl"))
-                ScriptableObject.putProperty(scope, "spikeLocale", load("locales-en-US.xml"))
+                ScriptableObject.putProperty(scope, "spikeStyle", CslSafeXml.parse(load("apa.csl").byteInputStream(Charsets.UTF_8)).first)
+                ScriptableObject.putProperty(scope, "spikeLocale", CslSafeXml.parse(load("locales-en-US.xml").byteInputStream(Charsets.UTF_8)).first)
                 cx.evaluateString(scope, """
                     var lookup = {}, ids = [];
                     var sys = {retrieveLocale:function(){return String(spikeLocale);}, retrieveItem:function(id){return lookup[id];}};

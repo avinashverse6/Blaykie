@@ -30,6 +30,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.blaykie.nativeapp.csl.CslSafeXml
 import org.blaykie.nativeapp.csl.CslWebViewHost
 import org.blaykie.nativeapp.csl.CslRenderRequest
 import org.blaykie.nativeapp.csl.StyleRegistry
@@ -191,7 +192,7 @@ class WebViewSpikeActivity : Activity() {
         }
     }
     private fun denied(): WebResourceResponse = WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
-    private fun asset(name: String): String = assets.open("csl/$name").bufferedReader(Charsets.UTF_8).use { it.readText() }
+    private fun asset(name: String): String = assets.open("csl/$name").use { if (name.endsWith(".xml") || name.endsWith(".csl")) CslSafeXml.parse(it).first else it.bufferedReader(Charsets.UTF_8).readText() }
     /** All messages are JSON: a fixed operation and quoted data; no JS interface is installed. */
     private fun evaluate(run: Int, script: String, callback: (JSONObject) -> Unit) {
         if (!active || run != generation) return

@@ -3,7 +3,6 @@ package org.blaykie.nativeapp.csl
 import java.io.InputStream
 import java.io.File
 import org.w3c.dom.Element
-import javax.xml.parsers.DocumentBuilderFactory
 
 /** Metadata comes from the style itself; the title includes any edition text. */
 internal enum class StyleSource { BUNDLED, PRIVATE }
@@ -32,16 +31,7 @@ internal object StyleRegistry {
     }
 
     internal fun read(asset: String, input: InputStream, source: StyleSource = StyleSource.BUNDLED): StyleMetadata {
-        val factory = DocumentBuilderFactory.newInstance().apply {
-            isNamespaceAware = true
-            // Styles are bundled files, but still never resolve external entities or DTDs.
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            isXIncludeAware = false
-            isExpandEntityReferences = false
-        }
-        val root = factory.newDocumentBuilder().parse(input).documentElement
+        val root = CslSafeXml.parse(input).second.documentElement
         require(root.namespaceURI == CSL_NAMESPACE && root.localName == "style") { "Not a CSL style" }
         val infos = root.getElementsByTagNameNS(CSL_NAMESPACE, "info")
         require(infos.length == 1 && infos.item(0).parentNode == root) { "Missing style info" }
