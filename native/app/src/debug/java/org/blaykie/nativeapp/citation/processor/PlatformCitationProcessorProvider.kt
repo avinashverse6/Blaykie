@@ -1,15 +1,16 @@
 package org.blaykie.nativeapp.citation.processor
 
 import android.content.Context
+import org.blaykie.nativeapp.csl.CitationItemToCsl
 import org.blaykie.nativeapp.csl.CslHostState
 import org.blaykie.nativeapp.csl.CslRenderRequest
 import org.blaykie.nativeapp.csl.CslWebViewHost
 import org.blaykie.nativeapp.docx.CitationItem
 
-/** Construct once per session; conversion is injected until the CSL-JSON conversion step. */
+/** Construct once per session; conversion is replaceable for comparison. */
 internal class PlatformCitationProcessorProvider(
     context: Context,
-    private val requestFor: (List<CitationItem>, List<CitationItem>) -> CslRenderRequest,
+    private val requestFor: (List<CitationItem>, List<CitationItem>) -> CslRenderRequest = CitationItemToCsl::request,
 ) : CitationProcessorProvider {
     private val host = CslWebViewHost(context.applicationContext)
 
