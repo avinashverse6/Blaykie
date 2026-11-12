@@ -26,7 +26,7 @@ internal class PlatformCitationProcessorProvider(
                 val ready = host.state as? CslHostState.Ready
                 if (ready?.styleId != styleId) host.warmUp(styleId).getOrThrow()
                 val response = host.render(request).getOrThrow()
-                return if (mode == "narrative") "${narrativeAuthor(response.author, response.andTerm, items.single().authors.size)} ${response.suppress}" else response.cluster
+                return if (mode == "narrative") "${narrativeAuthor(response.author, response.andTerm, items.single().authors.size, items.single().authors.filter { it.group }.map { it.last })} ${response.suppress}" else response.cluster
             }
         }
     }
