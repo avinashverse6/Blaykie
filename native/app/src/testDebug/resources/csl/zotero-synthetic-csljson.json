@@ -1,0 +1,5 @@
+[
+  {"id":"journal-1","type":"article-journal","title":"Example journal","author":[{"family":"Shah","given":"Asha"}],"issued":{"date-parts":[[2020]]},"container-title":"Example Journal"},
+  {"id":"book-1","type":"book","title":"Example book","author":[{"literal":"Example Group"}],"issued":{"date-parts":[[2021]]},"publisher":"Example Press"},
+  {"id":"web-1","type":"webpage","title":"Example page","author":[{"family":"शर्मा","given":"अनिता"}],"URL":"https://example.org/"}
+]
