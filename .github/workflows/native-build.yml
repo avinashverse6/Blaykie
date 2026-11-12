@@ -92,7 +92,10 @@ jobs:
               for name in z.namelist():
                   if name.endswith('.dex'):
                       data = z.read(name)
-                      assert b'org/blaykie/nativeapp/csl/spike' not in data
+                      assert b'org/blaykie/nativeapp/csl/' not in data
+                      assert b'CslWebViewHost' not in data
+                      assert b'StyleController' not in data
+                      assert b'Citation style' not in data
                       assert b'org/mozilla/javascript/Context' not in data
           print('Release isolation verified:', apk)
           print('::notice::Release assets: ' + (', '.join(assets) if assets else '(none)') + '; no spike or Rhino classes found')
