@@ -397,7 +397,7 @@ class DocxProject(private val source: File) {
         "double" -> 480
         else -> throw IllegalArgumentException("Invalid line spacing")
     }
-    private fun bibliography(items: List<CitationItem>, bookmark: Int, line: String): String {
+    private fun bibliography(items: List<CitationItem>, bookmark: Int, line: String, result: org.blaykie.nativeapp.citation.processor.BibliographyResult? = null): String {
         val spacing = "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
         val base = bodyRuns().firstOrNull()?.second?.rpr.orEmpty()
         val fonts = Regex("<w:rFonts\\b[^>]*/>").find(base)?.value.orEmpty()
@@ -405,7 +405,14 @@ class DocxProject(private val source: File) {
         fun run(text: String, italic: Boolean = false, bold: Boolean = false) = makeRun("<w:rPr>$fonts${if (bold) "<w:b/>" else ""}${if (italic) "<w:i/>" else ""}$size</w:rPr>", text)
         val heading = "<w:p><w:pPr><w:pageBreakBefore/>$spacing<w:jc w:val=\"center\"/></w:pPr>${run("References", bold = true)}</w:p>"
         val suffixes = CitationFormatting.suffixes(items)
-        val entries = CitationFormatting.ordered(items).joinToString("") { item ->
+        val entries = if (result != null) result.entries.joinToString("") { entry ->
+            val runs = entry.runs.joinToString("") { part ->
+                val properties = "<w:rPr>$fonts${if (part.bold) "<w:b/>" else ""}${if (part.italic) "<w:i/>" else ""}${if (part.underline) "<w:u w:val=\"single\"/>" else ""}${if (part.smallCaps) "<w:smallCaps/>" else ""}$size</w:rPr>"
+                makeRun(properties, part.text)
+            }
+            val indent = if (result.layout.hangingIndent == true) "<w:ind w:left=\"720\" w:hanging=\"720\"/>" else ""
+            "<w:p><w:pPr>$spacing$indent</w:pPr>$runs</w:p>"
+        } else CitationFormatting.ordered(items).joinToString("") { item ->
             val merged = mutableListOf<Pair<String, Boolean>>()
             CitationFormatting.reference(item, suffixes[item.key].orEmpty()).filter { it.first.isNotEmpty() }.forEach { part ->
                 if (merged.isNotEmpty() && merged.last().second == part.second) {
@@ -417,7 +424,15 @@ class DocxProject(private val source: File) {
         }
         return "<w:bookmarkStart w:id=\"$bookmark\" w:name=\"BLK_BIBLIOGRAPHY\"/>$heading$entries<w:bookmarkEnd w:id=\"$bookmark\"/>"
     }
-    fun buildXml(line: String = "match", allowMissing: Boolean = false): String {
+    fun buildXml(line: String = "match", allowMissing: Boolean = false): String = buildXmlInternal(line, allowMissing, null)
+    internal fun buildXmlWithProcessor(line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult): String = buildXmlInternal(line, allowMissing, result)
+    private fun buildXmlInternal(line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult?): String {
+        val input = if (result != null) citationExportInput(allowMissing) else null
+        if (input != null) {
+            require(result!!.citations.map { it.id } == input.clusters.map { it.id }) { "Citation results do not match the document." }
+            val ids = result.entries.flatMap { it.itemIds }
+            require(ids.size == input.items.size && ids.toSet() == input.items.map { it.key }.toSet()) { "Bibliography results do not match the document." }
+        }
         val present = presentKeys()
         require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
         val items = present.sorted().mapNotNull { known[it] }
@@ -426,8 +441,12 @@ class DocxProject(private val source: File) {
             val first = citation.items.firstOrNull() ?: continue
             val name = "BLK_${itemKey(first)}_${citation.number}"
             val pattern = Regex("(<w:bookmarkStart w:id=\"\\d+\" w:name=\"${Regex.escape(name)}\"/>(?:<w:bookmarkStart [^>]*/>)*<w:r>(?:<w:rPr>.*?</w:rPr>)?<w:t xml:space=\"preserve\">)(.*?)(</w:t></w:r>)", RegexOption.DOT_MATCHES_ALL)
-            val fresh = escape(CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items))
-            pattern.find(joined)?.let { match ->
+            val replacement = result?.citations?.firstOrNull { it.id == citation.number.toString() }
+            if (result != null && replacement == null) continue
+            val fresh = escape(replacement?.text ?: CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items))
+            val matches = pattern.findAll(joined).toList()
+            if (result != null) require(matches.size == 1 && replacement!!.text.isNotBlank()) { "Cannot safely replace a session citation." }
+            matches.firstOrNull()?.let { match ->
                 joined = joined.replaceRange(match.range, match.groupValues[1] + fresh + match.groupValues[3])
             }
         }
@@ -439,7 +458,7 @@ class DocxProject(private val source: File) {
         for (element in elements) { rebuilt += Block(element.tag, joined.substring(cursor, element.start), joined.substring(element.start, element.end)); cursor = element.end }
         val tailGap = joined.substring(cursor, hi)
         val maxId = Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(joined).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0
-        val bibliography = bibliography(items, maxId + 1, line)
+        val bibliography = bibliography(items, maxId + 1, line, result)
         val start = rebuilt.indexOfFirst { it.tag == "w:bookmarkStart" && it.xml.contains("BLK_BIBLIOGRAPHY") }
         val end = if (start < 0) -1 else (start + 1 until rebuilt.size).firstOrNull { rebuilt[it].tag == "w:bookmarkEnd" } ?: -1
         val body = if (start >= 0 && end >= 0) {
@@ -450,7 +469,9 @@ class DocxProject(private val source: File) {
         }
         return joined.substring(0, lo) + body + tailGap + joined.substring(hi)
     }
-    fun export(target: File, line: String = "match", allowMissing: Boolean = false) {
+    fun export(target: File, line: String = "match", allowMissing: Boolean = false) = exportInternal(target, line, allowMissing, null)
+    internal fun exportWithProcessor(target: File, line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult) = exportInternal(target, line, allowMissing, result)
+    private fun exportInternal(target: File, line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult?) {
         require(source.canonicalFile != target.canonicalFile) { "Choose a different file name. The original is never changed." }
         if (target.exists()) {
             // Reflection keeps java.nio.file (API 26) optional on Android 24/25.
@@ -462,7 +483,7 @@ class DocxProject(private val source: File) {
             } catch (_: Exception) { true } // Fail closed when identity cannot be verified.
             require(!sameFile) { "Choose a different file name. The original is never changed." }
         }
-        val text = buildXml(line, allowMissing)
+        val text = buildXmlInternal(line, allowMissing, result)
         val bytes = ((if (bom) "\uFEFF" else "") + text).toByteArray(Charsets.UTF_8)
         ZipFile(source).use { input ->
             ZipOutputStream(target.outputStream().buffered()).use { output ->
