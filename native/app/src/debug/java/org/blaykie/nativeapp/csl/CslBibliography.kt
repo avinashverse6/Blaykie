@@ -73,6 +73,7 @@ internal object CslBibliography {
     fun script(json: String): String = """
         var data=JSON.parse(${JsonPrimitive(json)}), byId={}, work=[], mapping=[];
         data.records.forEach(function(record){byId[record.id]=record;});
+        window.engine.restoreProcessorState([]);
         window.lookup=byId;
         data.clusters.forEach(function(c,i){
             function item(id,withPrefix,withPage){var x={id:id}; if(withPrefix && c.prefix)x.prefix=c.prefix; if(withPage && c.page){x.locator=c.page;x.label='page';} return x;}
@@ -85,7 +86,6 @@ internal object CslBibliography {
         });
         var used={}; data.clusters.forEach(function(c){c.itemIds.forEach(function(id){used[id]=true;});});
         var uncited=data.records.filter(function(record){return !used[record.id];}).map(function(record){return record.id;});
-        window.engine.restoreProcessorState([]);
         window.engine.updateUncitedItems(uncited);
         var rebuilt=window.engine.rebuildProcessorState(work,'text',uncited);
         function at(i){if(!rebuilt[i] || typeof rebuilt[i][2] !== 'string')throw Error('Missing citation result');return rebuilt[i][2];}
