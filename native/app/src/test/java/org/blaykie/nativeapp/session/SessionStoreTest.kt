@@ -40,6 +40,19 @@ class SessionStoreTest {
         assertEquals(value(expected, "protected"), protected)
         assertEquals(value(expected, "protectedAfter"), p.blockText(1))
     }
+    @Test fun citationPreviewReplaysAndUndoRestoresOriginalParagraph() {
+        val store = SessionStore(temp.root); val ready = opened(store)
+        val paragraph = ready.project.blockText(0)
+        val item = org.blaykie.nativeapp.docx.CitationItem("item", "Example", listOf(org.blaykie.nativeapp.docx.CitationAuthor("Ada", "Lovelace")), "2020")
+        val position = paragraph.length
+        ready.project.insertCitation(0, position, position, listOf(item), previewText="(Preview, 2020)")
+        val operation = EditOperation(0, type="citation", position=position, items=listOf(item), previewText="(Preview, 2020)")
+        store.save(ready.session.copy(edits=listOf(operation)))
+        val restored = store.read() as SessionRead.Ready
+        assertTrue(restored.project.blockText(0).endsWith("(Preview, 2020)"))
+        assertTrue(restored.project.undo())
+        assertEquals(paragraph, restored.project.blockText(0))
+    }
     @Test fun citationStyleIsSessionOnlyAndOldSessionDefaultsToBuiltIn() {
         val store = SessionStore(temp.root)
         val ready = opened(store)
