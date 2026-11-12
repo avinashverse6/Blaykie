@@ -2,6 +2,7 @@ package org.blaykie.nativeapp.csl
 
 import kotlinx.serialization.json.*
 import org.blaykie.nativeapp.citation.processor.BuiltInApaProcessor
+import org.blaykie.nativeapp.citation.processor.CitationCluster
 import org.blaykie.nativeapp.docx.CitationAuthor
 import org.blaykie.nativeapp.docx.CitationItem
 import org.junit.Assert.*
@@ -27,25 +28,19 @@ class CslBibliographyRhinoTest {
             val scope = cx.initStandardObjects()
             ScriptableObject.putProperty(scope, "spikeStyle", asset("apa.csl"))
             ScriptableObject.putProperty(scope, "spikeLocale", asset("locales-en-US.xml"))
-            ScriptableObject.putProperty(scope, "records", JsonArray(items.map(CitationItemToCsl::convert)).toString())
+            val clusters = items.mapIndexed { i, item -> CitationCluster("c$i", listOf(item.key)) }
             cx.evaluateString(scope, asset("citeproc.js"), "citeproc.js", 1, null)
-            val value = cx.evaluateString(scope, """
-                var records=JSON.parse(String(records)), lookup={};
-                records.forEach(function(item){lookup[item.id]=item;});
-                var engine=new CSL.Engine({retrieveLocale:function(){return String(spikeLocale);},retrieveItem:function(id){return lookup[id];}},String(spikeStyle),'en-US');
-                var citations=records.map(function(item,i){return {citationID:'c'+i,citationItems:[{id:item.id}],properties:{noteIndex:0}};});
-                var rendered=engine.rebuildProcessorState(citations,'text',[]);
-                engine.setOutputFormat('html'); var bibliography=engine.makeBibliography();
-                JSON.stringify({citations:rendered, meta:bibliography[0], entries:bibliography[1]});
-            """.trimIndent(), "bibliography", 1, null).toString()
-            val root = Json.parseToJsonElement(value).jsonObject
-            val citations = root.getValue("citations").jsonArray
-            assertEquals("(Smith, 2020a)", citations[0].jsonArray[2].jsonPrimitive.content)
-            assertEquals("(Smith, 2020b)", citations[1].jsonArray[2].jsonPrimitive.content)
-            val meta = root.getValue("meta").jsonObject
-            assertTrue(meta.getValue("hangingindent").jsonPrimitive.boolean)
-            val ids = meta.getValue("entry_ids").jsonArray.map { it.jsonArray[0].jsonPrimitive.content }
-            val entries = root.getValue("entries").jsonArray.map { CslRichText.parse(it.jsonPrimitive.content) }
+            cx.evaluateString(scope, """var window=this; window.lookup={}; window.__cslLayoutDefined={hanging:true,line:true,entry:true}; window.engine=new CSL.Engine({retrieveLocale:function(){return String(spikeLocale);},retrieveItem:function(id){return window.lookup[id];}},String(spikeStyle),'en-US'); window.engine.setOutputFormat('text');""", "setup", 1, null)
+            val request = CslBibliography.request(items, clusters)
+            val value = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(request)}})())", "bibliography", 1, null).toString()
+            val result = CslBibliography.parse(value, items, clusters)
+            assertEquals("(Smith, 2020a)", result.citations[0].text)
+            assertEquals("(Smith, 2020b)", result.citations[1].text)
+            assertEquals(true, result.layout.hangingIndent)
+            assertEquals(2.0, result.layout.lineSpacing!!, 0.0)
+            assertEquals(0.0, result.layout.entrySpacing!!, 0.0)
+            val ids = result.entries.map { it.itemIds.single() }
+            val entries = result.entries.map { it.runs }
             assertEquals(items.size, entries.size)
             assertTrue(ids.indexOf("a") < ids.indexOf("b"))
             val builtIn = BuiltInApaProcessor.bibliography(items, emptyList()).entries.associateBy { it.itemIds.single() }

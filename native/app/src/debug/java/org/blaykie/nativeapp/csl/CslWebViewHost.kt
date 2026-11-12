@@ -20,6 +20,9 @@ import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.ByteArrayInputStream
 import java.io.File
+import org.blaykie.nativeapp.citation.processor.BibliographyResult
+import org.blaykie.nativeapp.citation.processor.CitationCluster
+import org.blaykie.nativeapp.docx.CitationItem
 
 /** One detached host per document session. Only the application context is retained. */
 internal class CslWebViewHost(context: Context) {
@@ -63,7 +66,12 @@ internal class CslWebViewHost(context: Context) {
                         StyleSource.BUNDLED -> app.assets.open(style.asset)
                         StyleSource.PRIVATE -> File(app.filesDir, "styles/${style.asset}").inputStream()
                     }
-                    val styleText = styleBytes.use { CslSafeXml.parse(it).first }
+                    val parsedStyle = styleBytes.use { CslSafeXml.parse(it) }
+                    val styleText = parsedStyle.first
+                    val bibliography = parsedStyle.second.getElementsByTagNameNS("http://purl.org/net/xbiblio/csl", "bibliography")
+                    val element = if (bibliography.length == 1) bibliography.item(0) as org.w3c.dom.Element else null
+                    val layout = JSONObject().put("hanging", element?.hasAttribute("hanging-indent") == true)
+                        .put("line", element?.hasAttribute("line-spacing") == true).put("entry", element?.hasAttribute("entry-spacing") == true)
                     val reread = StyleRegistry.read(style.asset, styleText.byteInputStream(Charsets.UTF_8), style.source)
                     require(reread == style) { "Citation style changed during loading" }
                     val locale = app.assets.open("csl/locales-en-US.xml").use { CslSafeXml.parse(it).first }
@@ -115,6 +123,7 @@ internal class CslWebViewHost(context: Context) {
                     evaluate("""
                         var data=JSON.parse(${JSONObject.quote(data.toString())});
                         window.lookup={}; window.ids=[];
+                        window.__cslLayoutDefined=JSON.parse(${JSONObject.quote(layout.toString())});
                         window.engine=new CSL.Engine({retrieveLocale:function(){return data.locale;},retrieveItem:function(id){return window.lookup[id];}},data.style,'en-US');
                         window.engine.setOutputFormat('text'); return {ok:true};
                     """.trimIndent())
@@ -153,4 +162,18 @@ internal class CslWebViewHost(context: Context) {
             catch (e: Throwable) { failed(token, "Citation rendering failed: ${e.message ?: e.javaClass.simpleName}") }
         }
     }
+    suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): Result<BibliographyResult> = withContext(Dispatchers.Main.immediate) {
+        lock.withLock {
+            val token = machine.renderToken() ?: return@withLock Result.failure(IllegalStateException("Citation style is not ready"))
+            try {
+                val request = CslBibliography.request(items, clusters)
+                withTimeout(120_000) {
+                    val result = evaluate(CslBibliography.script(request))
+                    Result.success(CslBibliography.parse(result.toString(), items, clusters))
+                }
+            } catch (e: TimeoutCancellationException) { failed(token, "Bibliography rendering timed out") }
+            catch (e: Throwable) { failed(token, "Bibliography rendering failed: ${e.message ?: e.javaClass.simpleName}") }
+        }
+    }
+
 }

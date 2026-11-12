@@ -18,8 +18,11 @@ internal class PlatformCitationProcessorProvider(
     override fun create(styleId: String): CitationProcessor? {
         if (styleId.isBlank()) return null
         return object : CitationProcessor {
-            override suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): BibliographyResult =
-                throw UnsupportedOperationException("CSL bibliography host not connected yet")
+            override suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): BibliographyResult {
+                val ready = host.state as? CslHostState.Ready
+                if (ready?.styleId != styleId) host.warmUp(styleId).getOrThrow()
+                return host.bibliography(items, clusters).getOrThrow()
+            }
             override suspend fun citation(items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String {
                 require(mode == "parenthetical" || mode == "narrative") { "Unsupported citation mode" }
                 require(mode != "narrative" || items.size == 1) { "CSL narrative requires one item" }
