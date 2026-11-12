@@ -5,7 +5,7 @@ import org.junit.Test
 
 class StyleRegistryTest {
     @Test fun readsMetadataFromBundledStyle() {
-        val styles = StyleRegistry.load { requireNotNull(javaClass.classLoader?.getResourceAsStream(it)) }
+        val styles = StyleRegistry.load({ requireNotNull(javaClass.classLoader?.getResourceAsStream(it)) })
         assertEquals(listOf(StyleMetadata("csl/apa.csl", "APA Style 7th edition", "http://www.zotero.org/styles/apa", "in-text", "author-date", false, StyleSource.BUNDLED)), styles)
     }
 
