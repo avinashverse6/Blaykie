@@ -23,6 +23,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.ByteArrayInputStream
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import org.blaykie.nativeapp.csl.CslWebViewHost
+import org.blaykie.nativeapp.csl.CslRenderRequest
+import org.blaykie.nativeapp.csl.StyleRegistry
 
 /** Debug-only, detached WebView: all executable code and data are bundled locally. */
 class WebViewSpikeActivity : Activity() {
@@ -34,6 +43,8 @@ class WebViewSpikeActivity : Activity() {
     private val lines = mutableListOf<String>()
     private lateinit var status: TextView
     private lateinit var output: TextView
+    private val hostScope = MainScope()
+    private var selfTestHost: CslWebViewHost? = null
     private var web: WebView? = null
     private var active = false
     private var generation = 0
@@ -69,6 +80,7 @@ class WebViewSpikeActivity : Activity() {
             setOnClickListener { (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("CSL WebView results", lines.joinToString("\n"))) }
         })
         body.addView(Button(this).apply { text = "Run codec self-test"; setOnClickListener { CodecSelfTest.run().forEach(::line) } })
+        body.addView(Button(this).apply { text = "Host self-test"; setOnClickListener { hostSelfTest() } })
         Target.values().forEach { target -> body.addView(Button(this).apply { text = target.title; setOnClickListener { start(target) } }) }
         body.addView(output)
         setContentView(ScrollView(this).apply { addView(body) })
@@ -78,6 +90,36 @@ class WebViewSpikeActivity : Activity() {
         } catch (t: Throwable) { "unavailable: ${t.javaClass.simpleName}: ${t.message.orEmpty().take(160)}" }
         line("Device=${Build.MODEL}; Android=${Build.VERSION.RELEASE}; WebView provider=$provider")
         handler.post(ticker)
+    }
+    private fun hostSelfTest() {
+        if (selfTestHost != null) { line("Host self-test already running"); return }
+        val host = CslWebViewHost(applicationContext)
+        selfTestHost = host
+        hostScope.launch {
+            val total = SystemClock.elapsedRealtime()
+            try {
+                val provider = if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "not available" else "unavailable below Android 8"
+                line("Host self-test WebView provider: $provider")
+                val styleId = StyleRegistry.load({ assets.open(it) }).single { it.asset == "csl/apa.csl" }.id
+                val warmStart = SystemClock.elapsedRealtime()
+                val warm = host.warmUp(styleId)
+                line("${if (warm.isSuccess) "PASS" else "FAIL"} host warm-up: ${SystemClock.elapsedRealtime() - warmStart} ms ${warm.exceptionOrNull()?.message.orEmpty()}")
+                if (warm.isFailure) return@launch
+                val records = Json.parseToJsonElement(CslSpike.fixtures(5).toString()).jsonArray.map { it.jsonObject }
+                val ids = records.map { it.getValue("id").toString().trim('"') }
+                val start = SystemClock.elapsedRealtime()
+                val result = host.render(CslRenderRequest(records, ids))
+                val output = result.getOrNull()
+                val passed = output != null && output.cluster == "(Author0, 2020; Author1, 2021; Author2, 2022; Author3, 2023; शर्मा, 2020)" && output.author == "Author0" && output.suppress == "(2020)" && output.bibliography.size == 5
+                line("${if (passed) "PASS" else "FAIL"} host render: ${SystemClock.elapsedRealtime() - start} ms ${result.exceptionOrNull()?.message.orEmpty()}")
+                if (output != null) { line("Host cluster: ${output.cluster}"); line("Host author: ${output.author}; suppress: ${output.suppress}"); output.bibliography.forEach { line("Host bibliography: $it") } }
+            } catch (t: Throwable) {
+                line("FAIL host self-test: ${t.javaClass.simpleName}: ${t.message.orEmpty().take(200)}")
+            } finally {
+                host.destroy(); selfTestHost = null
+                line("Host destroyed; total ${SystemClock.elapsedRealtime() - total} ms")
+            }
+        }
     }
     private fun begin(name: String) { current = name; started = SystemClock.elapsedRealtime(); status.text = "Stage: $name — 0 s" }
     private fun done(detail: String = "") {
@@ -264,5 +306,5 @@ class WebViewSpikeActivity : Activity() {
         actual.filterNot { it in expected }.forEach { differences++; line("DIFFERENCE extra WebView bibliography: $it") }
         line("Five-item comparison vs JVM golden text: $differences differences (bibliography order not compared)")
     }
-    override fun onDestroy() { handler.removeCallbacks(ticker); closeRun(); super.onDestroy() }
+    override fun onDestroy() { selfTestHost?.destroy(); hostScope.cancel(); handler.removeCallbacks(ticker); closeRun(); super.onDestroy() }
 }
