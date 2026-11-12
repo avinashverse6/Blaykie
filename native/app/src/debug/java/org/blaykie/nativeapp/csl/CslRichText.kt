@@ -32,6 +32,7 @@ internal object CslRichText {
                     if (token.startsWith("/")) {
                         val tag = token.substring(1)
                         require(stack.size > 1 && stack.last().tag == tag) { "Mismatched CSL tag" }
+                        if (tag == "div") require(end == text.lastIndex) { "Unexpected content after entry" }
                         stack.removeAt(stack.lastIndex)
                     } else {
                         val current = stack.last()
@@ -60,7 +61,7 @@ internal object CslRichText {
                     require(code != null && Character.isValidCodePoint(code) && code !in 0xD800..0xDFFF && code >= 0x20) { "Invalid entity" }
                     pending.appendCodePoint(code); i = end + 1
                 }
-                else -> { require(text[i] != '\u0000') { "Invalid character" }; pending.append(text[i]); i++ }
+                else -> { require(text[i] >= ' ' || text[i] in "\t\r\n") { "Invalid character" }; pending.append(text[i]); i++ }
             }
         }
         flush(); require(stack.size == 1) { "Unclosed CSL tag" }
