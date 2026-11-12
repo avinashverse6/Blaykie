@@ -19,7 +19,7 @@ class CslMessagesTest {
     }
 
     @Test fun validatesResponse() {
-        val valid = """{"ok":true,"cluster":"(A, 2020)","author":"A","suppress":"(2020)","bibliography":["A. (2020)."]}"""
+        val valid = """{"ok":true,"cluster":"(A, 2020)","author":"A","suppress":"(2020)","andTerm":"and","bibliography":["A. (2020)."]}"""
         assertEquals("A", CslRenderResponse.parse(valid, 1).author)
         invalid { CslRenderResponse.parse(valid, 2) }
         invalid { CslRenderResponse.parse(valid.replace("\"author\":\"A\"", "\"author\":5"), 1) }

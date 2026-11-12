@@ -2,6 +2,7 @@ package org.blaykie.nativeapp.citation.processor
 
 import android.content.Context
 import org.blaykie.nativeapp.csl.CitationItemToCsl
+import org.blaykie.nativeapp.csl.narrativeAuthor
 import org.blaykie.nativeapp.csl.CslHostState
 import org.blaykie.nativeapp.csl.CslRenderRequest
 import org.blaykie.nativeapp.csl.CslWebViewHost
@@ -25,7 +26,7 @@ internal class PlatformCitationProcessorProvider(
                 val ready = host.state as? CslHostState.Ready
                 if (ready?.styleId != styleId) host.warmUp(styleId).getOrThrow()
                 val response = host.render(request).getOrThrow()
-                return if (mode == "narrative") "${response.author} ${response.suppress}" else response.cluster
+                return if (mode == "narrative") "${narrativeAuthor(response.author, response.andTerm, items.single().authors.size)} ${response.suppress}" else response.cluster
             }
         }
     }

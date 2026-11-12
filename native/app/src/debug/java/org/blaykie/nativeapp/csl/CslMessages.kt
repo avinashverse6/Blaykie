@@ -26,18 +26,18 @@ internal data class CslRenderRequest(val records: List<JsonObject>, val citation
     }
 }
 
-internal data class CslRenderResponse(val cluster: String, val author: String, val suppress: String, val bibliography: List<String>) {
+internal data class CslRenderResponse(val cluster: String, val author: String, val suppress: String, val bibliography: List<String>, val andTerm: String) {
     companion object {
         fun parse(text: String, expectedCount: Int): CslRenderResponse {
             require(text.length <= MAX_MESSAGE) { "Response too large" }
             require(expectedCount in 1..300) { "Invalid expected count" }
             val root = Json.parseToJsonElement(text) as? JsonObject ?: error("Response must be an object")
-            require(root.keys == setOf("ok", "cluster", "author", "suppress", "bibliography")) { "Unexpected response fields" }
+            require(root.keys == setOf("ok", "cluster", "author", "suppress", "bibliography", "andTerm")) { "Unexpected response fields" }
             require(root["ok"] == JsonPrimitive(true)) { "Render failed" }
             val bib = root["bibliography"] as? JsonArray ?: error("Bibliography must be an array")
             require(bib.size == expectedCount) { "Unexpected bibliography size" }
             return CslRenderResponse(requireString(root, "cluster", MAX_TEXT), requireString(root, "author", MAX_TEXT),
-                requireString(root, "suppress", MAX_TEXT), bib.map { stringValue(it, MAX_TEXT) })
+                requireString(root, "suppress", MAX_TEXT), bib.map { stringValue(it, MAX_TEXT) }, requireString(root, "andTerm", 256))
         }
     }
 }

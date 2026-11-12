@@ -21,6 +21,6 @@ internal object CslRenderScript {
         var author=window.engine.makeCitationCluster([authorItem]);
         var suppress=window.engine.makeCitationCluster([suppressItem]);
         var bib=window.engine.makeBibliography();
-        return {ok:true,cluster:cluster,author:author,suppress:suppress,bibliography:bib[1]};
+        return {ok:true,cluster:cluster,author:author,suppress:suppress,bibliography:bib[1],andTerm:window.engine.getTerm("and", "long", 0)};
     """.trimIndent()
 }
