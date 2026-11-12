@@ -18,12 +18,13 @@ internal class PlatformCitationProcessorProvider(
         if (styleId.isBlank()) return null
         return object : CitationProcessor {
             override suspend fun citation(items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String {
-                require(page.isBlank() && prefix.isBlank()) { "CSL page and prefix are not implemented yet" }
                 require(mode == "parenthetical" || mode == "narrative") { "Unsupported citation mode" }
                 require(mode != "narrative" || items.size == 1) { "CSL narrative requires one item" }
+                val request = requestFor(items, context).copy(page = page, prefix = prefix)
+                request.toJson() // Reject unsupported combinations before warming the engine.
                 val ready = host.state as? CslHostState.Ready
                 if (ready?.styleId != styleId) host.warmUp(styleId).getOrThrow()
-                val response = host.render(requestFor(items, context)).getOrThrow()
+                val response = host.render(request).getOrThrow()
                 return if (mode == "narrative") "${response.author} ${response.suppress}" else response.cluster
             }
         }

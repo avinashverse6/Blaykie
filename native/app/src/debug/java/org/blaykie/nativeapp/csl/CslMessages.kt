@@ -3,7 +3,7 @@ package org.blaykie.nativeapp.csl
 import kotlinx.serialization.json.*
 
 /** Transport model for the spike-style render operation, not a CitationItem converter. */
-internal data class CslRenderRequest(val records: List<JsonObject>, val citationIds: List<String>) {
+internal data class CslRenderRequest(val records: List<JsonObject>, val citationIds: List<String>, val page: String = "", val prefix: String = "") {
     fun toJson(): String {
         require(records.size in 1..300) { "Expected 1 to 300 records" }
         require(citationIds.size in 1..5) { "Expected 1 to 5 citation ids" }
@@ -13,7 +13,11 @@ internal data class CslRenderRequest(val records: List<JsonObject>, val citation
         }
         require(ids.distinct().size == ids.size) { "Duplicate record id" }
         require(citationIds.distinct().size == citationIds.size && citationIds.all { it in ids }) { "Invalid citation ids" }
+        require(page.length <= 1024 && prefix.length <= 1024) { "Citation affix too large" }
+        require(citationIds.size == 1 || (page.isBlank() && prefix.isBlank())) { "Page and prefix require one citation item" }
         val data = buildJsonObject {
+            put("page", page.trim())
+            put("prefix", prefix.trim())
             put("records", JsonArray(records))
             put("citationIds", JsonArray(citationIds.map(::JsonPrimitive)))
         }.toString()

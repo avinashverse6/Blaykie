@@ -146,17 +146,7 @@ internal class CslWebViewHost(context: Context) {
             try {
                 val json = request.toJson()
                 withTimeout(120_000) {
-                    val message = evaluate("""
-                        var data=JSON.parse(${JSONObject.quote(json)});
-                        window.lookup={}; window.ids=[];
-                        data.records.forEach(function(item){window.lookup[item.id]=item;window.ids.push(item.id);});
-                        window.engine.updateItems(window.ids);
-                        var cluster=window.engine.makeCitationCluster(data.citationIds.map(function(id){return {id:id};}));
-                        var author=window.engine.makeCitationCluster([{id:data.citationIds[0],'author-only':true}]);
-                        var suppress=window.engine.makeCitationCluster([{id:data.citationIds[0],'suppress-author':true}]);
-                        var bib=window.engine.makeBibliography();
-                        return {ok:true,cluster:cluster,author:author,suppress:suppress,bibliography:bib[1]};
-                    """.trimIndent())
+                    val message = evaluate(CslRenderScript.body(json))
                     Result.success(CslRenderResponse.parse(message.toString(), request.records.size))
                 }
             } catch (e: TimeoutCancellationException) { failed(token, "Citation rendering timed out") }
