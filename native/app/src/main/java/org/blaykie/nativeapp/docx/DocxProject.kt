@@ -208,6 +208,12 @@ data class Citation(val number: Int, val keys: List<String>, val text: String) {
     internal var page = ""
     internal var prefix = ""
 }
+/** Immutable inputs for a document-wide citation processor pass. */
+internal data class CitationExportInput(
+    val items: List<CitationItem>,
+    val clusters: List<org.blaykie.nativeapp.citation.processor.CitationCluster>,
+    val legacyCount: Int,
+)
 private data class Snapshot(
     val xml: List<String>, val items: Map<String, CitationItem>, val nextCitation: Int,
     val nextBookmark: Int, val citations: List<Citation>, val removed: Int, val added: Int,
@@ -275,6 +281,26 @@ class DocxProject(private val source: File) {
         val sessionNumbers = citationOperations.map { it.number.toString() }.toSet()
         return blocks.flatMap { block -> bookmarkPattern.findAll(block.xml).map { it.groupValues[2] }.toList() }
             .filterNot { it in sessionNumbers }.toSet().size
+    }
+    /** Resolve active session operations in document order, rather than insertion order. */
+    internal fun citationExportInput(allowMissing: Boolean = false): CitationExportInput {
+        val present = presentKeys()
+        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
+        val items = present.sorted().mapNotNull { known[it] }
+        require(items.map { it.key }.distinct().size == items.size) { "Ambiguous reference identifiers." }
+        val operations = citationOperations.associateBy { it.number.toString() }
+        val order = linkedMapOf<String, MutableList<String>>()
+        blocks.forEach { block -> bookmarkPattern.findAll(block.xml).forEach { match ->
+            val number = match.groupValues[2]
+            if (number in operations) order.getOrPut(number) { mutableListOf() }.add(match.groupValues[1])
+        } }
+        val clusters = order.map { (number, markers) ->
+            val citation = operations.getValue(number)
+            require(markers == citation.items.map(::itemKey)) { "A session citation's bookmarks have changed." }
+            require(citation.items.all { it.key in items.map(CitationItem::key) }) { "A session citation's reference is missing." }
+            org.blaykie.nativeapp.citation.processor.CitationCluster(number, citation.items.map { it.key }, citation.style, citation.page, citation.prefix)
+        }
+        return CitationExportInput(items, clusters, legacyCitationCount())
     }
     fun editSummary(): Pair<Int, Int> = removed to added
     private fun snapshot() = Snapshot(blocks.map { it.xml }, known.toMap(), nextCitation, nextBookmark, citationOperations.toList(), removed, added)

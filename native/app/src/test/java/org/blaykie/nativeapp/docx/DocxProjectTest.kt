@@ -91,6 +91,20 @@ class DocxProjectTest {
         assertEquals(0, project.legacyCitationCount())
         assertEquals(listOf(Citation(1, listOf("ABCD2345"), "(Lovelace, 2020)")), project.citations())
     }
+    @Test fun documentWideCitationInputsFollowDocumentOrderAndSkipDeletedCitations() {
+        val project = DocxProject(makeDocx())
+        project.insertCitation(1, second.length, second.length, listOf(item), page = "14", prefix = "see")
+        project.insertCitation(0, first.length, first.length, listOf(item), style = "narrative")
+        val input = project.citationExportInput()
+        assertEquals(listOf("2", "1"), input.clusters.map { it.id })
+        assertEquals("narrative", input.clusters.first().mode)
+        assertEquals("14", input.clusters.last().page)
+        assertEquals("see", input.clusters.last().prefix)
+        assertEquals(listOf(item), input.items)
+        assertEquals(0, input.legacyCount)
+        project.deleteRange(0, first.length + 1, project.blockText(0).length)
+        assertEquals(listOf("1"), project.citationExportInput().clusters.map { it.id })
+    }
     @Test fun deleteRange() {
         val project = DocxProject(makeDocx()); val start = second.indexOf("enough")
         project.deleteRange(1, start, start + 6, tidy = false)
