@@ -48,6 +48,18 @@ class CslBibliographyRhinoTest {
             val repeated = CslBibliography.parse(second, items, reduced)
             assertEquals("(Smith, 2020a)", repeated.citations.single().text)
             assertEquals(4, repeated.entries.size)
+            val first = listOf(CitationAuthor("Alex", "Smith"), CitationAuthor("Jo", "Jones"), CitationAuthor("Bea", "Brown"))
+            val secondAuthors = listOf(CitationAuthor("Alex", "Smith"), CitationAuthor("Kim", "Park"), CitationAuthor("Bea", "Brown"))
+            val ambiguous = listOf(
+                CitationItem("e", "One", first, "2023", itemType="book"),
+                CitationItem("f", "Two", secondAuthors, "2023", itemType="book")
+            )
+            val ambiguousClusters = listOf(CitationCluster("one", listOf("e")), CitationCluster("two", listOf("f")))
+            val raw = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(CslBibliography.request(ambiguous, ambiguousClusters))}})())", "etal", 1, null).toString()
+            val disambiguated = CslBibliography.parse(raw, ambiguous, ambiguousClusters)
+            assertNotEquals(disambiguated.citations[0].text, disambiguated.citations[1].text)
+            assertTrue(disambiguated.citations[0].text.contains("Jones"))
+            assertTrue(disambiguated.citations[1].text.contains("Park"))
             val builtIn = BuiltInApaProcessor.bibliography(items, emptyList()).entries.associateBy { it.itemIds.single() }
             val checks = mapOf("a" to "Example Journal", "b" to "Beta", "c" to "A webpage", "d" to "Hindi Journal")
             for ((id, part) in checks) {
