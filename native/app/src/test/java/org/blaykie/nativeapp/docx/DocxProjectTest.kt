@@ -105,6 +105,26 @@ class DocxProjectTest {
         project.deleteRange(0, first.length + 1, project.blockText(0).length)
         assertEquals(listOf("1"), project.citationExportInput().clusters.map { it.id })
     }
+    @Test fun structuredExportPreservesPartsAndUsesPanelSpacingAndRichRuns() {
+        val source = makeDocx(); val before = source.readBytes(); val project = DocxProject(source)
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val input = project.citationExportInput()
+        val result = org.blaykie.nativeapp.citation.processor.BibliographyResult(
+            listOf(org.blaykie.nativeapp.citation.processor.BibliographyEntry(listOf(item.key), listOf(
+                org.blaykie.nativeapp.citation.processor.RichRun("Styled & title", italic = true, bold = true, underline = true, smallCaps = true)))),
+            org.blaykie.nativeapp.citation.processor.BibliographyLayout(hangingIndent = true, lineSpacing = 2.0),
+            listOf(org.blaykie.nativeapp.citation.processor.ClusterResult(input.clusters.single().id, "(Custom & citation)")))
+        val file = output(); project.exportWithProcessor(file, "1.5", false, result)
+        DocxProject(file)
+        val originalParts = zipContent(source); val parts = zipContent(file)
+        assertArrayEquals(before, source.readBytes())
+        originalParts.filterKeys { it != "word/document.xml" }.forEach { (name, bytes) -> assertArrayEquals(bytes, parts.getValue(name)) }
+        val xml = parts.getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertTrue(xml.contains("(Custom &amp; citation)")); assertTrue(xml.contains("Styled &amp; title"))
+        assertTrue(xml.contains("<w:i/>")); assertTrue(xml.contains("<w:b/>")); assertTrue(xml.contains("<w:u w:val=\"single\"/>")); assertTrue(xml.contains("<w:smallCaps/>"))
+        assertTrue(xml.contains("w:hanging=\"720\"")); assertTrue(xml.contains("w:line=\"360\""))
+        try { project.buildXmlWithProcessor("match", false, result.copy(citations = emptyList())); fail("missing result accepted") } catch (_: IllegalArgumentException) { }
+    }
     @Test fun deleteRange() {
         val project = DocxProject(makeDocx()); val start = second.indexOf("enough")
         project.deleteRange(1, start, start + 6, tidy = false)
