@@ -40,6 +40,17 @@ class SessionStoreTest {
         assertEquals(value(expected, "protected"), protected)
         assertEquals(value(expected, "protectedAfter"), p.blockText(1))
     }
+    @Test fun citationStyleIsSessionOnlyAndOldSessionDefaultsToBuiltIn() {
+        val store = SessionStore(temp.root)
+        val ready = opened(store)
+        val source = File(temp.root, "session-sources/${ready.session.sourceName}")
+        val original = source.readBytes()
+        store.save(ready.session.copy(debugCitationStyleId = "https://example.org/styles/apa"))
+        assertEquals("https://example.org/styles/apa", (SessionStore(temp.root).read() as SessionRead.Ready).session.debugCitationStyleId)
+        assertArrayEquals(original, source.readBytes())
+        File(temp.root, "session.json").writeText("""{"uri":"content://example/file","fileName":"paper.docx","sourceName":"${ready.session.sourceName}","version":1}""")
+        assertNull((SessionStore(temp.root).read() as SessionRead.Ready).session.debugCitationStyleId)
+    }
     @Test fun versionOneSessionRestoresTextEditsAndCanUndoAfterRestart() {
         val store = SessionStore(temp.root)
         val ready = opened(store)
