@@ -1,21 +1,37 @@
 package org.blaykie.nativeapp.csl
 
 import java.io.InputStream
+import java.io.File
+import org.w3c.dom.Element
 import javax.xml.parsers.DocumentBuilderFactory
 
 /** Metadata comes from the style itself; the title includes any edition text. */
-internal data class StyleMetadata(val asset: String, val title: String, val id: String, val styleClass: String)
+internal enum class StyleSource { BUNDLED, PRIVATE }
+internal data class StyleMetadata(
+    val asset: String, val title: String, val id: String, val styleClass: String?,
+    val citationFormat: String?, val dependent: Boolean, val source: StyleSource,
+)
 
 /** Debug-only inventory. This is not yet connected to a processor or a picker. */
 internal object StyleRegistry {
     private val assets = listOf("csl/apa.csl")
     private const val CSL_NAMESPACE = "http://purl.org/net/xbiblio/csl"
 
-    fun load(open: (String) -> InputStream): List<StyleMetadata> = assets.map { asset ->
-        open(asset).use { read(asset, it) }
+    /** privateDirectory must be a directory under the application's private storage. */
+    fun load(open: (String) -> InputStream, privateDirectory: File? = null): List<StyleMetadata> {
+        val bundled = assets.map { asset -> open(asset).use { read(asset, it, StyleSource.BUNDLED) } }
+        val privateStyles = if (privateDirectory == null || !privateDirectory.exists()) emptyList() else {
+            require(privateDirectory.isDirectory) { "Private style path is not a directory" }
+            val dir = privateDirectory.canonicalFile
+            requireNotNull(dir.listFiles()) { "Cannot list private styles" }
+                .filter { it.name.endsWith(".csl", ignoreCase = true) && it.isFile && it.canonicalFile.parentFile == dir }
+                .sortedBy { it.name }
+                .map { file -> file.inputStream().use { read(file.name, it, StyleSource.PRIVATE) } }
+        }
+        return bundled + privateStyles
     }
 
-    internal fun read(asset: String, input: InputStream): StyleMetadata {
+    internal fun read(asset: String, input: InputStream, source: StyleSource = StyleSource.BUNDLED): StyleMetadata {
         val factory = DocumentBuilderFactory.newInstance().apply {
             isNamespaceAware = true
             // Styles are bundled files, but still never resolve external entities or DTDs.
@@ -36,7 +52,15 @@ internal object StyleRegistry {
             require(matches.size == 1) { "Missing or duplicate style $name" }
             return matches.single().textContent.trim().also { require(it.isNotEmpty()) { "Empty style $name" } }
         }
-        return StyleMetadata(asset, directText("title"), directText("id"),
-            root.getAttribute("class").trim().also { require(it.isNotEmpty()) { "Missing style class" } })
+        val children = (0 until info.childNodes.length).map { info.childNodes.item(it) }
+            .filterIsInstance<Element>().filter { it.namespaceURI == CSL_NAMESPACE }
+        val formats = children.filter { it.localName == "category" && it.hasAttribute("citation-format") }
+            .map { it.getAttribute("citation-format").trim() }
+        require(formats.size <= 1 && formats.all { it in setOf("author-date", "numeric", "note", "label") }) { "Invalid citation format" }
+        val dependent = children.any { it.localName == "link" && it.getAttribute("rel") == "independent-parent" }
+        val styleClass = root.getAttribute("class").trim().ifEmpty { null }
+        require(styleClass != null || dependent) { "Missing style class" }
+        return StyleMetadata(asset, directText("title"), directText("id"), styleClass,
+            formats.singleOrNull(), dependent, source)
     }
 }
