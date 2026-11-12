@@ -18,6 +18,9 @@ internal object CitationItemToCsl {
     private fun date(value: String): JsonObject? {
         val text = value.trim()
         if (text.isEmpty() || text.lowercase(Locale.ROOT) in setOf("n.d.", "nd", "no date", "undated")) return null
+        if (text.contains("in press", ignoreCase = true) || text.contains("forthcoming", ignoreCase = true)) {
+            return buildJsonObject { put("literal", "in press") }
+        }
         val iso = Regex("^(\\d{4})(?:[-/.](\\d{1,2})(?:[-/.](\\d{1,2}))?)?$").matchEntire(text)
         val values = if (iso != null) {
             val year = iso.groupValues[1].toInt()
@@ -60,15 +63,21 @@ internal object CitationItemToCsl {
         field("container-title", when (item.itemType) {
             "bookSection" -> item.bookTitle
             "webpage" -> item.websiteTitle.ifBlank { item.publicationTitle }
-            "blogPost" -> item.blogTitle.ifBlank { item.publicationTitle }
+            "blogPost" -> item.blogTitle.ifBlank { item.websiteTitle }.ifBlank { item.publicationTitle }
             "conferencePaper" -> item.proceedingsTitle.ifBlank { item.publicationTitle }
             else -> item.publicationTitle
         })
         field("volume", item.volume); field("issue", item.issue); field("page", item.pages)
-        field("DOI", item.doi); field("URL", item.url); field("edition", item.edition)
+        val doi = item.doi.trim().ifEmpty {
+            Regex("^\\s*DOI:\\s*(\\S+)", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)).find(item.extra)?.groupValues?.get(1).orEmpty()
+        }.replace(Regex("^(doi:\\s*|https?://(?:dx\\.)?doi\\.org/)", RegexOption.IGNORE_CASE), "").trim()
+        field("DOI", doi); field("URL", item.url)
+        val editionWords = listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth")
+        val wordIndex = editionWords.indexOf(item.edition.trim().lowercase(Locale.ROOT))
+        field("edition", if (wordIndex >= 0) (wordIndex + 1).toString() else item.edition)
         field("publisher", when (item.itemType) {
             "report" -> item.institution.ifBlank { item.publisher }
-            "thesis" -> item.university.ifBlank { item.publisher }
+            "thesis" -> item.university.ifBlank { item.institution }.ifBlank { item.publisher }
             "preprint" -> item.repository.ifBlank { item.publisher }
             else -> item.publisher
         })
@@ -82,6 +91,7 @@ internal object CitationItemToCsl {
             else -> ""
         })
         field("event-title", item.conferenceName)
+        field("event-place", item.place)
         field("archive", item.archive)
     }
 
