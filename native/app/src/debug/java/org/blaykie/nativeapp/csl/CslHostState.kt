@@ -12,7 +12,7 @@ internal sealed class CslHostState {
 
 internal class CslHostStateMachine {
     private var generation = 0L
-    var state: CslHostState = CslHostState.Idle
+    @Volatile var state: CslHostState = CslHostState.Idle
         private set
 
     /** Starting a replacement invalidates all callbacks from the previous engine. */
