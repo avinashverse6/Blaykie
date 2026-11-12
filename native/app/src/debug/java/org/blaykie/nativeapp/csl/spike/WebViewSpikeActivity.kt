@@ -93,6 +93,21 @@ class WebViewSpikeActivity : Activity() {
         line("Device=${Build.MODEL}; Android=${Build.VERSION.RELEASE}; WebView provider=$provider")
         handler.post(ticker)
     }
+    private fun registrySelfTest() {
+        val parser = try { CslSafeXml.parserClassName() } catch (t: Throwable) { "unavailable (${t.javaClass.name})" }
+        fun test(name: String, reject: Boolean, operation: () -> Unit) {
+            try {
+                operation()
+                line("${if (reject) "FAIL" else "PASS"} registry $name: exception=none; parser=$parser")
+            } catch (t: Throwable) {
+                line("${if (reject && t is IllegalArgumentException) "PASS" else "FAIL"} registry $name: exception=${t.javaClass.name}; parser=$parser")
+            }
+        }
+        test("bundled APA", false) { assets.open("csl/apa.csl").use { StyleRegistry.read("csl/apa.csl", it) } }
+        test("DOCTYPE", true) { StyleRegistry.read("bad.csl", "<!DOCTYPE style><style/>".byteInputStream()) }
+        test("ENTITY", true) { StyleRegistry.read("bad.csl", "<!ENTITY x 'bad'><style/>".byteInputStream()) }
+        test("oversized", true) { StyleRegistry.read("bad.csl", ("<style>" + "x".repeat(CslSafeXml.MAX_BYTES) + "</style>").byteInputStream()) }
+    }
     private fun hostSelfTest() {
         if (selfTestHost != null) { line("Host self-test already running"); return }
         val host = CslWebViewHost(applicationContext)
@@ -100,6 +115,7 @@ class WebViewSpikeActivity : Activity() {
         hostScope.launch {
             val total = SystemClock.elapsedRealtime()
             try {
+                registrySelfTest()
                 val provider = if (Build.VERSION.SDK_INT >= 26) WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "not available" else "unavailable below Android 8"
                 line("Host self-test WebView provider: $provider")
                 val styleId = StyleRegistry.load({ assets.open(it) }).single { it.asset == "csl/apa.csl" }.id
