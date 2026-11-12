@@ -63,6 +63,8 @@ import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.citation.CitationSearchController
+import org.blaykie.nativeapp.citation.style.CitationStyleRow
+import org.blaykie.nativeapp.citation.style.CitationStyleSession
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
@@ -312,6 +314,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
+    val saveCitationStyle: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
+    CitationStyleSession(context, session, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle)
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -362,6 +366,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
                 Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
+            CitationStyleRow(context, session, saveCitationStyle)
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
