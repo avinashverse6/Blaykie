@@ -1,6 +1,32 @@
 package org.blaykie.nativeapp.citation.processor
 
-/** Placeholder until the debug WebView processor is available. */
-internal object PlatformCitationProcessorProvider : CitationProcessorProvider {
-    override fun create(styleId: String): CitationProcessor? = null
+import android.content.Context
+import org.blaykie.nativeapp.csl.CslHostState
+import org.blaykie.nativeapp.csl.CslRenderRequest
+import org.blaykie.nativeapp.csl.CslWebViewHost
+import org.blaykie.nativeapp.docx.CitationItem
+
+/** Construct once per session; conversion is injected until the CSL-JSON conversion step. */
+internal class PlatformCitationProcessorProvider(
+    context: Context,
+    private val requestFor: (List<CitationItem>, List<CitationItem>) -> CslRenderRequest,
+) : CitationProcessorProvider {
+    private val host = CslWebViewHost(context.applicationContext)
+
+    override fun create(styleId: String): CitationProcessor? {
+        if (styleId.isBlank()) return null
+        return object : CitationProcessor {
+            override suspend fun citation(items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String {
+                require(page.isBlank() && prefix.isBlank()) { "CSL page and prefix are not implemented yet" }
+                require(mode == "parenthetical" || mode == "narrative") { "Unsupported citation mode" }
+                require(mode != "narrative" || items.size == 1) { "CSL narrative requires one item" }
+                val ready = host.state as? CslHostState.Ready
+                if (ready?.styleId != styleId) host.warmUp(styleId).getOrThrow()
+                val response = host.render(requestFor(items, context)).getOrThrow()
+                return if (mode == "narrative") "${response.author} ${response.suppress}" else response.cluster
+            }
+        }
+    }
+    fun cancel() = host.cancel()
+    fun destroy() = host.destroy()
 }

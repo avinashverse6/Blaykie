@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.blaykie.nativeapp.csl.CslWebViewHost
 import org.blaykie.nativeapp.csl.CslRenderRequest
 import org.blaykie.nativeapp.csl.StyleRegistry
@@ -106,7 +107,7 @@ class WebViewSpikeActivity : Activity() {
                 line("${if (warm.isSuccess) "PASS" else "FAIL"} host warm-up: ${SystemClock.elapsedRealtime() - warmStart} ms ${warm.exceptionOrNull()?.message.orEmpty()}")
                 if (warm.isFailure) return@launch
                 val records = Json.parseToJsonElement(CslSpike.fixtures(5).toString()).jsonArray.map { it.jsonObject }
-                val ids = records.map { it.getValue("id").toString().trim('"') }
+                val ids = records.map { it.getValue("id").jsonPrimitive.content }
                 val start = SystemClock.elapsedRealtime()
                 val result = host.render(CslRenderRequest(records, ids))
                 val output = result.getOrNull()
