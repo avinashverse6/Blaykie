@@ -12,19 +12,15 @@ internal object CslBibliography {
         CslRenderRequest(records, items.take(5).map { it.key }).toJson()
         require(clusters.map { it.id }.distinct().size == clusters.size) { "Duplicate citation ID" }
         val ids = items.map { it.key }.toSet()
-        val cited = mutableSetOf<String>()
         val values = clusters.map { c ->
             require(c.id.isNotBlank() && c.id.length <= 256 && c.itemIds.size in 1..5 && c.itemIds.distinct().size == c.itemIds.size && c.itemIds.all { it in ids }) { "Invalid citation cluster" }
             require(c.mode in setOf("parenthetical", "narrative") && (c.mode != "narrative" || c.itemIds.size == 1)) { "Unsupported citation mode" }
             require(c.page.length <= 1024 && c.prefix.length <= 1024 && (c.itemIds.size == 1 || (c.page.isBlank() && c.prefix.isBlank()))) { "Unsupported citation affixes" }
-            cited.addAll(c.itemIds)
             buildJsonObject {
                 put("id", c.id); put("mode", c.mode); put("page", c.page.trim()); put("prefix", c.prefix.trim())
                 put("itemIds", JsonArray(c.itemIds.map(::JsonPrimitive)))
             }
         }
-        // Do not silently compute disambiguation with missing session citations.
-        require(cited == ids) { "All bibliography items must occur in the supplied session clusters" }
         return buildJsonObject { put("records", JsonArray(records)); put("clusters", JsonArray(values)) }.toString()
             .also { require(it.length <= 2_000_000) { "Document request too large" } }
     }
@@ -52,10 +48,10 @@ internal object CslBibliography {
         require(layout.keys == setOf("hangingIndent", "lineSpacing", "entrySpacing")) { "Invalid layout" }
         fun number(key: String): Double? = when (val v = layout[key]) {
             JsonNull -> null
-            is JsonPrimitive -> v.doubleOrNull?.also { require(it.isFinite() && it in 0.0..100.0) } ?: error("Invalid $key")
+            is JsonPrimitive -> { require(!v.isString) { "Invalid $key" }; v.doubleOrNull?.also { require(it.isFinite() && it in 0.0..100.0) } ?: error("Invalid $key") }
             else -> error("Invalid $key")
         }
-        val hanging = when (val v = layout["hangingIndent"]) { JsonNull -> null; is JsonPrimitive -> v.booleanOrNull ?: error("Invalid hanging indent"); else -> error("Invalid hanging indent") }
+        val hanging = when (val v = layout["hangingIndent"]) { JsonNull -> null; is JsonPrimitive -> { require(!v.isString) { "Invalid hanging indent" }; v.booleanOrNull ?: error("Invalid hanging indent") }; else -> error("Invalid hanging indent") }
         val result = root.getValue("citations") as? JsonArray ?: error("Missing citations")
         require(result.size == clusters.size) { "Invalid citation count" }
         val term = string(root.getValue("andTerm")); require(term.isNotBlank() && term.length <= 256)
@@ -63,10 +59,11 @@ internal object CslBibliography {
         val citations = clusters.zip(result).map { (cluster, element) ->
             val row = element as? JsonObject ?: error("Invalid citation")
             require(row.keys == setOf("id", "text", "author", "suppress") && string(row.getValue("id")) == cluster.id) { "Invalid citation order" }
+            val rawText = string(row.getValue("text")); val authorText = string(row.getValue("author")); val suppressText = string(row.getValue("suppress"))
             val textValue = if (cluster.mode == "narrative") {
                 val authors = byId.getValue(cluster.itemIds.single()).authors
-                narrativeAuthor(string(row.getValue("author")), term, authors.size, authors.filter { it.group }.map { it.last }) + " " + string(row.getValue("suppress"))
-            } else string(row.getValue("text"))
+                narrativeAuthor(authorText, term, authors.size, authors.filter { it.group }.map { it.last }) + " " + suppressText
+            } else rawText
             require(textValue.isNotBlank() && textValue.length <= 100_000) { "Invalid citation text" }
             ClusterResult(cluster.id, textValue)
         }
@@ -86,8 +83,11 @@ internal object CslBibliography {
                 mapping.push({id:c.id,author:add('a',[a]),suppress:add('b',[b])});
             } else mapping.push({id:c.id,text:add('p',c.itemIds.map(function(id){return item(id,true,true);}))});
         });
+        var used={}; data.clusters.forEach(function(c){c.itemIds.forEach(function(id){used[id]=true;});});
+        var uncited=data.records.filter(function(record){return !used[record.id];}).map(function(record){return record.id;});
         window.engine.restoreProcessorState([]);
-        var rebuilt=window.engine.rebuildProcessorState(work,'text',[]);
+        window.engine.updateUncitedItems(uncited);
+        var rebuilt=window.engine.rebuildProcessorState(work,'text',uncited);
         function at(i){if(!rebuilt[i] || typeof rebuilt[i][2] !== 'string')throw Error('Missing citation result');return rebuilt[i][2];}
         var citations=mapping.map(function(m){return {id:m.id,text:m.text===undefined?'':at(m.text),author:m.author===undefined?'':at(m.author),suppress:m.suppress===undefined?'':at(m.suppress)};});
         var bib;

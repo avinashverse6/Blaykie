@@ -28,14 +28,14 @@ class CslBibliographyRhinoTest {
             val scope = cx.initStandardObjects()
             ScriptableObject.putProperty(scope, "spikeStyle", asset("apa.csl"))
             ScriptableObject.putProperty(scope, "spikeLocale", asset("locales-en-US.xml"))
-            val clusters = items.mapIndexed { i, item -> CitationCluster("c$i", listOf(item.key)) }
+            val clusters = items.mapIndexed { i, item -> CitationCluster("c$i", listOf(item.key), mode = if (i == 1) "narrative" else "parenthetical") }
             cx.evaluateString(scope, asset("citeproc.js"), "citeproc.js", 1, null)
             cx.evaluateString(scope, """var window=this; window.lookup={}; window.__cslLayoutDefined={hanging:true,line:true,entry:true}; window.engine=new CSL.Engine({retrieveLocale:function(){return String(spikeLocale);},retrieveItem:function(id){return window.lookup[id];}},String(spikeStyle),'en-US'); window.engine.setOutputFormat('text');""", "setup", 1, null)
             val request = CslBibliography.request(items, clusters)
             val value = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(request)}})())", "bibliography", 1, null).toString()
             val result = CslBibliography.parse(value, items, clusters)
             assertEquals("(Smith, 2020a)", result.citations[0].text)
-            assertEquals("(Smith, 2020b)", result.citations[1].text)
+            assertEquals("Smith (2020b)", result.citations[1].text)
             assertEquals(true, result.layout.hangingIndent)
             assertEquals(2.0, result.layout.lineSpacing!!, 0.0)
             assertEquals(0.0, result.layout.entrySpacing!!, 0.0)
@@ -43,6 +43,11 @@ class CslBibliographyRhinoTest {
             val entries = result.entries.map { it.runs }
             assertEquals(items.size, entries.size)
             assertTrue(ids.indexOf("a") < ids.indexOf("b"))
+            val reduced = listOf(CitationCluster("only", listOf("a")))
+            val second = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(CslBibliography.request(items, reduced))}})())", "repeat", 1, null).toString()
+            val repeated = CslBibliography.parse(second, items, reduced)
+            assertEquals("(Smith, 2020a)", repeated.citations.single().text)
+            assertEquals(4, repeated.entries.size)
             val builtIn = BuiltInApaProcessor.bibliography(items, emptyList()).entries.associateBy { it.itemIds.single() }
             val checks = mapOf("a" to "Example Journal", "b" to "Beta", "c" to "A webpage", "d" to "Hindi Journal")
             for ((id, part) in checks) {
