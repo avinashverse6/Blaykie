@@ -68,6 +68,7 @@ import org.blaykie.nativeapp.citation.style.CitationStyleSession
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.citationOptionRestriction
 import org.blaykie.nativeapp.citation.style.renderCitationPreview
+import org.blaykie.nativeapp.citation.style.exportCslStyle
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
@@ -417,7 +418,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                                 citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
                                 message = "Citation added: " + citation.take(50) + when {
                                     fallback -> " — CSL unavailable; used built-in APA."
-                                    preview != null -> " — CSL preview; export uses built-in APA until B1b."
+                                    preview != null -> " — CSL citation."
                                     else -> ""
                                 }
                             }
@@ -468,7 +469,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it, citationUsesCsl(it), exportCslStyle(context, it)) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }

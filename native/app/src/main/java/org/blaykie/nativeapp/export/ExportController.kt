@@ -27,13 +27,13 @@ import org.blaykie.nativeapp.session.SessionStore
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroResult
 
-internal enum class ExportPhase { IDLE, PREPARING, CHOOSE, WAITING, WRITING, DONE }
+internal enum class ExportPhase { IDLE, PREPARING, FALLBACK, CHOOSE, WAITING, WRITING, DONE }
 internal data class ExportState(
     val phase: ExportPhase = ExportPhase.IDLE, val line: String = "match", val name: String = "",
     val message: String = "", val needsKey: Boolean = false, val omitted: Int = 0,
-    val shareFile: File? = null,
+    val shareFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0,
 ) { override fun toString() = "ExportState(redacted)" }
-private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean)
+private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean, val verifiedCslFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0)
 internal class ExportController(private val context: Context, private val sessions: SessionStore, private val accounts: AccountStore) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutable = MutableStateFlow(ExportState())
@@ -42,7 +42,7 @@ internal class ExportController(private val context: Context, private val sessio
     @Volatile private var cancelled = false
     private var prepared: Prepared? = null
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
-    fun begin(session: Session) {
+    fun begin(session: Session, cslSelected: Boolean = false, csl: ExportCslStyle? = null) {
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val line = mutable.value.line
@@ -78,8 +78,41 @@ internal class ExportController(private val context: Context, private val sessio
             client = null
             val ready = result.first
             if (ready == null) mutable.value = mutable.value.copy(phase = ExportPhase.IDLE, message = result.second, needsKey = result.second.startsWith("Some earlier citations"))
-            else { prepared = ready; mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, message = "Choose where to save the document.") }
+            else {
+                prepared = ready
+                if (!cslSelected) {
+                    mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, message = "Choose where to save the document.")
+                } else {
+                    try {
+                        checkNotNull(csl) { "The selected citation style is not ready." }
+                        val input = ready.project.citationExportInput(ready.omitted > 0)
+                        val rendered = if (input.items.isEmpty()) org.blaykie.nativeapp.citation.processor.BibliographyResult(emptyList(), org.blaykie.nativeapp.citation.processor.BibliographyLayout(), emptyList())
+                            else csl.processor.bibliography(input.items, input.clusters)
+                        check(!cancelled) { "Export cancelled." }
+                        val file = File(File(context.cacheDir, CACHE_FOLDER), ready.name)
+                        withContext(Dispatchers.IO) {
+                            try {
+                                ready.project.exportWithProcessor(file, line, ready.omitted > 0, rendered)
+                                DocxProject(file)
+                            } catch (e: Exception) { file.delete(); throw e }
+                        }
+                        prepared = ready.copy(verifiedCslFile = file, styleTitle = csl.title, legacyCount = input.legacyCount)
+                        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = csl.title, legacyCount = input.legacyCount, message = "Choose where to save the document.")
+                    } catch (e: Exception) {
+                        mutable.value = mutable.value.copy(phase = ExportPhase.FALLBACK, message = "CSL export could not be prepared. No destination was written. Choose built-in APA or cancel.")
+                    }
+                }
+            }
         }
+    }
+    fun fallbackToApa() {
+        if (mutable.value.phase != ExportPhase.FALLBACK || prepared == null) return
+        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = prepared!!.omitted, styleTitle = "", legacyCount = 0, message = "Choose where to save the document.")
+    }
+    fun cancelFallback() {
+        if (mutable.value.phase != ExportPhase.FALLBACK) return
+        prepared = null
+        mutable.value = mutable.value.copy(phase = ExportPhase.IDLE, message = "Export cancelled.")
     }
     fun cancelLookup() { cancelled = true; client?.cancel() }
     fun chooserLaunched(): Boolean {
@@ -109,14 +142,21 @@ internal class ExportController(private val context: Context, private val sessio
                     val sameSource = sameDocument(source.toString(), uri.toString(), identity(source), identity(uri))
                     if (uri.scheme != ContentResolver.SCHEME_CONTENT) return@withContext Pair(null, "The destination is not writable.")
                     val file = File(File(context.cacheDir, CACHE_FOLDER), work.name)
-                    writeVerifiedExport(work.project, file, line, work.omitted > 0, sameSource,
+                    if (work.verifiedCslFile != null) {
+                        if (sameSource) throw SourceDestinationConflict()
+                        DocxProject(work.verifiedCslFile)
+                        stage = FailureStage.DESTINATION
+                        (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }.use { target ->
+                            work.verifiedCslFile.inputStream().use { it.copyTo(target) }; target.flush()
+                        }
+                    } else writeVerifiedExport(work.project, file, line, work.omitted > 0, sameSource,
                         beforeCopy = { stage = FailureStage.DESTINATION }, destination = {
                             (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }
                         })
                     val tracked = sessions.recordExport(work.session)
                     val saved = if (savedName.isNullOrBlank()) "Saved." else "Saved as $savedName."
                     val warning = if (tracked) "" else " Export tracking could not be saved; edits may still be treated as unexported."
-                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + (if (work.omitted > 0) " ${work.omitted} reference(s) not found." + if (work.oldBibliographyRetained) " The existing bibliography remains unchanged." else " They were omitted from the new list." else "") + warning)
+                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + (if (work.styleTitle.isNotEmpty()) " Style: ${work.styleTitle}. ${work.legacyCount} earlier citation(s) left unchanged." else "") + (if (work.omitted > 0) " ${work.omitted} reference(s) not found." + if (work.oldBibliographyRetained) " The existing bibliography remains unchanged." else " They were omitted from the new list." else "") + warning)
                 } catch (_: SourceDestinationConflict) { Pair(null, "Choose a different file. The original is never changed.") }
                 catch (e: Exception) {
                     val message = if (stage == FailureStage.DESTINATION && outputOpened) failedCopyMessage(e, destinationName) {

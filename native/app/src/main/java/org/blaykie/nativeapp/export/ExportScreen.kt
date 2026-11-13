@@ -31,7 +31,8 @@ internal fun ExportScreen(project: DocxProject, state: ExportState, controller: 
                 Row { RadioButton(selected = state.line == value, enabled = idle, onClick = { controller.setLine(value) }); Text(label, modifier = Modifier.padding(top = 12.dp)) }
             }
         }
-        if (!idle) CircularProgressIndicator()
+        if (state.phase != ExportPhase.FALLBACK && !idle) CircularProgressIndicator()
+        if (state.styleTitle.isNotEmpty()) Text("Style: ${state.styleTitle}. Earlier citations left unchanged: ${state.legacyCount}")
         if (state.message.isNotEmpty()) Text(if (state.message == "Zotero error: 404") "User ID not found. Check your Zotero User ID." else state.message, style = MaterialTheme.typography.bodyMedium)
         if (state.needsKey) Button(onClick = onAddKey) { Text("Add Zotero key") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -41,6 +42,11 @@ internal fun ExportScreen(project: DocxProject, state: ExportState, controller: 
         if (state.phase == ExportPhase.PREPARING) TextButton(onClick = controller::cancelLookup) { Text("Cancel lookup") }
         TextButton(enabled = idle, onClick = onClose) { Text("Close") }
     }
+    if (state.phase == ExportPhase.FALLBACK) AlertDialog(onDismissRequest = controller::cancelFallback,
+        title = { Text("Could not export with the selected citation style") },
+        text = { Text(state.message) },
+        confirmButton = { TextButton(onClick = controller::fallbackToApa) { Text("Export with built-in APA") } },
+        dismissButton = { TextButton(onClick = controller::cancelFallback) { Text("Cancel") } })
     if (shareMenu) AlertDialog(onDismissRequest = { shareMenu = false }, title = { Text("Share / open") }, text = { Text("Choose an action for the exported document.") }, confirmButton = {
         TextButton(onClick = { shareMenu = false; onShare() }) { Text("Share") }
     }, dismissButton = { TextButton(onClick = { shareMenu = false; onOpen() }) { Text("Open") } })
