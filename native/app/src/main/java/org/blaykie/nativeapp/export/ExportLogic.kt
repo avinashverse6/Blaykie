@@ -8,6 +8,8 @@ import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroResult
 
+internal data class ExportCslStyle(val title: String, val processor: org.blaykie.nativeapp.citation.processor.CitationProcessor)
+
 internal const val DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 internal const val CACHE_FOLDER = "export-share"
 internal fun exportName(name: String): String {

@@ -12,3 +12,5 @@ import org.blaykie.nativeapp.docx.CitationItem
 internal fun citationUsesCsl(session: Session?): Boolean = false
 internal fun citationOptionRestriction(context: Context, session: Session?, search: SearchState): String? = null
 internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>): String? = null
+
+internal fun exportCslStyle(context: Context, session: Session): org.blaykie.nativeapp.export.ExportCslStyle? = null

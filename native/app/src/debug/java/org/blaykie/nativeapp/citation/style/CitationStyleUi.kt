@@ -22,6 +22,10 @@ import org.blaykie.nativeapp.csl.StyleChoice
 import org.blaykie.nativeapp.csl.StyleRegistry
 import org.blaykie.nativeapp.csl.styleChoices
 import org.blaykie.nativeapp.session.Session
+import org.blaykie.nativeapp.citation.processor.CitationProcessor
+import org.blaykie.nativeapp.citation.processor.CitationCluster
+import org.blaykie.nativeapp.citation.processor.BibliographyResult
+import org.blaykie.nativeapp.export.ExportCslStyle
 import java.io.File
 
 private data class UiState(val choices: List<StyleChoice> = styleChoices(emptyList()), val preparing: Boolean = false,
@@ -87,6 +91,21 @@ private class StyleController(context: Context) : ViewModel() {
             "${narrativeAuthor(response.author, response.andTerm, authors.size, authors.filter { it.group }.map { it.last })} ${response.suppress}"
         } else response.cluster
     }
+    fun exportStyle(session: Session): ExportCslStyle? {
+        val id = session.debugCitationStyleId ?: return null
+        val choice = state.value.choices.singleOrNull { it.id == id && it.disabledReason == null } ?: return null
+        val web = host ?: return null
+        if (key != session.sourceName || selected != id || !state.value.ready || (web.state as? CslHostState.Ready)?.styleId != id) return null
+        val processor = object : CitationProcessor {
+            override suspend fun citation(items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String =
+                render(session.sourceName, id, items, mode, page, prefix, context) ?: error("Citation style not ready")
+            override suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): BibliographyResult {
+                check(key == session.sourceName && selected == id && state.value.ready && (web.state as? CslHostState.Ready)?.styleId == id) { "Citation style not ready" }
+                return web.bibliography(items, clusters).getOrThrow()
+            }
+        }
+        return ExportCslStyle(choice.title, processor)
+    }
     fun cancel() {
         generation++; host?.cancel(); job?.cancel(); selected = null
         state.value = state.value.copy(preparing = false, ready = false, message = "", failedStyle = null)
@@ -106,6 +125,8 @@ private fun controllerFor(context: Context): StyleController {
     val activity = context as ComponentActivity
     return ViewModelProvider(activity, StyleController.Factory(activity.applicationContext))[StyleController::class.java]
 }
+
+internal fun exportCslStyle(context: Context, session: Session): ExportCslStyle? = controllerFor(context).exportStyle(session)
 
 internal fun citationUsesCsl(session: Session?): Boolean = session?.debugCitationStyleId != null
 internal fun citationOptionRestriction(context: Context, session: Session?, search: SearchState): String? {
@@ -165,6 +186,5 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             TextButton(onClick = { if (onStyleChange(null)) vm.cancel() }) { Text("Cancel") }
         }
         if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodySmall)
-        if (session?.edits?.any { it.previewText != null } == true) Text("CSL citations are previews; export uses built-in APA until B1b.", style = MaterialTheme.typography.bodySmall)
-    }
+        }
 }
