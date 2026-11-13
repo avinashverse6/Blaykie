@@ -48,6 +48,8 @@ jobs:
           assert version == '1.7.15' and licenses, 'Missing or unexpected Rhino POM metadata'
           PYCODE
       - name: Run unit tests and build debug APK
+        env:
+          BLAYKIE_SAMPLE_DIR: ${{ github.workspace }}/native/app/build/sample-docx-csl
         working-directory: native
         run: |
           set +e
@@ -146,6 +148,12 @@ jobs:
           path: |
             native/app/build/reports/tests
             native/app/build/test-results
+      - name: Upload sample DOCX files
+        uses: actions/upload-artifact@v4
+        with:
+          name: sample-docx-csl
+          path: native/app/build/sample-docx-csl/*.docx
+          if-no-files-found: error
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
