@@ -94,7 +94,12 @@ class CslExportSamplesTest {
                 compareParts(input, file)
                 val reopened = DocxProject(file)
                 val text = (0 until reopened.blockCount).joinToString(" ") { reopened.blockText(it) }
-                assertTrue(text.contains("2020a")); assertTrue(text.contains("2020b")); assertTrue(text.contains("42")); assertTrue(text.contains("see")); assertTrue(text.contains("शर्मा")); assertTrue(text.contains("References"))
+                assertTrue(reopened.blockText(0).contains("(Example, 2020a)"))
+                assertTrue(reopened.blockText(1).contains("Example (2020b)"))
+                assertTrue(reopened.blockText(2).contains("42"))
+                assertTrue(reopened.blockText(3).contains("see"))
+                assertTrue(reopened.blockText(4).contains("शर्मा"))
+                assertTrue(text.contains("Alpha study")); assertTrue(text.contains("Beta study")); assertTrue(text.contains("References"))
                 if (file == legacy) assertTrue(text.contains("(Earlier, 2018)"))
             }
             // Existing headings remain in place; the generated list honors the panel, not the CSL line hint.

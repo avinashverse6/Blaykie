@@ -12,7 +12,7 @@ class ExportFallbackTest {
     @get:Rule val temp = TemporaryFolder()
     @Test fun notReadyRequiresExplicitChoiceBeforeProceeding() = runBlocking {
         val source = File(temp.root, "source.docx").apply {
-            writeBytes(requireNotNull(javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
+            writeBytes(requireNotNull(this@ExportFallbackTest.javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
         }
         val cache = File(temp.root, "private.docx")
         val initial = ExportState(phase = ExportPhase.PREPARING, line = "double")
