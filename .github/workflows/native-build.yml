@@ -107,6 +107,30 @@ jobs:
           spike=$(stat -c %s app/build/outputs/apk/debug/app-debug.apk)
           echo "Baseline debug APK: $base bytes; spike debug APK: $spike bytes; increase: $((spike-base)) bytes"
           echo "::notice::Baseline debug APK: $base bytes; spike debug APK: $spike bytes; increase: $((spike-base)) bytes"
+      - name: Inventory optional-processor markers in release APK
+        working-directory: native
+        run: |
+          python3 - <<'PYCODE'
+          import glob, struct, zipfile
+          apk = glob.glob('app/build/outputs/apk/release/*.apk')[0]
+          def strings(data):
+              size, off = struct.unpack_from('<II', data, 56)
+              for i in range(size):
+                  pos = struct.unpack_from('<I', data, off + i * 4)[0]
+                  while data[pos] & 128: pos += 1
+                  pos += 1
+                  end = data.index(b'\0', pos)
+                  yield data[pos:end].decode('utf-8', 'replace')
+          with zipfile.ZipFile(apk) as z:
+              assets = [n for n in z.namelist() if n.startswith('assets/') and ('csl' in n.lower() or 'citeproc' in n.lower())]
+              print('Optional processor assets:', assets or '(none)')
+              for name in z.namelist():
+                  if name.endswith('.dex'):
+                      matches = sorted(set(s for s in strings(z.read(name)) if 'csl' in s.lower() or 'citeproc' in s.lower() or 'rhino' in s.lower()))
+                      print(name + ' matching strings:')
+                      for match in matches: print('  ' + repr(match))
+                      if not matches: print('  (none)')
+          PYCODE
       - name: List release dependency and APK license and notice filenames
         working-directory: native
         run: python3 ci/list-release-licenses.py
