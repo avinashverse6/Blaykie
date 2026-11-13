@@ -185,3 +185,10 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
         if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodySmall)
         }
 }
+
+internal fun citationInsertionNote(fallback: Boolean, rendered: Boolean): String = when {
+    fallback -> " — CSL unavailable; used built-in APA."
+    rendered -> " — CSL citation."
+    else -> ""
+}
+internal fun citationPreviewNote(): String = "CSL citation is generated on insertion."

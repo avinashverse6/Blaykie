@@ -68,12 +68,13 @@ import org.blaykie.nativeapp.citation.style.CitationStyleSession
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.citationOptionRestriction
 import org.blaykie.nativeapp.citation.style.renderCitationPreview
-import org.blaykie.nativeapp.citation.style.exportCslStyle
+import org.blaykie.nativeapp.citation.style.citationInsertionNote
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
+import org.blaykie.nativeapp.export.beginExport
 import org.blaykie.nativeapp.export.ExportScreen
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
@@ -417,9 +418,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                                 val citation = p.citations().last().text
                                 citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
                                 message = "Citation added: " + citation.take(50) + when {
-                                    fallback -> " — CSL unavailable; used built-in APA."
-                                    preview != null -> " — CSL citation."
-                                    else -> ""
+                                    else -> citationInsertionNote(fallback, preview != null)
                                 }
                             }
                         } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
@@ -469,7 +468,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it, citationUsesCsl(it), exportCslStyle(context, it)) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }

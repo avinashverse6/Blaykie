@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp.citation
 
+import org.blaykie.nativeapp.citation.style.citationPreviewNote
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -73,7 +74,7 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
                 val start = (position - 60).coerceAtLeast(0); val end = (position + 60).coerceAtMost(paragraph.length)
                 Text(paragraph.substring(start, position) + "|" + paragraph.substring(position, end), style = MaterialTheme.typography.bodyMedium)
                 val preview = state.preview()
-                Text(if (preview.isEmpty()) "Select one or more references." else if (cslSelected) "CSL preview is generated on insertion; export uses built-in APA until B1b." else "Will insert:  $preview", style = MaterialTheme.typography.bodyMedium)
+                Text(if (preview.isEmpty()) "Select one or more references." else if (cslSelected) citationPreviewNote() else "Will insert:  $preview", style = MaterialTheme.typography.bodyMedium)
                 if (restriction != null) Text(restriction, style = MaterialTheme.typography.bodySmall)
             }
         }
