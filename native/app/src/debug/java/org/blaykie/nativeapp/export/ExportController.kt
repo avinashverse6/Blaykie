@@ -91,7 +91,7 @@ internal class ExportController(private val context: Context, private val sessio
                         prepared = ready.copy(verifiedCslFile = file, styleTitle = title, legacyCount = legacyCount)
                         mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = title, legacyCount = legacyCount, message = "Choose where to save the document.")
                     } catch (e: Exception) {
-                        mutable.value = mutable.value.copy(phase = ExportPhase.FALLBACK, message = "CSL export could not be prepared. No destination was written. Choose built-in APA or cancel.")
+                        mutable.value = preparationFailed(mutable.value)
                     }
                 }
             }
@@ -99,12 +99,12 @@ internal class ExportController(private val context: Context, private val sessio
     }
     fun fallbackToApa() {
         if (mutable.value.phase != ExportPhase.FALLBACK || prepared == null) return
-        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = prepared!!.omitted, styleTitle = "", legacyCount = 0, message = "Choose where to save the document.")
+        mutable.value = chooseBuiltIn(mutable.value, prepared!!.omitted)
     }
     fun cancelFallback() {
         if (mutable.value.phase != ExportPhase.FALLBACK) return
         prepared = null
-        mutable.value = mutable.value.copy(phase = ExportPhase.IDLE, message = "Export cancelled.")
+        mutable.value = cancelPreparation(mutable.value)
     }
     fun cancelLookup() { cancelled = true; client?.cancel() }
     fun chooserLaunched(): Boolean {

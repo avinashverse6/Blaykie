@@ -27,3 +27,17 @@ internal suspend fun prepareCslExport(project: DocxProject, file: File, line: St
 
 internal fun beginExport(context: Context, controller: ExportController, session: Session) =
     controller.begin(session, citationUsesCsl(session), exportCslStyle(context, session))
+
+/** Explicit transitions keep a failed preparation from implicitly choosing a fallback. */
+internal fun preparationFailed(state: ExportState): ExportState = state.copy(
+    phase = ExportPhase.FALLBACK,
+    message = "CSL export could not be prepared. No destination was written. Choose built-in APA or cancel.",
+)
+internal fun chooseBuiltIn(state: ExportState, omitted: Int): ExportState {
+    require(state.phase == ExportPhase.FALLBACK)
+    return state.copy(phase = ExportPhase.CHOOSE, omitted = omitted, styleTitle = "", legacyCount = 0, message = "Choose where to save the document.")
+}
+internal fun cancelPreparation(state: ExportState): ExportState {
+    require(state.phase == ExportPhase.FALLBACK)
+    return state.copy(phase = ExportPhase.IDLE, message = "Export cancelled.")
+}

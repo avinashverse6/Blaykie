@@ -38,7 +38,7 @@ class CslExportSamplesTest {
                     val bodyEnd = xml.indexOf("</w:body>")
                     require(bodyStart >= "<w:body>".length && bodyEnd > bodyStart)
                     fun paragraph(text: String) = "<w:p><w:pPr><w:spacing w:line=\"300\"/></w:pPr><w:r><w:t>$text</w:t></w:r></w:p>"
-                    val labels = listOf("Parenthetical example.", "Narrative example.", "Page example.", "Prefix example.", "Hindi author example.")
+                    val labels = listOf("Parenthetical citation example in the test document.", "Narrative citation example in the test document.", "Page citation example in the test document.", "Prefix citation example in the test document.", "Hindi author citation example in the test document.")
                     val legacyParagraph = if (legacy) "<w:p><w:r><w:t>Earlier citation: </w:t></w:r><w:bookmarkStart w:id=\"1\" w:name=\"BLK_OLD1_1\"/><w:r><w:t xml:space=\"preserve\">(Earlier, 2018)</w:t></w:r><w:bookmarkEnd w:id=\"1\"/></w:p>" else ""
                     val content = labels.joinToString("") { paragraph(it) } + legacyParagraph + (if (heading) paragraph("References") else "") + "<w:sectPr/>"
                     (xml.substring(0, bodyStart) + content + xml.substring(bodyEnd)).toByteArray(Charsets.UTF_8)
@@ -96,6 +96,22 @@ class CslExportSamplesTest {
                 val text = (0 until reopened.blockCount).joinToString(" ") { reopened.blockText(it) }
                 assertTrue(text.contains("2020a")); assertTrue(text.contains("2020b")); assertTrue(text.contains("42")); assertTrue(text.contains("see")); assertTrue(text.contains("शर्मा")); assertTrue(text.contains("References"))
                 if (file == legacy) assertTrue(text.contains("(Earlier, 2018)"))
+            }
+            // Existing headings remain in place; the generated list honors the panel, not the CSL line hint.
+            val headed = source(false, heading = true); val headedProject = project(headed, false)
+            assertEquals(1, headedProject.existingReferenceHeadings().size)
+            for ((choice, value) in listOf("match" to 300, "1.5" to 360, "double" to 480)) {
+                val spacingFile = File(temp.root, "spacing-$choice.docx")
+                prepareCslExport(headedProject, spacingFile, choice, false, style)
+                compareParts(headed, spacingFile)
+                val reopened = DocxProject(spacingFile)
+                assertEquals(2, reopened.existingReferenceHeadings().size)
+                val xml = ZipFile(spacingFile).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml")).bufferedReader().use { it.readText() } }
+                val bibliography = xml.substringAfter("w:name=\"BLK_BIBLIOGRAPHY\"")
+                val spacings = Regex("<w:spacing[^>]*/>").findAll(bibliography).map { it.value }.toList()
+                assertEquals(4, spacings.size) // heading and three references
+                assertTrue(spacings.all { it.contains("w:line=\"$value\"") })
+                assertTrue(bibliography.contains("w:hanging=\"720\""))
             }
             assertArrayEquals(original, plain.readBytes()); assertArrayEquals(legacyOriginal, legacySource.readBytes())
         } finally { Context.exit() }
