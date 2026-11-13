@@ -124,12 +124,16 @@ jobs:
           with zipfile.ZipFile(apk) as z:
               assets = [n for n in z.namelist() if n.startswith('assets/') and ('csl' in n.lower() or 'citeproc' in n.lower())]
               print('Optional processor assets:', assets or '(none)')
+              print('::notice::Optional processor assets: ' + (', '.join(assets) if assets else '(none)'))
               for name in z.namelist():
                   if name.endswith('.dex'):
                       matches = sorted(set(s for s in strings(z.read(name)) if 'csl' in s.lower() or 'citeproc' in s.lower() or 'rhino' in s.lower()))
                       print(name + ' matching strings:')
                       for match in matches: print('  ' + repr(match))
                       if not matches: print('  (none)')
+                      for match in matches:
+                          escaped = repr(match).replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+                          print('::notice::' + name + ' marker: ' + escaped)
           PYCODE
       - name: List release dependency and APK license and notice filenames
         working-directory: native
