@@ -68,11 +68,11 @@ private class StyleController(context: Context) : ViewModel() {
                 if (token != generation) return@launch
                 if (result.isSuccess) state.value = state.value.copy(preparing = false, ready = true, message = "Style ready")
                 else state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId,
-                    message = "Could not prepare citation style. Using built-in APA. ${result.exceptionOrNull()?.message.orEmpty().take(160)}")
+                    message = "Could not prepare citation style. ${result.exceptionOrNull()?.message.orEmpty().take(160)}")
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (token == generation) state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId,
-                    message = "Could not prepare citation style. Using built-in APA. ${e.message.orEmpty().take(160)}")
+                    message = "Could not prepare citation style. ${e.message.orEmpty().take(160)}")
             }
         }
     }
@@ -83,7 +83,7 @@ private class StyleController(context: Context) : ViewModel() {
         if (state.value.choices.none { it.id == styleId && it.disabledReason == null }) return null
         val response = try { web.render(CitationItemToCsl.request(items, context).copy(page = page, prefix = prefix)).getOrThrow() }
         catch (_: Exception) {
-            state.value = state.value.copy(ready = false, preparing = false, failedStyle = styleId, message = "Citation style failed. Using built-in APA.")
+            state.value = state.value.copy(ready = false, preparing = false, failedStyle = styleId, message = "Citation style failed.")
             return null
         }
         return if (mode == "narrative") {
@@ -154,9 +154,6 @@ internal fun CitationStyleSession(context: Context, session: Session?, active: B
             if (active && session != null) vm.activate(session.sourceName, session.debugCitationStyleId)
             else vm.leave()
         }
-    }
-    LaunchedEffect(state.failedStyle, session?.debugCitationStyleId, active) {
-        if (active && state.failedStyle != null && state.failedStyle == session?.debugCitationStyleId) onStyleChange(null)
     }
 }
 

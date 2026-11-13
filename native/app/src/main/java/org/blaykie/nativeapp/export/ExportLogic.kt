@@ -64,6 +64,22 @@ internal fun writeVerifiedExport(project: DocxProject, file: File, line: String,
     destination().use { target -> file.inputStream().use { it.copyTo(target) }; target.flush() }
 }
 
+/** Prepare and reopen privately; caller must not offer a destination unless this succeeds. */
+internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?): Int {
+    try {
+        val selected = requireNotNull(style) { "Citation style is not ready" }
+        val input = project.citationExportInput(allowMissing)
+        val result = if (input.items.isEmpty()) org.blaykie.nativeapp.citation.processor.BibliographyResult(emptyList(), org.blaykie.nativeapp.citation.processor.BibliographyLayout(), emptyList())
+            else selected.processor.bibliography(input.items, input.clusters)
+        project.exportWithProcessor(file, line, allowMissing, result)
+        DocxProject(file)
+        return input.legacyCount
+    } catch (e: Exception) {
+        file.delete()
+        throw e
+    }
+}
+
 internal fun failedCopyMessage(error: Throwable, name: String, deletePartial: () -> Boolean): String {
     val reason = exportError(error, FailureStage.DESTINATION).removeSuffix(" The file may be incomplete.")
     val removed = try { deletePartial() } catch (_: Exception) { false }

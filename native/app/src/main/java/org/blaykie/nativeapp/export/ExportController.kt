@@ -84,20 +84,12 @@ internal class ExportController(private val context: Context, private val sessio
                     mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, message = "Choose where to save the document.")
                 } else {
                     try {
-                        checkNotNull(csl) { "The selected citation style is not ready." }
-                        val input = ready.project.citationExportInput(ready.omitted > 0)
-                        val rendered = if (input.items.isEmpty()) org.blaykie.nativeapp.citation.processor.BibliographyResult(emptyList(), org.blaykie.nativeapp.citation.processor.BibliographyLayout(), emptyList())
-                            else csl.processor.bibliography(input.items, input.clusters)
-                        check(!cancelled) { "Export cancelled." }
                         val file = File(File(context.cacheDir, CACHE_FOLDER), ready.name)
-                        withContext(Dispatchers.IO) {
-                            try {
-                                ready.project.exportWithProcessor(file, line, ready.omitted > 0, rendered)
-                                DocxProject(file)
-                            } catch (e: Exception) { file.delete(); throw e }
-                        }
-                        prepared = ready.copy(verifiedCslFile = file, styleTitle = csl.title, legacyCount = input.legacyCount)
-                        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = csl.title, legacyCount = input.legacyCount, message = "Choose where to save the document.")
+                        val legacyCount = prepareCslExport(ready.project, file, line, ready.omitted > 0, csl)
+                        check(!cancelled) { "Export cancelled." }
+                        val title = requireNotNull(csl).title
+                        prepared = ready.copy(verifiedCslFile = file, styleTitle = title, legacyCount = legacyCount)
+                        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = title, legacyCount = legacyCount, message = "Choose where to save the document.")
                     } catch (e: Exception) {
                         mutable.value = mutable.value.copy(phase = ExportPhase.FALLBACK, message = "CSL export could not be prepared. No destination was written. Choose built-in APA or cancel.")
                     }
