@@ -43,6 +43,41 @@ class CslBibliographyRhinoTest {
             val entries = result.entries.map { it.runs }
             assertEquals(items.size, entries.size)
             assertTrue(ids.indexOf("a") < ids.indexOf("b"))
+            // Use the exact document-wide result and writer used by export on a valid DOCX package.
+            val source = java.io.File.createTempFile("csl-source", ".docx")
+            val output = java.io.File.createTempFile("csl-output", ".docx"); output.delete()
+            try {
+                source.writeBytes(requireNotNull(javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
+                val original = source.readBytes()
+                val project = org.blaykie.nativeapp.docx.DocxProject(source)
+                val at = project.blockText(1).length
+                project.insertCitation(1, at, at, listOf(items[0]))
+                project.insertCitation(1, project.blockText(1).length, project.blockText(1).length, listOf(items[1]), style = "narrative")
+                val input = project.citationExportInput()
+                val exportRaw = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(CslBibliography.request(input.items, input.clusters))}})())", "export", 1, null).toString()
+                val exportResult = CslBibliography.parse(exportRaw, input.items, input.clusters)
+                project.exportWithProcessor(output, "1.5", false, exportResult)
+                val reopened = org.blaykie.nativeapp.docx.DocxProject(output)
+                assertTrue(reopened.blockText(1).contains("(Smith, 2020a)"))
+                assertTrue(reopened.blockText(1).contains("Smith (2020b)"))
+                assertArrayEquals(original, source.readBytes())
+                java.util.zip.ZipFile(source).use { from -> java.util.zip.ZipFile(output).use { to ->
+                    val names = from.entries().asSequence().map { it.name }.toSet()
+                    assertEquals(names, to.entries().asSequence().map { it.name }.toSet())
+                    for (name in names) {
+                        val before = from.getInputStream(from.getEntry(name)).use { it.readBytes() }
+                        val after = to.getInputStream(to.getEntry(name)).use { it.readBytes() }
+                        if (name != "word/document.xml") assertArrayEquals(name, before, after)
+                        if (name.endsWith(".xml") || name.endsWith(".rels")) {
+                            val factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                            factory.isNamespaceAware = true
+                            val document = factory.newDocumentBuilder().parse(after.inputStream())
+                            if (name == "[Content_Types].xml") assertEquals("Types", document.documentElement.localName)
+                            if (name.endsWith(".rels")) assertEquals("Relationships", document.documentElement.localName)
+                        }
+                    }
+                } }
+            } finally { source.delete(); output.delete() }
             val reduced = listOf(CitationCluster("only", listOf("a")))
             val second = cx.evaluateString(scope, "JSON.stringify((function(){${CslBibliography.script(CslBibliography.request(items, reduced))}})())", "repeat", 1, null).toString()
             val repeated = CslBibliography.parse(second, items, reduced)
