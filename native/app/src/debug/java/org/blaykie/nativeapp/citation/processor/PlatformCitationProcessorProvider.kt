@@ -12,11 +12,16 @@ import org.blaykie.nativeapp.docx.CitationItem
 internal class PlatformCitationProcessorProvider(
     context: Context,
     private val requestFor: (List<CitationItem>, List<CitationItem>) -> CslRenderRequest = CitationItemToCsl::request,
+    enabled: Boolean = true,
 ) : CitationProcessorProvider {
-    private val host = CslWebViewHost(context.applicationContext)
+    private val applicationContext = context.applicationContext
+    private val lazyHost = lazy { CslWebViewHost(applicationContext) }
+    private val gate = FeatureGatedCitationProcessorProvider(enabled, ::createEnabled)
 
-    override fun create(styleId: String): CitationProcessor? {
-        if (styleId.isBlank()) return null
+    override fun create(styleId: String): CitationProcessor? = gate.create(styleId)
+
+    private fun createEnabled(styleId: String): CitationProcessor {
+        val host = lazyHost.value
         return object : CitationProcessor {
             override suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): BibliographyResult {
                 val ready = host.state as? CslHostState.Ready
@@ -35,6 +40,6 @@ internal class PlatformCitationProcessorProvider(
             }
         }
     }
-    fun cancel() = host.cancel()
-    fun destroy() = host.destroy()
+    fun cancel() { if (lazyHost.isInitialized()) lazyHost.value.cancel() }
+    fun destroy() { if (lazyHost.isInitialized()) lazyHost.value.destroy() }
 }
