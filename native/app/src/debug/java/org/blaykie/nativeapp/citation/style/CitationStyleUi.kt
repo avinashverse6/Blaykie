@@ -31,6 +31,7 @@ import org.blaykie.nativeapp.csl.StyleSource
 import org.blaykie.nativeapp.csl.styleSelectionId
 import org.blaykie.nativeapp.csl.StylePreview
 import org.blaykie.nativeapp.csl.StylePreviewData
+import org.blaykie.nativeapp.csl.DEPENDENT_STYLE_NOTE
 import org.blaykie.nativeapp.csl.PreviewHost
 import org.blaykie.nativeapp.csl.PreviewOutcome
 import org.blaykie.nativeapp.csl.PreviewFeedback
@@ -258,6 +259,7 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                     DropdownMenuItem(text = {
                         Column {
                             Text(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "")
+                            if (choice.dependent) Text(DEPENDENT_STYLE_NOTE, style = MaterialTheme.typography.bodySmall)
                             (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         }
                     }, trailingIcon = if (choice.source == StyleSource.PRIVATE) ({

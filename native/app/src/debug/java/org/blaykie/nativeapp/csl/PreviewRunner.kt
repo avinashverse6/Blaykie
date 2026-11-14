@@ -21,7 +21,7 @@ internal sealed class PreviewOutcome {
 }
 internal const val PREVIEW_TIMEOUT_MS = 20_000L
 internal suspend fun runStylePreview(host: PreviewHost, clock: PreviewClock, styleId: String, title: String): PreviewOutcome = try {
-    clock.within(PREVIEW_TIMEOUT_MS) { host.render(styleId, title) }?.let(PreviewOutcome::Success) ?: PreviewOutcome.TimedOut
+    clock.within(PREVIEW_TIMEOUT_MS) { host.render(styleId, title) }?.let { PreviewOutcome.Success(it) } ?: PreviewOutcome.TimedOut
 } catch (_: CancellationException) { PreviewOutcome.Cancelled }
 catch (_: Exception) { PreviewOutcome.Failed }
 finally { host.close() }

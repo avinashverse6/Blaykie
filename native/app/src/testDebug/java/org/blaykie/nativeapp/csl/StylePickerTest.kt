@@ -16,6 +16,8 @@ class StylePickerTest {
         assertEquals("Numeric styles are not supported.", choices[2].disabledReason)
         assertEquals("Note-based styles are not supported.", choices[3].disabledReason)
         assertTrue(choices[4].disabledReason!!.contains("import the parent file first"))
+        assertTrue(choices[4].dependent)
+        assertEquals("Uses the parent style's formatting; the dependent style's own language setting is applied once language files can be imported", DEPENDENT_STYLE_NOTE)
         assertNotNull(choices[5].disabledReason)
     }
     @Test fun ambiguousIdsAreDisabled() {
