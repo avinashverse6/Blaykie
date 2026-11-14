@@ -116,6 +116,7 @@ internal class ExportController(private val context: Context, private val sessio
     fun fallbackToApa() {
         if (mutable.value.phase != ExportPhase.FALLBACK || prepared == null) return
         mutable.value = PlatformExportHook.chooseBuiltIn(mutable.value, prepared!!.omitted)
+        optionalSelection = false
     }
     fun cancelFallback() {
         if (mutable.value.phase != ExportPhase.FALLBACK) return
