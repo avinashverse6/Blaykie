@@ -67,17 +67,26 @@ private class StyleController(context: Context) : ViewModel() {
     private var selectedLanguage: String = "en-US"
     private var selectedExplicit = false
     private val blockedLanguages = mutableSetOf<String>()
+    private val gate = CustomStylesGate<CslWebViewHost> { it.destroy() }
     private var host: CslWebViewHost? = null
     private var job: Job? = null
     private var previewJob: Job? = null
+    private var operationJob: Job? = null
     private var generation = 0
 
+    fun setEnabled(enabled: Boolean) {
+        if (gate.enabled == enabled) return
+        if (!enabled) leave()
+        gate.setEnabled(enabled)
+    }
+
     fun activate(sessionKey: String, styleId: String?, language: String = "en-US", explicit: Boolean = false, force: Boolean = false) {
+        if (!gate.enabled) return
         if (!force && key == sessionKey && selected == styleId && selectedLanguage == language && selectedExplicit == explicit) return
         val fallbackMessage = if (language.equals("en-US", true) && state.value.failedLanguage != null) state.value.message else ""
         val changedSession = key != sessionKey
         if (changedSession || selected != styleId || selectedExplicit != explicit) blockedLanguages.clear()
-        if (changedSession) { leave(); key = sessionKey; host = CslWebViewHost(app) }
+        if (changedSession) { leave(); key = sessionKey; host = gate.open { CslWebViewHost(app) } }
         else { generation++; host?.cancel(); job?.cancel() }
         selected = styleId
         selectedLanguage = language
@@ -135,6 +144,7 @@ private class StyleController(context: Context) : ViewModel() {
         }
     }
     suspend fun render(sessionKey: String, styleId: String, language: String, items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String? {
+        if (!gate.enabled) return null
         val web = host ?: return null
         val actual = web.state as? CslHostState.Ready ?: return null
         if (key != sessionKey || selected != styleId || selectedLanguage != language || actual.styleId != styleId || !state.value.ready) return null
@@ -153,7 +163,7 @@ private class StyleController(context: Context) : ViewModel() {
     fun cancelPreview() { if (state.value.previewing) previewJob?.cancel() }
     fun pickerError() { state.value = state.value.copy(message = "Could not open the file picker.") }
     fun importStyle(uri: Uri) {
-        if (state.value.importing) return
+        if (!gate.enabled || state.value.importing) return
         state.value = state.value.copy(importing = true, message = "Importing style…")
         previewJob = scope.launch {
             try {
@@ -163,7 +173,7 @@ private class StyleController(context: Context) : ViewModel() {
                 val id = styleSelectionId(imported)
                 val choices = withContext(Dispatchers.IO) { styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) }
                 state.value = state.value.copy(choices = choices, previewing = true, message = "Preparing style preview…")
-                val previewWeb = CslWebViewHost(app)
+                val previewWeb = gate.open { CslWebViewHost(app) } ?: return@launch
                 val previewHost = object : PreviewHost {
                     override suspend fun render(styleId: String, title: String): StylePreview {
                         val ready = previewWeb.warmUp(styleId)
@@ -173,9 +183,11 @@ private class StyleController(context: Context) : ViewModel() {
                         currentCoroutineContext().ensureActive()
                         return StylePreviewData.build(title, result.getOrThrow())
                     }
-                    override fun close() = previewWeb.destroy()
+                    override fun close() = gate.close(previewWeb)
                 }
                 val outcome = runStylePreview(previewHost, RealPreviewClock, id, imported.title)
+                currentCoroutineContext().ensureActive()
+                if (!gate.enabled) return@launch
                 val feedback = previewFeedback(PreviewFeedback(selected, state.value.failedIds, state.value.message), id, outcome)
                 state.value = state.value.copy(importing = false, previewing = false, failedIds = feedback.failed, message = feedback.message,
                     preview = (outcome as? PreviewOutcome.Success)?.preview)
@@ -189,9 +201,9 @@ private class StyleController(context: Context) : ViewModel() {
         }
     }
     fun importLocale(uri: Uri) {
-        if (state.value.importing) return
+        if (!gate.enabled || state.value.importing) return
         state.value = state.value.copy(importing = true, message = "Importing language…")
-        scope.launch {
+        operationJob = scope.launch {
             try {
                 val (imported, locales) = withContext(Dispatchers.IO) {
                     val store = LocaleImportStore(File(app.filesDir, "locales"))
@@ -208,10 +220,10 @@ private class StyleController(context: Context) : ViewModel() {
         }
     }
     fun removeLocale(locale: LocaleMetadata) {
-        if (state.value.importing) return
+        if (!gate.enabled || state.value.importing) return
         if (selectedLanguage.equals(locale.tag, true)) host?.cancel()
         state.value = state.value.copy(importing = true, ready = if (selectedLanguage.equals(locale.tag, true)) false else state.value.ready)
-        scope.launch {
+        operationJob = scope.launch {
             try {
                 val locales = withContext(Dispatchers.IO) {
                     val store = LocaleImportStore(File(app.filesDir, "locales"))
@@ -226,9 +238,9 @@ private class StyleController(context: Context) : ViewModel() {
     }
     fun removeStyle(choice: StyleChoice) {
         val asset = choice.asset ?: return
-        if (choice.source != StyleSource.PRIVATE || state.value.importing) return
+        if (!gate.enabled || choice.source != StyleSource.PRIVATE || state.value.importing) return
         state.value = state.value.copy(importing = true)
-        scope.launch {
+        operationJob = scope.launch {
             try {
                 val choices = withContext(Dispatchers.IO) {
                     check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
@@ -245,6 +257,7 @@ private class StyleController(context: Context) : ViewModel() {
         }
     }
     fun exportStyle(session: Session): ExportCslStyle? {
+        if (!gate.enabled) return null
         val id = session.debugCitationStyleId ?: return null
         val choice = state.value.choices.singleOrNull { it.id == id && it.disabledReason == null } ?: return null
         val web = host ?: return null
@@ -253,7 +266,7 @@ private class StyleController(context: Context) : ViewModel() {
             override suspend fun citation(items: List<CitationItem>, mode: String, page: String, prefix: String, context: List<CitationItem>): String =
                 render(session.sourceName, id, session.debugCitationLanguage, items, mode, page, prefix, context) ?: error("Citation style not ready")
             override suspend fun bibliography(items: List<CitationItem>, clusters: List<CitationCluster>): BibliographyResult {
-                check(key == session.sourceName && selected == id && selectedLanguage == session.debugCitationLanguage && state.value.ready && (web.state as? CslHostState.Ready)?.styleId == id) { "Citation style not ready" }
+                check(gate.enabled && key == session.sourceName && selected == id && selectedLanguage == session.debugCitationLanguage && state.value.ready && (web.state as? CslHostState.Ready)?.styleId == id) { "Citation style not ready" }
                 return web.bibliography(items, clusters).getOrThrow()
             }
         }
@@ -264,7 +277,8 @@ private class StyleController(context: Context) : ViewModel() {
         state.value = state.value.copy(preparing = false, ready = false, message = "", failedStyle = null)
     }
     fun leave() {
-        generation++; job?.cancel(); job = null; host?.destroy(); host = null
+        generation++; job?.cancel(); job = null; previewJob?.cancel(); previewJob = null
+        operationJob?.cancel(); operationJob = null; gate.closeAll(); host = null
         key = null; selected = null; selectedLanguage = "en-US"; selectedExplicit = false; blockedLanguages.clear(); state.value = UiState()
     }
     override fun onCleared() { leave(); scope.cancel() }
@@ -281,14 +295,16 @@ private fun controllerFor(context: Context): StyleController {
 
 internal fun exportCslStyle(context: Context, session: Session): ExportCslStyle? = controllerFor(context).exportStyle(session)
 
-internal fun citationUsesCsl(session: Session?): Boolean = session?.debugCitationStyleId != null
-internal fun citationOptionRestriction(context: Context, session: Session?, search: SearchState): String? {
+internal fun citationUsesCsl(session: Session?, enabled: Boolean = true): Boolean = enabled && session?.debugCitationStyleId != null
+internal fun citationOptionRestriction(context: Context, session: Session?, search: SearchState, enabled: Boolean = true): String? {
+    if (!enabled) return null
     val styleId = session?.debugCitationStyleId ?: return null
     val choice = controllerFor(context).state.value.choices.firstOrNull { it.id == styleId }
     if (choice?.disabledReason != null) return choice.disabledReason
     return citationRestriction(choice?.originalId ?: styleId, search.style, search.selectedItems().size, search.page, search.prefix)
 }
-internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>): String? {
+internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>, enabled: Boolean = true): String? {
+    if (!enabled) return null
     val id = session.debugCitationStyleId ?: return null
     return controllerFor(context).render(session.sourceName, id, session.debugCitationLanguage, search.selectedItems(), search.style, search.page.trim(), search.prefix.trim(), citationContext)
 }
@@ -299,23 +315,26 @@ internal suspend fun renderCitationPreview(context: Context, session: Session, s
 }
 
 @Composable
-internal fun CitationStyleSession(context: Context, session: Session?, active: Boolean, loaded: Boolean, onStyleChange: (String?) -> Boolean, onAutoLanguageChange: (String) -> Boolean) {
+internal fun CitationStyleSession(context: Context, session: Session?, enabled: Boolean, active: Boolean, loaded: Boolean, onStyleChange: (String?) -> Boolean, onAutoLanguageChange: (String) -> Boolean) {
     val vm = controller(context)
     val state by vm.state.collectAsState()
-    LaunchedEffect(loaded, active, session?.sourceName, session?.debugCitationStyleId, session?.debugCitationLanguage, session?.debugCitationLanguageExplicit) {
+    SideEffect { vm.setEnabled(enabled && active) }
+    DisposableEffect(vm) { onDispose { vm.setEnabled(false) } }
+    LaunchedEffect(loaded, enabled, active, session?.sourceName, session?.debugCitationStyleId, session?.debugCitationLanguage, session?.debugCitationLanguageExplicit) {
+        vm.setEnabled(enabled && active)
         if (loaded) {
-            if (active && session != null) vm.activate(session.sourceName, session.debugCitationStyleId, session.debugCitationLanguage, session.debugCitationLanguageExplicit)
+            if (enabled && active && session != null) vm.activate(session.sourceName, session.debugCitationStyleId, session.debugCitationLanguage, session.debugCitationLanguageExplicit)
             else vm.leave()
         }
     }
     LaunchedEffect(state.requestedLanguage, session?.debugCitationLanguage, active) {
-        if (active && state.requestedLanguage != null && state.requestedLanguage != session?.debugCitationLanguage) onAutoLanguageChange(state.requestedLanguage!!)
+        if (enabled && active && state.requestedLanguage != null && state.requestedLanguage != session?.debugCitationLanguage) onAutoLanguageChange(state.requestedLanguage!!)
     }
     LaunchedEffect(state.failedLanguage, session?.debugCitationLanguage, active) {
-        if (active && state.failedLanguage != null && state.failedLanguage == session?.debugCitationLanguage) onAutoLanguageChange("en-US")
+        if (enabled && active && state.failedLanguage != null && state.failedLanguage == session?.debugCitationLanguage) onAutoLanguageChange("en-US")
     }
     LaunchedEffect(state.failedWarmup, session?.debugCitationStyleId, active) {
-        if (active && state.failedWarmup != null && state.failedWarmup == session?.debugCitationStyleId) onStyleChange(null)
+        if (enabled && active && state.failedWarmup != null && state.failedWarmup == session?.debugCitationStyleId) onStyleChange(null)
     }
 }
 

@@ -6,6 +6,7 @@ import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.exportCslStyle
+import org.blaykie.nativeapp.citation.style.whenCustomStylesEnabled
 
 internal data class ExportCslStyle(val title: String, val processor: org.blaykie.nativeapp.citation.processor.CitationProcessor, val language: String = "en-US")
 
@@ -25,10 +26,15 @@ internal suspend fun prepareCslExport(project: DocxProject, file: File, line: St
     }
 }
 
-internal fun beginExport(context: Context, controller: ExportController, session: Session) {
-    val style = exportCslStyle(context, session)
-    val selection = if (citationUsesCsl(session)) ProcessorSelection(style?.processor, style?.title.orEmpty(), style?.language.orEmpty()) else null
-    controller.begin(session, selection)
+internal fun optionalExportSelection(enabled: Boolean, session: Session, style: () -> ExportCslStyle?): ProcessorSelection? =
+    whenCustomStylesEnabled(enabled && citationUsesCsl(session)) {
+        val selected = style()
+        ProcessorSelection(selected?.processor, selected?.title.orEmpty(), selected?.language.orEmpty())
+    }
+
+internal fun beginExport(context: Context, controller: ExportController, session: Session, enabled: Boolean) {
+    val selection = optionalExportSelection(enabled, session) { exportCslStyle(context, session) }
+    controller.begin(session, selection, showOptionalSummary = enabled)
 }
 
 /** Explicit transitions keep a failed preparation from implicitly choosing a fallback. */

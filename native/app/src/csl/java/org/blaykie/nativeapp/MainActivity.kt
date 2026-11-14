@@ -63,6 +63,7 @@ import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.citation.CitationSearchController
+import org.blaykie.nativeapp.citation.style.builtInSession
 import org.blaykie.nativeapp.citation.style.CitationStyleRow
 import org.blaykie.nativeapp.citation.style.CitationStyleSession
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
@@ -183,6 +184,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
     var discardCount by rememberSaveable { mutableIntStateOf(0) }
     var inserting by remember { mutableStateOf(false) }
+    val latestCustomStyles by rememberUpdatedState(settings.customCitationStyles)
+    var previousCustomStyles by remember { mutableStateOf(settings.customCitationStyles) }
 
     fun accept(loaded: Loaded) {
         session = loaded.session; project = loaded.project; blockCards = loaded.cards
@@ -324,7 +327,19 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag, debugCitationLanguageExplicit = true)) } ?: false }
     val useStyleLanguage: () -> Boolean = { session?.let { persist(it.copy(debugCitationLanguageExplicit = false)) } ?: false }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
+    LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
+        val turnedOff = previousCustomStyles && !settings.customCitationStyles
+        previousCustomStyles = settings.customCitationStyles
+        val current = session
+        if (!settings.customCitationStyles && current != null) {
+            val reset = builtInSession(current)
+            val changed = reset != current
+            if ((!changed || persist(reset)) && (turnedOff || current.debugCitationStyleId != null)) {
+                message = "Custom citation styles off; using built-in APA."
+            }
+        }
+    }
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -375,7 +390,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
                 Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
-            CitationStyleRow(context, session, saveCitationStyle, saveCitationLanguage, useStyleLanguage)
+            if (settings.customCitationStyles) CitationStyleRow(context, session, saveCitationStyle, saveCitationLanguage, useStyleLanguage)
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
@@ -402,7 +417,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         }
         Screen.EDITOR -> if (searchState.open) {
             CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
-                cslSelected = citationUsesCsl(session), restriction = citationOptionRestriction(context, session, searchState), inserting = inserting, onInsert = {
+                cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting, onInsert = {
                 val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
                 if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
                 else if (p != null && s != null) {
@@ -427,14 +442,15 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                         } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
                         catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
                     }
-                    if (!citationUsesCsl(s)) insert(null, false)
-                    else if (!inserting && citationOptionRestriction(context, s, snapshot) == null) {
+                    if (!citationUsesCsl(s, settings.customCitationStyles)) insert(null, false)
+                    else if (!inserting && citationOptionRestriction(context, s, snapshot, settings.customCitationStyles) == null) {
                         inserting = true
                         scope.launch {
                             try {
                                 val existing = p.citations().flatMap { it.items }
-                                val preview = renderCitationPreview(context, s, snapshot, existing + chosen)
-                                insert(preview, preview == null)
+                                val preview = renderCitationPreview(context, s, snapshot, existing + chosen, latestCustomStyles)
+                                if (latestCustomStyles) insert(preview, preview == null)
+                                else if (citationSearch.state.value.open) citationSearch.message("Custom citation styles are off. Please try again.")
                             } finally { inserting = false }
                         }
                     }
@@ -471,7 +487,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
         }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
@@ -544,6 +560,14 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             Text("Appearance", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             SettingsRow("Theme", settings.theme.name) { dialog = "theme" }
             SettingsRow("Text size", settings.textSize.name) { dialog = "size" }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Custom citation styles (experimental)", style = MaterialTheme.typography.bodyLarge)
+                    Text("Import styles and languages for citations and references.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = settings.customCitationStyles, onCheckedChange = { enabled -> scope.launch { store.setCustomCitationStyles(enabled) } })
+            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             SettingsRow("About Blaykie", "") { onAbout() }

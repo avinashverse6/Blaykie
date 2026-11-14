@@ -42,11 +42,11 @@ internal class ExportController(private val context: Context, private val sessio
     @Volatile private var cancelled = false
     private var prepared: Prepared? = null
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
-    fun begin(session: Session, selection: ProcessorSelection? = null) {
+    fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true) {
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val line = mutable.value.line
-        mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), languageSummary = PlatformExportHook.initialLanguageSummary(selection != null), message = "Preparing export…")
+        mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), languageSummary = if (showOptionalSummary) PlatformExportHook.initialLanguageSummary(selection != null) else "", message = "Preparing export…")
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 var stage = FailureStage.PRIVATE
