@@ -60,7 +60,7 @@ internal class CslWebViewHost(context: Context) {
             try {
                 withTimeout(120_000) {
                     val styles = StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))
-                    val style = styles.singleOrNull { it.id == styleId } ?: error("Citation style not found or ambiguous")
+                    val style = styles.singleOrNull { styleSelectionId(it) == styleId } ?: error("Citation style not found or ambiguous")
                     require(!style.dependent) { "Dependent styles need their parent style" }
                     val styleBytes = when (style.source) {
                         StyleSource.BUNDLED -> app.assets.open(style.asset)

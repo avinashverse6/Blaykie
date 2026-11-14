@@ -10,7 +10,9 @@ class StylePickerTest {
     @Test fun classifiesStylesAndRetainsTitles() {
         val choices = styleChoices(listOf(style("apa", "author-date"), style("numbers", "numeric"), style("note", "note", "note"), style("child", null, null, true), style("unknown", null)))
         assertEquals(StyleChoice(null, "APA 7 (built-in)"), choices[0])
-        assertEquals(StyleChoice("apa", "apa edition"), choices[1])
+        assertEquals("imported:apa.csl", choices[1].id)
+        assertEquals("apa edition", choices[1].title)
+        assertEquals(StyleSource.PRIVATE, choices[1].source)
         assertEquals("Numeric styles are not supported.", choices[2].disabledReason)
         assertEquals("Note-based styles are not supported.", choices[3].disabledReason)
         assertEquals("Dependent styles are not supported.", choices[4].disabledReason)
