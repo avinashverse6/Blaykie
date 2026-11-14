@@ -53,7 +53,7 @@ internal class CslWebViewHost(context: Context) {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun warmUp(styleId: String): Result<Unit> = withContext(Dispatchers.Main.immediate) {
+    suspend fun warmUp(styleId: String, language: String = "en-US"): Result<Unit> = withContext(Dispatchers.Main.immediate) {
         lock.withLock {
             val token = machine.warmUp(styleId) ?: return@withLock Result.failure(IllegalStateException("Invalid style or host destroyed"))
             closeView()
@@ -73,7 +73,17 @@ internal class CslWebViewHost(context: Context) {
                     val element = if (bibliography.length == 1) bibliography.item(0) as org.w3c.dom.Element else null
                     val layout = JSONObject().put("hanging", element?.hasAttribute("hanging-indent") == true)
                         .put("line", element?.hasAttribute("line-spacing") == true).put("entry", element?.hasAttribute("entry-spacing") == true)
-                    val locale = app.assets.open("csl/locales-en-US.xml").use { CslSafeXml.parse(it).first }
+                    val fallback = app.assets.open("csl/locales-en-US.xml").use { CslSafeXml.parse(it).first }
+                    val primary = if (language.equals("en-US", true)) fallback else {
+                        val store = LocaleImportStore(File(app.filesDir, "locales"))
+                        val metadata = store.list().singleOrNull { it.tag.equals(language, true) } ?: error("Language unavailable")
+                        File(app.filesDir, "locales/${metadata.asset}").inputStream().use {
+                            val bytes = it.readBytes()
+                            require(bytes.size <= LocaleImportStore.MAX_BYTES)
+                            require(LocaleImportStore.read(metadata.asset, bytes.inputStream()) == metadata)
+                            CslSafeXml.parse(bytes.inputStream()).first
+                        }
+                    }
                     val script = asset("csl/citeproc.js")
                     WebView.setWebContentsDebuggingEnabled(false)
                     val web = WebView(app)
@@ -118,13 +128,13 @@ internal class CslWebViewHost(context: Context) {
                     }
                     val loaded = evaluate(WebViewLoader.body)
                     require(loaded.getString("windowCsl") == "object") { "CSL did not load" }
-                    val data = JSONObject().put("style", styleText).put("locale", locale)
-                        .put("language", "en-US").put("forceLanguage", false)
+                    val data = JSONObject().put("style", styleText).put("primary", primary).put("fallback", fallback)
+                        .put("language", language)
                     evaluate("""
                         var data=JSON.parse(${JSONObject.quote(data.toString())});
                         window.lookup={}; window.ids=[];
                         window.__cslLayoutDefined=JSON.parse(${JSONObject.quote(layout.toString())});
-                        window.engine=new CSL.Engine({retrieveLocale:function(){return data.locale;},retrieveItem:function(id){return window.lookup[id];}},data.style,data.language,data.forceLanguage);
+                        ${CslLocaleScript.createEngine}
                         window.engine.setOutputFormat('text'); return {ok:true};
                     """.trimIndent())
                     check(machine.ready(token)) { "Warm-up cancelled" }
