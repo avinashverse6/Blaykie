@@ -23,7 +23,7 @@ class StyleImportTest {
         rejected("<!ENTITY x 'x'><style/>".toByteArray(), "malformed or unsafe")
         rejected(byteArrayOf(0xc3.toByte(), 0x28), "malformed or unsafe")
         rejected(("<x>".repeat(130) + "</x>".repeat(130)).toByteArray(), "malformed or unsafe")
-        rejected(style("child", extra = """<link rel="independent-parent" href="parent"/>""").toByteArray(), "needs its parent")
+        rejected(style("child", extra = """<link rel="independent-parent" href="parent"/>""").toByteArray(), "import the parent file first")
         rejected(style("numeric", format = "numeric").toByteArray(), "not supported yet")
         rejected(style("note", format = "note", kind = "note").toByteArray(), "not supported yet")
         rejected(style("unknown", format = "label").toByteArray(), "author-date")
@@ -40,7 +40,7 @@ class StyleImportTest {
         val replacement = style(id, title = "Replacement edition")
         assertEquals("Replacement edition", importer.import(replacement.byteInputStream()).title)
         assertEquals(replacement, target.readText())
-        val broken = StyleImportStore(directory) { _, _ -> false }
+        val broken = StyleImportStore(directory, replace = { _, _ -> false })
         try { broken.import(first.byteInputStream()); fail("write accepted") } catch (_: IllegalStateException) { }
         assertEquals(replacement, target.readText()); assertTrue(directory.listFiles()!!.none { it.name.endsWith(".tmp") })
         for (i in 1 until 20) importer.import(style("item-$i").byteInputStream())

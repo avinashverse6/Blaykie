@@ -15,7 +15,7 @@ class StylePickerTest {
         assertEquals(StyleSource.PRIVATE, choices[1].source)
         assertEquals("Numeric styles are not supported.", choices[2].disabledReason)
         assertEquals("Note-based styles are not supported.", choices[3].disabledReason)
-        assertEquals("Dependent styles are not supported.", choices[4].disabledReason)
+        assertTrue(choices[4].disabledReason!!.contains("import the parent file first"))
         assertNotNull(choices[5].disabledReason)
     }
     @Test fun ambiguousIdsAreDisabled() {

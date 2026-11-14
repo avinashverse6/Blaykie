@@ -24,7 +24,7 @@ class StyleRegistryTest {
             val styles = StyleRegistry.load({ requireNotNull(javaClass.classLoader?.getResourceAsStream(it)) }, directory)
             assertEquals(3, styles.size)
             assertEquals(StyleSource.BUNDLED, styles[0].source)
-            assertEquals(StyleMetadata("dependent.csl", "Dependent edition", "dependent-id", null, "note", true, StyleSource.PRIVATE), styles[1])
+            assertEquals(StyleMetadata("dependent.csl", "Dependent edition", "dependent-id", null, "note", true, StyleSource.PRIVATE, "https://example.test/parent"), styles[1])
             assertEquals(StyleMetadata("numeric.csl", "Numbers", "numeric-id", "in-text", "numeric", false, StyleSource.PRIVATE), styles[2])
         } finally { directory.deleteRecursively() }
     }

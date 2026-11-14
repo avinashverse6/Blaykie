@@ -8,7 +8,7 @@ import java.security.MessageDigest
 internal class StyleImportFailure(message: String) : IllegalArgumentException(message)
 
 /** Private files are addressed by a digest, never by an external filename. */
-internal class StyleImportStore(private val directory: File, private val replace: (File, File) -> Boolean = { from, to -> from.renameTo(to) }) {
+internal class StyleImportStore(private val directory: File, private val replace: (File, File) -> Boolean = { from, to -> from.renameTo(to) }, private val available: () -> List<StyleMetadata> = { emptyList() }) {
     companion object {
         const val MAX_BYTES = 512 * 1024
         const val MAX_STYLES = 20
@@ -31,10 +31,11 @@ internal class StyleImportStore(private val directory: File, private val replace
             if (e.message == "Not a CSL style") throw StyleImportFailure("Not a CSL style file.")
             throw StyleImportFailure("Malformed or unsafe XML.")
         }
-        if (metadata.dependent) throw StyleImportFailure("This style needs its parent style; import the parent first.")
-        if (metadata.styleClass == "note" || metadata.citationFormat == "note" || metadata.citationFormat == "numeric")
+        val effective = if (metadata.dependent) independentParent(metadata, available())
+            ?: throw StyleImportFailure(missingParentMessage(requireNotNull(metadata.parentId))) else metadata
+        if (effective.styleClass == "note" || effective.citationFormat == "note" || effective.citationFormat == "numeric")
             throw StyleImportFailure("Numeric and note styles are not supported yet.")
-        if (metadata.styleClass != "in-text" || metadata.citationFormat != "author-date")
+        if (effective.styleClass != "in-text" || effective.citationFormat != "author-date")
             throw StyleImportFailure("Only independent author-date styles are supported.")
         require(directory.isDirectory || directory.mkdirs()) { "Could not create styles directory." }
         val root = directory.canonicalFile

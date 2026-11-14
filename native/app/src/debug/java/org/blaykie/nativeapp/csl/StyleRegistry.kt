@@ -9,6 +9,7 @@ internal enum class StyleSource { BUNDLED, PRIVATE }
 internal data class StyleMetadata(
     val asset: String, val title: String, val id: String, val styleClass: String?,
     val citationFormat: String?, val dependent: Boolean, val source: StyleSource,
+    val parentId: String? = null, val defaultLocale: String? = null,
 )
 
 /** Debug-only inventory. This is not yet connected to a processor or a picker. */
@@ -47,10 +48,22 @@ internal object StyleRegistry {
         val formats = children.filter { it.localName == "category" && it.hasAttribute("citation-format") }
             .map { it.getAttribute("citation-format").trim() }
         require(formats.size <= 1 && formats.all { it in setOf("author-date", "numeric", "note", "label") }) { "Invalid citation format" }
-        val dependent = children.any { it.localName == "link" && it.getAttribute("rel") == "independent-parent" }
+        val parents = children.filter { it.localName == "link" && it.getAttribute("rel") == "independent-parent" }
+        require(parents.size <= 1) { "Invalid parent link" }
+        val parentId = parents.singleOrNull()?.getAttribute("href")?.trim()?.also {
+            require(it.isNotBlank() && it.length <= 1024 && it.none { c -> c.isISOControl() }) { "Invalid parent link" }
+        }
+        val dependent = parentId != null
+        val defaultLocale = root.getAttribute("default-locale").trim().ifEmpty { null }
+        require(defaultLocale == null || Regex("[A-Za-z0-9-]{1,64}").matches(defaultLocale)) { "Invalid default locale" }
         val styleClass = root.getAttribute("class").trim().ifEmpty { null }
         require(styleClass != null || dependent) { "Missing style class" }
         return StyleMetadata(asset, directText("title"), directText("id"), styleClass,
-            formats.singleOrNull(), dependent, source)
+            formats.singleOrNull(), dependent, source, parentId, defaultLocale)
     }
 }
+
+/** Prefer the bundled copy when both sources provide the same parent ID. */
+internal fun independentParent(style: StyleMetadata, styles: List<StyleMetadata>): StyleMetadata? =
+    style.parentId?.let { id -> styles.filter { it.id == id && !it.dependent }.sortedBy { it.source }.firstOrNull() }
+internal fun missingParentMessage(id: String): String = "Parent style $id is unavailable; import the parent file first."

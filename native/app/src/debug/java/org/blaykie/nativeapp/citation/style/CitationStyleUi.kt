@@ -108,7 +108,7 @@ private class StyleController(context: Context) : ViewModel() {
         scope.launch {
             try {
                 val imported = withContext(Dispatchers.IO) {
-                    (app.contentResolver.openInputStream(uri) ?: error("File could not be opened.")).use { StyleImportStore(File(app.filesDir, "styles")).import(it) }
+                    (app.contentResolver.openInputStream(uri) ?: error("File could not be opened.")).use { StyleImportStore(File(app.filesDir, "styles"), available = { StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")) }).import(it) }
                 }
                 val id = styleSelectionId(imported)
                 val choices = withContext(Dispatchers.IO) { styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) }
