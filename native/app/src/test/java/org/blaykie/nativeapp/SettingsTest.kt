@@ -23,6 +23,14 @@ class SettingsTest {
         assertEquals(Settings(ThemeMode.Light, TextSize.Large, true), parseSettings("Light", "Large", true))
     }
 
+    @Test fun buildDefaultAndSavedOverrideAreIndependent() {
+        assertEquals(BuildConfig.DEBUG, BuildConfig.CUSTOM_STYLES_DEFAULT)
+        assertEquals(true, parseSettings(null, null, null, true).customCitationStyles)
+        assertEquals(false, parseSettings(null, null, null, false).customCitationStyles)
+        assertEquals(false, parseSettings(null, null, false, true).customCitationStyles)
+        assertEquals(true, parseSettings(null, null, true, false).customCitationStyles)
+    }
+
     @Test fun textSizesScaleInOrder() {
         assertTrue(TextSize.Small.scale < TextSize.Normal.scale)
         assertTrue(TextSize.Normal.scale < TextSize.Large.scale)

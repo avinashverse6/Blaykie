@@ -32,10 +32,12 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "true")
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Blaykie (debug)"
         }
         getByName("release") {
+            buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "false")
             isMinifyEnabled = false
             isShrinkResources = false
             val releaseSigning = signingConfigs.getByName("release")
