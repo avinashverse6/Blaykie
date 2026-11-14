@@ -58,7 +58,11 @@ internal class LocaleImportStore(private val directory: File, private val replac
         if (!directory.exists()) return emptyList()
         val root = directory.canonicalFile
         return requireNotNull(root.listFiles()).filter { it.isFile && Regex("[0-9a-f]{64}\\.xml").matches(it.name) && it.canonicalFile.parentFile == root }
-            .map { file -> file.inputStream().use { read(file.name, it) } }.sortedBy { it.tag }
+            .mapNotNull { file ->
+                try {
+                    file.inputStream().use { read(file.name, it) }.takeIf { it.asset == nameFor(it.tag) }
+                } catch (_: Exception) { null }
+            }.sortedBy { it.tag }
     }
     @Synchronized fun remove(asset: String): Boolean {
         require(Regex("[0-9a-f]{64}\\.xml").matches(asset)) { "Invalid locale file." }

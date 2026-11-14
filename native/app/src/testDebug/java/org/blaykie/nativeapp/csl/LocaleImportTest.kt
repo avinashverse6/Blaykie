@@ -25,6 +25,13 @@ class LocaleImportTest {
         reject(("<x>".repeat(130) + "</x>".repeat(130)).toByteArray(), "malformed or unsafe")
         reject(xml("en-US").toByteArray(), "bundled")
     }
+    @Test fun damagedFileIsNotAvailable() {
+        val dir = File(temp.root, "locales"); val store = LocaleImportStore(dir)
+        val locale = store.import(xml("xx-XX").byteInputStream())
+        File(dir, locale.asset).writeText("<broken")
+        assertTrue(store.list().isEmpty())
+        assertEquals("en-US", languageAfterRemoval("xx-XX", locale.tag))
+    }
     @Test fun hashReplaceLimitAtomicFailureAndRemove() {
         val dir = File(temp.root, "locales"); val store = LocaleImportStore(dir)
         val first = xml("de-DE"); val imported = store.import(first.byteInputStream())
