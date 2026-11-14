@@ -11,8 +11,8 @@ import org.blaykie.nativeapp.docx.CitationItem
 /** Construct once per session; conversion is replaceable for comparison. */
 internal class PlatformCitationProcessorProvider(
     context: Context,
+    enabled: Boolean,
     private val requestFor: (List<CitationItem>, List<CitationItem>) -> CslRenderRequest = CitationItemToCsl::request,
-    enabled: Boolean = true,
 ) : CitationProcessorProvider {
     private val applicationContext = context.applicationContext
     private val lazyHost = lazy { CslWebViewHost(applicationContext) }

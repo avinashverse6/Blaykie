@@ -30,6 +30,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.blaykie.nativeapp.SettingsStore
 import org.blaykie.nativeapp.csl.CslSafeXml
 import org.blaykie.nativeapp.csl.CslWebViewHost
 import org.blaykie.nativeapp.csl.CslRenderRequest
@@ -48,6 +49,7 @@ class WebViewSpikeActivity : Activity() {
     private val hostScope = MainScope()
     private var selfTestHost: CslWebViewHost? = null
     private var web: WebView? = null
+    private var customStylesEnabled = false
     private var active = false
     private var generation = 0
     private var current = ""
@@ -91,6 +93,16 @@ class WebViewSpikeActivity : Activity() {
             else "provider version unavailable on Android below 8"
         } catch (t: Throwable) { "unavailable: ${t.javaClass.simpleName}: ${t.message.orEmpty().take(160)}" }
         line("Device=${Build.MODEL}; Android=${Build.VERSION.RELEASE}; WebView provider=$provider")
+        hostScope.launch {
+            SettingsStore(applicationContext).settings.collect { settings ->
+                customStylesEnabled = settings.customCitationStyles
+                if (!customStylesEnabled) {
+                    selfTestHost?.destroy()
+                    closeRun()
+                    status.text = "Custom citation styles are off in Settings."
+                }
+            }
+        }
         handler.post(ticker)
     }
     private fun registrySelfTest() {
@@ -109,6 +121,7 @@ class WebViewSpikeActivity : Activity() {
         test("oversized", true) { StyleRegistry.read("bad.csl", ("<style>" + "x".repeat(CslSafeXml.MAX_BYTES) + "</style>").byteInputStream()) }
     }
     private fun hostSelfTest() {
+        if (!customStylesEnabled) { line("Custom citation styles are off in Settings."); return }
         if (selfTestHost != null) { line("Host self-test already running"); return }
         val host = CslWebViewHost(applicationContext)
         selfTestHost = host
@@ -158,6 +171,7 @@ class WebViewSpikeActivity : Activity() {
     private fun complete(target: Target) { status.text = "Completed ${target.title}."; closeRun() }
     @SuppressLint("SetJavaScriptEnabled")
     private fun start(target: Target) {
+        if (!customStylesEnabled) { status.text = "Custom citation styles are off in Settings."; return }
         if (active) { status.text = "A stage is already running."; return }
         active = true; generation++; val run = generation
         line("Requested ${target.title}; fresh WebView and prerequisites; 120 s per stage")
