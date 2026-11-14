@@ -26,7 +26,7 @@
 
 Done: style registry; processor interface and built-in adapter; session-scoped WebView host with self-test; item converter A (see docs/csl/COMPARISON.md); style picker and session saving; CSL citation insertion; bibliography as structured rich text; export through CSL with explicit fallback; sample-docx-csl CI artifact.
 
-Phone checks done so far: none beyond the host self-test and the style picker and insertion checklist.
+Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding.
 
 
 
