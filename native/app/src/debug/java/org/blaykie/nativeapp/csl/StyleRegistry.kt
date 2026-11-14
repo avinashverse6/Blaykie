@@ -72,10 +72,10 @@ internal data class EffectiveStyle(val text: String, val title: String, val defa
 /** Use the independent parent's unmodified XML; the child's title and locale remain session metadata. */
 internal fun effectiveStyle(style: StyleMetadata, styles: List<StyleMetadata>, open: (StyleMetadata) -> InputStream): EffectiveStyle {
     fun readVerified(value: StyleMetadata): String {
-        val bytes = open(value).use { it.readBytes() }
-        val actual = StyleRegistry.read(value.asset, bytes.inputStream(), value.source)
+        val text = open(value).use { CslSafeXml.read(it) }
+        val actual = StyleRegistry.read(value.asset, text.byteInputStream(Charsets.UTF_8), value.source)
         require(actual == value) { "Citation style changed during loading" }
-        return bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
+        return text
     }
     if (!style.dependent) return EffectiveStyle(readVerified(style), style.title, null)
     readVerified(style)

@@ -13,7 +13,7 @@ internal fun styleChoices(styles: List<StyleMetadata>): List<StyleChoice> {
             style.dependent && parent == null -> missingParentMessage(style.parentId.orEmpty())
             effective?.styleClass == "note" || effective?.citationFormat == "note" -> "Note-based styles are not supported."
             effective?.citationFormat == "numeric" -> "Numeric styles are not supported."
-            effective?.styleClass != "in-text" || effective.citationFormat != "author-date" -> "Only independent author-date styles are supported."
+            effective?.styleClass != "in-text" || effective?.citationFormat != "author-date" -> "Only independent author-date styles are supported."
             else -> null
         }
         StyleChoice(styleSelectionId(style), style.title, reason, style.source, style.asset, style.id)
