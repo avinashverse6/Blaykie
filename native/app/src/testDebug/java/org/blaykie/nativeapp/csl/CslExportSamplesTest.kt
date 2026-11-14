@@ -21,8 +21,8 @@ class CslExportSamplesTest {
     @get:Rule val temp = TemporaryFolder()
     private fun resource(name: String) = requireNotNull(javaClass.classLoader?.getResourceAsStream(name)).use { it.readBytes() }
     private val authors = listOf(CitationAuthor("Alex", "Example"))
-    private val alpha = CitationItem("ALPHA1", "Alpha study", authors, "2020", itemType = "journalArticle", publicationTitle = "Test Journal", volume = "4")
-    private val beta = CitationItem("BETA2", "Beta study", authors, "2020", itemType = "book", publisher = "Test Press")
+    private val alpha = CitationItem("ALPHA1", "Alpha study with a deliberately long title to demonstrate reference wrapping and a visible hanging indent in a document viewer", authors, "2020", itemType = "journalArticle", publicationTitle = "Test Journal", volume = "4")
+    private val beta = CitationItem("BETA2", "Beta study with a deliberately long title to demonstrate reference wrapping and a visible hanging indent in a document viewer", authors, "2020", itemType = "book", publisher = "Test Press")
     private val hindi = CitationItem("HINDI3", "हिन्दी अध्ययन", listOf(CitationAuthor("अनिता", "शर्मा")), "2022", itemType = "book", publisher = "उदाहरण प्रकाशन")
     private val old = CitationItem("OLD1", "Earlier reference", listOf(CitationAuthor("Sam", "Earlier")), "2018", itemType = "book", publisher = "Test Press")
 

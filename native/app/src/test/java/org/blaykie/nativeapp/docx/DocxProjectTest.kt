@@ -125,6 +125,26 @@ class DocxProjectTest {
         assertTrue(xml.contains("w:hanging=\"720\"")); assertTrue(xml.contains("w:line=\"360\""))
         try { project.buildXmlWithProcessor("match", false, result.copy(citations = emptyList())); fail("missing result accepted") } catch (_: IllegalArgumentException) { }
     }
+    @Test fun bibliographyLayoutHintsControlIndentAndEntrySpacing() {
+        val project = DocxProject(makeDocx())
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val input = project.citationExportInput()
+        val result = org.blaykie.nativeapp.citation.processor.BibliographyResult(
+            listOf(org.blaykie.nativeapp.citation.processor.BibliographyEntry(listOf(item.key), listOf(org.blaykie.nativeapp.citation.processor.RichRun("Reference")))),
+            org.blaykie.nativeapp.citation.processor.BibliographyLayout(hangingIndent = true, entrySpacing = 1.0, lineSpacing = 2.0),
+            listOf(org.blaykie.nativeapp.citation.processor.ClusterResult(input.clusters.single().id, "(Example, 2020)")))
+        fun entry(layout: org.blaykie.nativeapp.citation.processor.BibliographyLayout): String {
+            val xml = project.buildXmlWithProcessor("1.5", false, result.copy(layout = layout))
+            return Regex("<w:p><w:pPr>(.*?)</w:pPr>(.*?)Reference</w:t></w:r></w:p>", RegexOption.DOT_MATCHES_ALL).findAll(xml).last().value
+        }
+        val withHint = entry(result.layout)
+        assertTrue(withHint.contains("<w:ind w:left=\"720\" w:hanging=\"720\"/>"))
+        assertTrue(withHint.contains("w:afterLines=\"100\"")); assertTrue(withHint.contains("w:after=\"360\"")); assertTrue(withHint.contains("w:line=\"360\""))
+        val noHint = entry(result.layout.copy(hangingIndent = null, entrySpacing = null))
+        assertFalse(noHint.contains("<w:ind")); assertFalse(noHint.contains("w:afterLines")); assertTrue(noHint.contains("w:after=\"0\""))
+        assertFalse(entry(result.layout.copy(hangingIndent = false)).contains("<w:ind"))
+        assertTrue(entry(result.layout.copy(entrySpacing = 0.0)).contains("w:afterLines=\"0\""))
+    }
     @Test fun deleteRange() {
         val project = DocxProject(makeDocx()); val start = second.indexOf("enough")
         project.deleteRange(1, start, start + 6, tidy = false)

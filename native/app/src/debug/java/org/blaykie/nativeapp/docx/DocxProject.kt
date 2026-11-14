@@ -411,7 +411,14 @@ class DocxProject(private val source: File) {
                 makeRun(properties, part.text)
             }
             val indent = if (result.layout.hangingIndent == true) "<w:ind w:left=\"720\" w:hanging=\"720\"/>" else ""
-            "<w:p><w:pPr>$spacing$indent</w:pPr>$runs</w:p>"
+            val entrySpacing = result.layout.entrySpacing
+            if (entrySpacing != null) require(entrySpacing.isFinite() && entrySpacing in 0.0..100.0) { "Invalid bibliography spacing" }
+            // CSL entry-spacing is a count of line-heights; the user's line choice wins.
+            // afterLines preserves a relative measure; after is a 12pt-compatible fallback.
+            val after = entrySpacing?.let { (it * lineSpacing(line)).toInt() } ?: 0
+            val afterLines = entrySpacing?.let { " w:afterLines=\"${(it * 100).toInt()}\"" }.orEmpty()
+            val entryProperties = "<w:spacing w:before=\"0\" w:after=\"$after\"$afterLines w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
+            "<w:p><w:pPr>$entryProperties$indent</w:pPr>$runs</w:p>"
         } else CitationFormatting.ordered(items).joinToString("") { item ->
             val merged = mutableListOf<Pair<String, Boolean>>()
             CitationFormatting.reference(item, suffixes[item.key].orEmpty()).filter { it.first.isNotEmpty() }.forEach { part ->
