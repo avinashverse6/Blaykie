@@ -119,7 +119,7 @@ internal class CslWebViewHost(context: Context) {
                     val loaded = evaluate(WebViewLoader.body)
                     require(loaded.getString("windowCsl") == "object") { "CSL did not load" }
                     val data = JSONObject().put("style", styleText).put("locale", locale)
-                        .put("language", resolved.defaultLocale ?: "en-US").put("forceLanguage", resolved.defaultLocale != null)
+                        .put("language", "en-US").put("forceLanguage", false)
                     evaluate("""
                         var data=JSON.parse(${JSONObject.quote(data.toString())});
                         window.lookup={}; window.ids=[];

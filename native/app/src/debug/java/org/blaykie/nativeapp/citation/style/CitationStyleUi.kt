@@ -31,6 +31,12 @@ import org.blaykie.nativeapp.csl.StyleSource
 import org.blaykie.nativeapp.csl.styleSelectionId
 import org.blaykie.nativeapp.csl.StylePreview
 import org.blaykie.nativeapp.csl.StylePreviewData
+import org.blaykie.nativeapp.csl.PreviewHost
+import org.blaykie.nativeapp.csl.PreviewOutcome
+import org.blaykie.nativeapp.csl.PreviewFeedback
+import org.blaykie.nativeapp.csl.RealPreviewClock
+import org.blaykie.nativeapp.csl.runStylePreview
+import org.blaykie.nativeapp.csl.previewFeedback
 import org.blaykie.nativeapp.csl.styleChoices
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
@@ -42,7 +48,7 @@ import java.io.File
 private data class UiState(val choices: List<StyleChoice> = styleChoices(emptyList()), val preparing: Boolean = false,
     val ready: Boolean = false, val message: String = "", val failedStyle: String? = null,
     val failedIds: Set<String> = emptySet(), val importing: Boolean = false, val failedWarmup: String? = null,
-    val preview: StylePreview? = null)
+    val preview: StylePreview? = null, val previewing: Boolean = false)
 
 /** Retained by the activity's ViewModelStore, but holds only application context. */
 private class StyleController(context: Context) : ViewModel() {
@@ -53,6 +59,7 @@ private class StyleController(context: Context) : ViewModel() {
     private var selected: String? = null
     private var host: CslWebViewHost? = null
     private var job: Job? = null
+    private var previewJob: Job? = null
     private var generation = 0
 
     fun activate(sessionKey: String, styleId: String?, force: Boolean = false) {
@@ -107,38 +114,33 @@ private class StyleController(context: Context) : ViewModel() {
         } else response.cluster
     }
     fun closePreview() { state.value = state.value.copy(preview = null) }
+    fun cancelPreview() { if (state.value.previewing) previewJob?.cancel() }
     fun pickerError() { state.value = state.value.copy(message = "Could not open the file picker.") }
     fun importStyle(uri: Uri) {
         if (state.value.importing) return
         state.value = state.value.copy(importing = true, message = "Importing style…")
-        scope.launch {
+        previewJob = scope.launch {
             try {
                 val imported = withContext(Dispatchers.IO) {
                     (app.contentResolver.openInputStream(uri) ?: error("File could not be opened.")).use { StyleImportStore(File(app.filesDir, "styles"), available = { StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")) }).import(it) }
                 }
                 val id = styleSelectionId(imported)
                 val choices = withContext(Dispatchers.IO) { styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) }
-                if (selected == id) { host?.cancel(); state.value = state.value.copy(ready = false) }
-                state.value = state.value.copy(choices = choices, failedIds = state.value.failedIds - id, message = "Preparing style preview…")
-                val previewHost = CslWebViewHost(app)
-                try {
-                    val preview = withTimeoutOrNull(20_000) {
-                        previewHost.warmUp(id).getOrThrow()
-                        val result = previewHost.bibliography(StylePreviewData.items, StylePreviewData.clusters).getOrThrow()
-                        StylePreviewData.build(imported.title, result)
+                state.value = state.value.copy(choices = choices, previewing = true, message = "Preparing style preview…")
+                val previewWeb = CslWebViewHost(app)
+                val previewHost = object : PreviewHost {
+                    override suspend fun render(styleId: String, title: String): StylePreview {
+                        previewWeb.warmUp(styleId).getOrThrow()
+                        return StylePreviewData.build(title, previewWeb.bibliography(StylePreviewData.items, StylePreviewData.clusters).getOrThrow())
                     }
-                    if (preview == null) {
-                        state.value = state.value.copy(importing = false, failedIds = state.value.failedIds + id,
-                            failedStyle = id, failedWarmup = if (selected == id) id else null, message = "Preview timed out.")
-                    } else {
-                        state.value = state.value.copy(importing = false, preview = preview, message = "Style imported.")
-                        if (selected == id) key?.let { activate(it, id, force = true) }
-                    }
-                } catch (e: CancellationException) { throw e }
-                catch (_: Exception) {
-                    state.value = state.value.copy(importing = false, failedIds = state.value.failedIds + id,
-                        failedStyle = id, failedWarmup = if (selected == id) id else null, message = "Style could not be loaded.")
-                } finally { previewHost.destroy() }
+                    override fun close() = previewWeb.destroy()
+                }
+                val outcome = runStylePreview(previewHost, RealPreviewClock, id, imported.title)
+                val feedback = previewFeedback(PreviewFeedback(selected, state.value.failedIds, state.value.message), id, outcome)
+                state.value = state.value.copy(importing = false, previewing = false, failedIds = feedback.failed, message = feedback.message,
+                    preview = (outcome as? PreviewOutcome.Success)?.preview)
+                if (outcome is PreviewOutcome.Success && selected == id) key?.let { activate(it, id, force = true) }
+
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 val message = if (e is StyleImportFailure) e.message.orEmpty() else "Could not import the style file."
@@ -266,6 +268,10 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                     try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
                 })
             }
+        }
+        if (state.previewing) Row {
+            Text("Preparing style preview", modifier = Modifier.weight(1f))
+            TextButton(onClick = vm::cancelPreview) { Text("Cancel preview") }
         }
         if (state.preparing) Row {
             Text("Preparing citation style", modifier = Modifier.weight(1f))
