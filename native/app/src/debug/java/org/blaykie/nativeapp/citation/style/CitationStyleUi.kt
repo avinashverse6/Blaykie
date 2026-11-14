@@ -130,8 +130,12 @@ private class StyleController(context: Context) : ViewModel() {
                 val previewWeb = CslWebViewHost(app)
                 val previewHost = object : PreviewHost {
                     override suspend fun render(styleId: String, title: String): StylePreview {
-                        previewWeb.warmUp(styleId).getOrThrow()
-                        return StylePreviewData.build(title, previewWeb.bibliography(StylePreviewData.items, StylePreviewData.clusters).getOrThrow())
+                        val ready = previewWeb.warmUp(styleId)
+                        currentCoroutineContext().ensureActive()
+                        ready.getOrThrow()
+                        val result = previewWeb.bibliography(StylePreviewData.items, StylePreviewData.clusters)
+                        currentCoroutineContext().ensureActive()
+                        return StylePreviewData.build(title, result.getOrThrow())
                     }
                     override fun close() = previewWeb.destroy()
                 }
