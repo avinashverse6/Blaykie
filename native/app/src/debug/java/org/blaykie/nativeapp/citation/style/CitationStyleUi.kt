@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -27,6 +29,8 @@ import org.blaykie.nativeapp.csl.StyleImportStore
 import org.blaykie.nativeapp.csl.StyleImportFailure
 import org.blaykie.nativeapp.csl.StyleSource
 import org.blaykie.nativeapp.csl.styleSelectionId
+import org.blaykie.nativeapp.csl.StylePreview
+import org.blaykie.nativeapp.csl.StylePreviewData
 import org.blaykie.nativeapp.csl.styleChoices
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
@@ -37,7 +41,8 @@ import java.io.File
 
 private data class UiState(val choices: List<StyleChoice> = styleChoices(emptyList()), val preparing: Boolean = false,
     val ready: Boolean = false, val message: String = "", val failedStyle: String? = null,
-    val failedIds: Set<String> = emptySet(), val importing: Boolean = false, val failedWarmup: String? = null)
+    val failedIds: Set<String> = emptySet(), val importing: Boolean = false, val failedWarmup: String? = null,
+    val preview: StylePreview? = null)
 
 /** Retained by the activity's ViewModelStore, but holds only application context. */
 private class StyleController(context: Context) : ViewModel() {
@@ -77,12 +82,12 @@ private class StyleController(context: Context) : ViewModel() {
                 if (result.isSuccess) state.value = state.value.copy(preparing = false, ready = true, message = "Style ready")
                 else state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId, failedWarmup = styleId,
                     failedIds = state.value.failedIds + styleId,
-                    message = "Could not prepare citation style. Using built-in APA. ${result.exceptionOrNull()?.message.orEmpty().take(120)}")
+                    message = "Style could not be loaded. Using built-in APA.")
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (token == generation) state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId, failedWarmup = styleId,
                     failedIds = if (styleId == null) state.value.failedIds else state.value.failedIds + styleId,
-                    message = "Could not prepare citation style. Using built-in APA. ${e.message.orEmpty().take(120)}")
+                    message = "Style could not be loaded. Using built-in APA.")
             }
         }
     }
@@ -101,6 +106,7 @@ private class StyleController(context: Context) : ViewModel() {
             "${narrativeAuthor(response.author, response.andTerm, authors.size, authors.filter { it.group }.map { it.last })} ${response.suppress}"
         } else response.cluster
     }
+    fun closePreview() { state.value = state.value.copy(preview = null) }
     fun pickerError() { state.value = state.value.copy(message = "Could not open the file picker.") }
     fun importStyle(uri: Uri) {
         if (state.value.importing) return
@@ -112,8 +118,27 @@ private class StyleController(context: Context) : ViewModel() {
                 }
                 val id = styleSelectionId(imported)
                 val choices = withContext(Dispatchers.IO) { styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) }
-                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - id, message = "Style imported: ${imported.title}")
-                if (selected == id) key?.let { activate(it, id, force = true) }
+                if (selected == id) { host?.cancel(); state.value = state.value.copy(ready = false) }
+                state.value = state.value.copy(choices = choices, failedIds = state.value.failedIds - id, message = "Preparing style preview…")
+                val previewHost = CslWebViewHost(app)
+                try {
+                    val preview = withTimeoutOrNull(20_000) {
+                        previewHost.warmUp(id).getOrThrow()
+                        val result = previewHost.bibliography(StylePreviewData.items, StylePreviewData.clusters).getOrThrow()
+                        StylePreviewData.build(imported.title, result)
+                    }
+                    if (preview == null) {
+                        state.value = state.value.copy(importing = false, failedIds = state.value.failedIds + id,
+                            failedStyle = id, failedWarmup = if (selected == id) id else null, message = "Preview timed out.")
+                    } else {
+                        state.value = state.value.copy(importing = false, preview = preview, message = "Style imported.")
+                        if (selected == id) key?.let { activate(it, id, force = true) }
+                    }
+                } catch (e: CancellationException) { throw e }
+                catch (_: Exception) {
+                    state.value = state.value.copy(importing = false, failedIds = state.value.failedIds + id,
+                        failedStyle = id, failedWarmup = if (selected == id) id else null, message = "Style could not be loaded.")
+                } finally { previewHost.destroy() }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 val message = if (e is StyleImportFailure) e.message.orEmpty() else "Could not import the style file."
@@ -131,7 +156,12 @@ private class StyleController(context: Context) : ViewModel() {
                     check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
                     styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")))
                 }
-                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - requireNotNull(choice.id), message = "Imported style removed.")
+                val selectedChoice = choices.firstOrNull { it.id == selected }
+                val unavailable = selected != null && (selectedChoice == null || selectedChoice.disabledReason != null)
+                if (unavailable) host?.cancel()
+                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - requireNotNull(choice.id),
+                    ready = if (unavailable) false else state.value.ready, failedWarmup = if (unavailable) selected else null,
+                    message = if (unavailable) selectedChoice?.disabledReason ?: "Style could not be loaded." else "Imported style removed.")
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported style.") }
         }
@@ -242,6 +272,18 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             TextButton(onClick = { if (onStyleChange(null)) vm.cancel() }) { Text("Cancel") }
         }
         if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodySmall)
+    }
+    state.preview?.let { preview ->
+        AlertDialog(onDismissRequest = vm::closePreview, title = { Text("Preview: ${preview.title}") },
+            text = { Column(Modifier.verticalScroll(rememberScrollState())) {
+                preview.rows.forEach { row ->
+                    Text(row.label, style = MaterialTheme.typography.titleSmall)
+                    Text("Parenthetical: ${row.parenthetical}")
+                    Text("Narrative: ${row.narrative}")
+                    Text("Reference: ${row.bibliography}")
+                    Spacer(Modifier.height(8.dp))
+                }
+            } }, confirmButton = { TextButton(onClick = vm::closePreview) { Text("Done") } })
     }
     removing?.let { choice ->
         AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove imported style?") },
