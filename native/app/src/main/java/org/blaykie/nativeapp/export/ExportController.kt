@@ -11,6 +11,7 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,13 +42,18 @@ internal class ExportController(private val context: Context, private val sessio
     @Volatile private var client: ZoteroClient? = null
     @Volatile private var cancelled = false
     private var prepared: Prepared? = null
+    private var preparationJob: Job? = null
+    private var preparationGeneration = 0
+    private var optionalSelection = false
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
     fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true) {
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
+        val token = ++preparationGeneration
+        optionalSelection = selection != null
         val line = mutable.value.line
         mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), languageSummary = if (showOptionalSummary) PlatformExportHook.initialLanguageSummary(selection != null) else "", message = "Preparing export…")
-        scope.launch {
+        preparationJob = scope.launch {
             val result = withContext(Dispatchers.IO) {
                 var stage = FailureStage.PRIVATE
                 try {
@@ -75,6 +81,7 @@ internal class ExportController(private val context: Context, private val sessio
                     Pair(Prepared(project, read.session, session.uri, exportName(session.fileName), omitted, omitted > 0 && project.presentKeys().size == omitted && project.hasBlaykieBibliography()), "")
                 } catch (e: Exception) { Pair(null, exportError(e, stage)) }
             }
+            if (token != preparationGeneration) return@launch
             client = null
             val ready = result.first
             if (ready == null) mutable.value = mutable.value.copy(phase = ExportPhase.IDLE, message = result.second, needsKey = result.second.startsWith("Some earlier citations"))
@@ -90,11 +97,21 @@ internal class ExportController(private val context: Context, private val sessio
                         prepared = ready.copy(details = details)
                         mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = details.title, languageSummary = details.languageSummary, legacyCount = details.legacyCount, message = "Choose where to save the document.")
                     } catch (e: Exception) {
+                        if (token != preparationGeneration) return@launch
                         mutable.value = PlatformExportHook.preparationFailed(mutable.value)
                     }
                 }
             }
         }
+    }
+    /** Drop an optional preparation or chooser if that feature is switched off. */
+    fun disableOptionalExport() {
+        if (!shouldCancelOptionalExport(optionalSelection, mutable.value.phase)) return
+        preparationGeneration++
+        cancelled = true; client?.cancel(); preparationJob?.cancel(); preparationJob = null
+        optionalSelection = false; prepared = null
+        mutable.value = mutable.value.copy(phase = ExportPhase.IDLE, message = "Export cancelled.",
+            styleTitle = "", legacyCount = 0, languageSummary = "")
     }
     fun fallbackToApa() {
         if (mutable.value.phase != ExportPhase.FALLBACK || prepared == null) return

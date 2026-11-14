@@ -330,6 +330,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
     LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
         val turnedOff = previousCustomStyles && !settings.customCitationStyles
+        if (!settings.customCitationStyles) exportController.disableOptionalExport()
         previousCustomStyles = settings.customCitationStyles
         val current = session
         if (!settings.customCitationStyles && current != null) {
