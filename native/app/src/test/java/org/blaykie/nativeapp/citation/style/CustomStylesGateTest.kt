@@ -16,7 +16,7 @@ class CustomStylesGateTest {
 
     @Test fun offDocumentAndExportNeverInvokeHostFactory() {
         val source = File(temp.root, "source.docx").apply {
-            writeBytes(requireNotNull(javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
+            writeBytes(requireNotNull(this@CustomStylesGateTest.javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
         }
         val document = DocxProject(source)
         assertTrue(document.blockCount > 0)
