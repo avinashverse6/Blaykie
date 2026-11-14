@@ -416,7 +416,7 @@ class DocxProject(private val source: File) {
             // CSL entry-spacing is a count of line-heights; the user's line choice wins.
             // afterLines preserves a relative measure; after is a 12pt-compatible fallback.
             val after = entrySpacing?.let { (it * lineSpacing(line)).toInt() } ?: 0
-            val afterLines = entrySpacing?.let { " w:afterLines=\"${(it * 100).toInt()}\"" }.orEmpty()
+            val afterLines = entrySpacing?.takeIf { it > 0.0 }?.let { " w:afterLines=\"${(it * lineSpacing(line) * 100 / 240).toInt()}\"" }.orEmpty()
             val entryProperties = "<w:spacing w:before=\"0\" w:after=\"$after\"$afterLines w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
             "<w:p><w:pPr>$entryProperties$indent</w:pPr>$runs</w:p>"
         } else CitationFormatting.ordered(items).joinToString("") { item ->

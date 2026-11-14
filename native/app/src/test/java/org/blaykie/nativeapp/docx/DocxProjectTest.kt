@@ -139,11 +139,11 @@ class DocxProjectTest {
         }
         val withHint = entry(result.layout)
         assertTrue(withHint.contains("<w:ind w:left=\"720\" w:hanging=\"720\"/>"))
-        assertTrue(withHint.contains("w:afterLines=\"100\"")); assertTrue(withHint.contains("w:after=\"360\"")); assertTrue(withHint.contains("w:line=\"360\""))
+        assertTrue(withHint.contains("w:afterLines=\"150\"")); assertTrue(withHint.contains("w:after=\"360\"")); assertTrue(withHint.contains("w:line=\"360\""))
         val noHint = entry(result.layout.copy(hangingIndent = null, entrySpacing = null))
         assertFalse(noHint.contains("<w:ind")); assertFalse(noHint.contains("w:afterLines")); assertTrue(noHint.contains("w:after=\"0\""))
         assertFalse(entry(result.layout.copy(hangingIndent = false)).contains("<w:ind"))
-        assertTrue(entry(result.layout.copy(entrySpacing = 0.0)).contains("w:afterLines=\"0\""))
+        assertFalse(entry(result.layout.copy(entrySpacing = 0.0)).contains("w:afterLines"))
     }
     @Test fun deleteRange() {
         val project = DocxProject(makeDocx()); val start = second.indexOf("enough")
