@@ -1,0 +1,3 @@
+# Debug phone-test fixtures
+
+These are made-up, minimal CSL files for the B2 phone checklist, not production styles or translations. `test-parent.csl` is an independent English-default parent; import it before either dependent child. `test-child-xx.csl` requests the fictional `xx-XX` locale; `test-child-missing.csl` requests a deliberately unavailable `zz-ZZ`. `test-independent-xx.csl` independently requests `xx-XX`. The `test-locale-xx.xml` terms deliberately use `zand` and `zothers`, and all other terms fall back to bundled English. Import these with the debug app only. Use the existing `native/app/src/test/resources/m4c/source.docx` as a test document; always save exports to a different file.
