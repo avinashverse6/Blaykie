@@ -1,15 +1,25 @@
 package org.blaykie.nativeapp.citation.style
 
+import java.io.File
+import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.export.optionalExportSelection
 import org.blaykie.nativeapp.session.Session
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
 
 class CustomStylesGateTest {
+    @get:Rule val temp = TemporaryFolder()
     private data class FakeHost(val id: Int)
     private fun selected() = Session("content://source", "source.docx", "source.docx", debugCitationStyleId = "example", debugCitationLanguage = "xx-XX", debugCitationLanguageExplicit = true)
 
     @Test fun offDocumentAndExportNeverInvokeHostFactory() {
+        val source = File(temp.root, "source.docx").apply {
+            writeBytes(requireNotNull(javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
+        }
+        val document = DocxProject(source)
+        assertTrue(document.blockCount > 0)
         var constructions = 0
         val gate = CustomStylesGate<FakeHost> { error("No host exists") }
         gate.setEnabled(false)
