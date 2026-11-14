@@ -26,9 +26,9 @@
 
 Done: style registry; processor interface and built-in adapter; session-scoped WebView host with self-test; item converter A (see docs/csl/COMPARISON.md); style picker and session saving; CSL citation insertion; bibliography as structured rich text; export through CSL with explicit fallback; sample-docx-csl CI artifact; B2-1 debug style import, validation, private storage and removal (phone verification pending).
 
-B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug; timeout, failure and cancellation are tested without changing the active session. The dependent style's own language setting is deferred to B2-3. Phone verification remains outstanding.
+B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug; timeout, failure and cancellation are tested without changing the active session. Dependent-style default-language rules remain deferred to B2-3c. Phone verification remains outstanding.
 
-B2-3 is in progress: debug-only locale validation and private atomic storage have been added with JVM tests; these are not yet connected to the picker or processor. Session language persistence, fallback behavior, dependent-style defaults and Rhino tests remain to be implemented. CI and phone verification are pending.
+B2-3b: debug-only locale import/removal, session language selection and persistence, selected-locale processing with English term fallback, and JVM/Rhino tests are implemented. Built-in APA remains the default and uses English. CI and phone verification of the latest changes remain pending; dependent-style default-language rules are not part of B2-3b.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
