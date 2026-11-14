@@ -16,6 +16,13 @@ class SettingsTest {
         }
     }
 
+    @Test fun customStylesDefaultOffForOlderSettingsAndReadSavedValue() {
+        assertEquals(false, parseSettings(null, null).customCitationStyles)
+        assertEquals(false, parseSettings("Light", "Large", false).customCitationStyles)
+        assertEquals(true, parseSettings("Light", "Large", true).customCitationStyles)
+        assertEquals(Settings(ThemeMode.Light, TextSize.Large, true), parseSettings("Light", "Large", true))
+    }
+
     @Test fun textSizesScaleInOrder() {
         assertTrue(TextSize.Small.scale < TextSize.Normal.scale)
         assertTrue(TextSize.Normal.scale < TextSize.Large.scale)
