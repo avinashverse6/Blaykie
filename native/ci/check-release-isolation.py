@@ -81,11 +81,13 @@ with zipfile.ZipFile(apk) as z:
     related = [c for c in all_classes if c.startswith(('Lorg/blaykie/nativeapp/csl/', 'Lorg/blaykie/nativeapp/citation/style/', 'Lorg/blaykie/nativeapp/citation/processor/'))]
 inventory = [c for c in all_classes if re.search(r'csl|style|locale|host', c, re.I)]
 packed = base64.b64encode(zlib.compress('\n'.join(inventory).encode())).decode()
-for i in range(0, len(packed), 25000):
-    print('::notice::Class inventory %d: %s' % (i // 25000, packed[i:i+25000]))
+for i in range(0, len(packed), 3000):
+    print('::notice::Class inventory %d: %s' % (i // 3000, packed[i:i+3000]))
 print('::notice::Release APK size: %d bytes' % os.path.getsize(apk))
 permissions, exported, components = manifest(apk)
 base_permissions, base_exported, _ = manifest(baseline)
+print('::notice::Release exported components: ' + repr(sorted(exported)))
+print('::notice::Baseline exported components: ' + repr(sorted(base_exported)))
 notice('Release assets', assets)
 notice('Release permissions', sorted(permissions))
 notice('Baseline permissions', sorted(base_permissions))
@@ -94,8 +96,6 @@ print('::notice::Release APK: %d bytes; v1.0.1 rebuilt unsigned APK: %d bytes' %
 badging = subprocess.check_output([aapt, 'dump', 'badging', apk], text=True)
 application_id = re.search(r"^package: name='([^']+)'", badging, re.M).group(1)
 assert permissions == base_permissions == {'android.permission.INTERNET', application_id + '.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}, (permissions, base_permissions)
-print('::notice::Release exported components: ' + repr(sorted(exported)))
-print('::notice::Baseline exported components: ' + repr(sorted(base_exported)))
 assert exported == base_exported, (exported, base_exported)
 assert not any('spike' in (c['name'] or '').lower() for c in components), components
 print('Release APK assets:', *assets, sep='\n')
