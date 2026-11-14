@@ -67,3 +67,19 @@ internal object StyleRegistry {
 internal fun independentParent(style: StyleMetadata, styles: List<StyleMetadata>): StyleMetadata? =
     style.parentId?.let { id -> styles.filter { it.id == id && !it.dependent }.sortedBy { it.source }.firstOrNull() }
 internal fun missingParentMessage(id: String): String = "Parent style $id is unavailable; import the parent file first."
+
+internal data class EffectiveStyle(val text: String, val title: String, val defaultLocale: String?)
+/** Use the independent parent's unmodified XML; the child's title and locale remain session metadata. */
+internal fun effectiveStyle(style: StyleMetadata, styles: List<StyleMetadata>, open: (StyleMetadata) -> InputStream): EffectiveStyle {
+    fun readVerified(value: StyleMetadata): String {
+        val bytes = open(value).use { it.readBytes() }
+        val actual = StyleRegistry.read(value.asset, bytes.inputStream(), value.source)
+        require(actual == value) { "Citation style changed during loading" }
+        return bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
+    }
+    if (!style.dependent) return EffectiveStyle(readVerified(style), style.title, null)
+    readVerified(style)
+    val parent = independentParent(style, styles) ?: throw IllegalArgumentException(missingParentMessage(requireNotNull(style.parentId)))
+    require(parent.styleClass == "in-text" && parent.citationFormat == "author-date") { "Numeric and note styles are not supported yet." }
+    return EffectiveStyle(readVerified(parent), style.title, style.defaultLocale)
+}

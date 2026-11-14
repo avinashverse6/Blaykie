@@ -61,19 +61,18 @@ internal class CslWebViewHost(context: Context) {
                 withTimeout(120_000) {
                     val styles = StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))
                     val style = styles.singleOrNull { styleSelectionId(it) == styleId } ?: error("Citation style not found or ambiguous")
-                    require(!style.dependent) { "Dependent styles need their parent style" }
-                    val styleBytes = when (style.source) {
-                        StyleSource.BUNDLED -> app.assets.open(style.asset)
-                        StyleSource.PRIVATE -> File(app.filesDir, "styles/${style.asset}").inputStream()
+                    val resolved = effectiveStyle(style, styles) { metadata ->
+                        when (metadata.source) {
+                            StyleSource.BUNDLED -> app.assets.open(metadata.asset)
+                            StyleSource.PRIVATE -> File(app.filesDir, "styles/${metadata.asset}").inputStream()
+                        }
                     }
-                    val parsedStyle = styleBytes.use { CslSafeXml.parse(it) }
-                    val styleText = parsedStyle.first
+                    val styleText = resolved.text
+                    val parsedStyle = CslSafeXml.parse(styleText.byteInputStream(Charsets.UTF_8))
                     val bibliography = parsedStyle.second.getElementsByTagNameNS("http://purl.org/net/xbiblio/csl", "bibliography")
                     val element = if (bibliography.length == 1) bibliography.item(0) as org.w3c.dom.Element else null
                     val layout = JSONObject().put("hanging", element?.hasAttribute("hanging-indent") == true)
                         .put("line", element?.hasAttribute("line-spacing") == true).put("entry", element?.hasAttribute("entry-spacing") == true)
-                    val reread = StyleRegistry.read(style.asset, styleText.byteInputStream(Charsets.UTF_8), style.source)
-                    require(reread == style) { "Citation style changed during loading" }
                     val locale = app.assets.open("csl/locales-en-US.xml").use { CslSafeXml.parse(it).first }
                     val script = asset("csl/citeproc.js")
                     WebView.setWebContentsDebuggingEnabled(false)
@@ -120,11 +119,12 @@ internal class CslWebViewHost(context: Context) {
                     val loaded = evaluate(WebViewLoader.body)
                     require(loaded.getString("windowCsl") == "object") { "CSL did not load" }
                     val data = JSONObject().put("style", styleText).put("locale", locale)
+                        .put("language", resolved.defaultLocale ?: "en-US").put("forceLanguage", resolved.defaultLocale != null)
                     evaluate("""
                         var data=JSON.parse(${JSONObject.quote(data.toString())});
                         window.lookup={}; window.ids=[];
                         window.__cslLayoutDefined=JSON.parse(${JSONObject.quote(layout.toString())});
-                        window.engine=new CSL.Engine({retrieveLocale:function(){return data.locale;},retrieveItem:function(id){return window.lookup[id];}},data.style,'en-US');
+                        window.engine=new CSL.Engine({retrieveLocale:function(){return data.locale;},retrieveItem:function(id){return window.lookup[id];}},data.style,data.language,data.forceLanguage);
                         window.engine.setOutputFormat('text'); return {ok:true};
                     """.trimIndent())
                     check(machine.ready(token)) { "Warm-up cancelled" }
