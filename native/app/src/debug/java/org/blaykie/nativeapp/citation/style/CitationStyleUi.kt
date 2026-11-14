@@ -1,6 +1,9 @@
 package org.blaykie.nativeapp.citation.style
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -20,6 +23,10 @@ import org.blaykie.nativeapp.docx.CitationItem
 import org.blaykie.nativeapp.citation.SearchState
 import org.blaykie.nativeapp.csl.StyleChoice
 import org.blaykie.nativeapp.csl.StyleRegistry
+import org.blaykie.nativeapp.csl.StyleImportStore
+import org.blaykie.nativeapp.csl.StyleImportFailure
+import org.blaykie.nativeapp.csl.StyleSource
+import org.blaykie.nativeapp.csl.styleSelectionId
 import org.blaykie.nativeapp.csl.styleChoices
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
@@ -29,7 +36,8 @@ import org.blaykie.nativeapp.export.ExportCslStyle
 import java.io.File
 
 private data class UiState(val choices: List<StyleChoice> = styleChoices(emptyList()), val preparing: Boolean = false,
-    val ready: Boolean = false, val message: String = "", val failedStyle: String? = null)
+    val ready: Boolean = false, val message: String = "", val failedStyle: String? = null,
+    val failedIds: Set<String> = emptySet(), val importing: Boolean = false, val failedWarmup: String? = null)
 
 /** Retained by the activity's ViewModelStore, but holds only application context. */
 private class StyleController(context: Context) : ViewModel() {
@@ -42,8 +50,8 @@ private class StyleController(context: Context) : ViewModel() {
     private var job: Job? = null
     private var generation = 0
 
-    fun activate(sessionKey: String, styleId: String?) {
-        if (key == sessionKey && selected == styleId) return
+    fun activate(sessionKey: String, styleId: String?, force: Boolean = false) {
+        if (!force && key == sessionKey && selected == styleId) return
         val changedSession = key != sessionKey
         if (changedSession) { leave(); key = sessionKey; host = CslWebViewHost(app) }
         else { generation++; host?.cancel(); job?.cancel() }
@@ -53,7 +61,7 @@ private class StyleController(context: Context) : ViewModel() {
             state.value = state.value.copy(preparing = false, ready = false)
             return
         }
-        state.value = state.value.copy(preparing = styleId != null, ready = false, message = "", failedStyle = null)
+        state.value = state.value.copy(preparing = styleId != null, ready = false, message = "", failedStyle = null, failedWarmup = null)
         job = scope.launch {
             try {
                 val choices = withContext(Dispatchers.IO) {
@@ -67,12 +75,14 @@ private class StyleController(context: Context) : ViewModel() {
                 val result = requireNotNull(host).warmUp(requireNotNull(option.id))
                 if (token != generation) return@launch
                 if (result.isSuccess) state.value = state.value.copy(preparing = false, ready = true, message = "Style ready")
-                else state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId,
-                    message = "Could not prepare citation style. ${result.exceptionOrNull()?.message.orEmpty().take(160)}")
+                else state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId, failedWarmup = styleId,
+                    failedIds = state.value.failedIds + styleId,
+                    message = "Could not prepare citation style. Using built-in APA. ${result.exceptionOrNull()?.message.orEmpty().take(120)}")
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
-                if (token == generation) state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId,
-                    message = "Could not prepare citation style. ${e.message.orEmpty().take(160)}")
+                if (token == generation) state.value = state.value.copy(preparing = false, ready = false, failedStyle = styleId, failedWarmup = styleId,
+                    failedIds = if (styleId == null) state.value.failedIds else state.value.failedIds + styleId,
+                    message = "Could not prepare citation style. Using built-in APA. ${e.message.orEmpty().take(120)}")
             }
         }
     }
@@ -90,6 +100,40 @@ private class StyleController(context: Context) : ViewModel() {
             val authors = items.single().authors
             "${narrativeAuthor(response.author, response.andTerm, authors.size, authors.filter { it.group }.map { it.last })} ${response.suppress}"
         } else response.cluster
+    }
+    fun importStyle(uri: Uri) {
+        if (state.value.importing) return
+        state.value = state.value.copy(importing = true, message = "Importing style…")
+        scope.launch {
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    (app.contentResolver.openInputStream(uri) ?: error("File could not be opened.")).use { StyleImportStore(File(app.filesDir, "styles")).import(it) }
+                }
+                val id = styleSelectionId(imported)
+                val choices = withContext(Dispatchers.IO) { styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) }
+                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - id, message = "Style imported: ${imported.title}")
+                if (selected == id) key?.let { activate(it, id, force = true) }
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                val message = if (e is StyleImportFailure) e.message.orEmpty() else "Could not import the style file."
+                state.value = state.value.copy(importing = false, message = message)
+            }
+        }
+    }
+    fun removeStyle(choice: StyleChoice) {
+        val asset = choice.asset ?: return
+        if (choice.source != StyleSource.PRIVATE || state.value.importing) return
+        state.value = state.value.copy(importing = true)
+        scope.launch {
+            try {
+                val choices = withContext(Dispatchers.IO) {
+                    check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
+                    styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")))
+                }
+                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - choice.id, message = "Imported style removed.")
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported style.") }
+        }
     }
     fun exportStyle(session: Session): ExportCslStyle? {
         val id = session.debugCitationStyleId ?: return null
@@ -155,6 +199,9 @@ internal fun CitationStyleSession(context: Context, session: Session?, active: B
             else vm.leave()
         }
     }
+    LaunchedEffect(state.failedWarmup, session?.debugCitationStyleId, active) {
+        if (active && state.failedWarmup != null && state.failedWarmup == session?.debugCitationStyleId) onStyleChange(null)
+    }
 }
 
 @Composable
@@ -162,6 +209,8 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
     val vm = controller(context)
     val state by vm.state.collectAsState()
     var expanded by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf<StyleChoice?>(null) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importStyle) }
     val selected = state.choices.firstOrNull { it.id == session?.debugCitationStyleId }?.title ?: "APA 7 (built-in)"
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text("Citation style", style = MaterialTheme.typography.labelLarge)
@@ -170,12 +219,21 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 state.choices.forEach { choice ->
                     DropdownMenuItem(text = {
-                        Column { Text(choice.title); choice.disabledReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) } }
-                    }, enabled = choice.disabledReason == null, onClick = {
+                        Column {
+                            Text(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "")
+                            (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }, trailingIcon = if (choice.source == StyleSource.PRIVATE) ({
+                        TextButton(enabled = !state.importing, onClick = { expanded = false; removing = choice }) { Text("Remove") }
+                    }) else null, enabled = choice.disabledReason == null && choice.id !in state.failedIds && !state.importing, onClick = {
                         expanded = false
                         onStyleChange(choice.id)
                     })
                 }
+                DropdownMenuItem(text = { Text("Import style (.csl)") }, enabled = !state.importing, onClick = {
+                    expanded = false
+                    try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { }
+                })
             }
         }
         if (state.preparing) Row {
@@ -183,7 +241,18 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             TextButton(onClick = { if (onStyleChange(null)) vm.cancel() }) { Text("Cancel") }
         }
         if (state.message.isNotEmpty()) Text(state.message, style = MaterialTheme.typography.bodySmall)
-        }
+    }
+    removing?.let { choice ->
+        AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove imported style?") },
+            text = { Text("Remove ${choice.title} from this device?") },
+            confirmButton = { TextButton(onClick = {
+                removing = null
+                if (session?.debugCitationStyleId != choice.id || onStyleChange(null)) {
+                    if (session?.debugCitationStyleId == choice.id) vm.cancel()
+                    vm.removeStyle(choice)
+                }
+            }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })
+    }
 }
 
 internal fun citationInsertionNote(fallback: Boolean, rendered: Boolean): String = when {
