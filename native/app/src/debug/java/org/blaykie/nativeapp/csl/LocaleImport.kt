@@ -67,3 +67,6 @@ internal class LocaleImportStore(private val directory: File, private val replac
         return file.isFile && file.delete()
     }
 }
+
+internal fun languageAfterRemoval(selected: String, removed: String): String =
+    if (selected.equals(removed, ignoreCase = true)) "en-US" else selected

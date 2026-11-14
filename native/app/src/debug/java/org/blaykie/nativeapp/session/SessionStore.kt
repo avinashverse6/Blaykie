@@ -15,7 +15,7 @@ import org.blaykie.nativeapp.docx.CitationItem
     val page: String = "", val prefix: String = "", val previewText: String? = null,
 )
 @Serializable data class Draft(val block: Int, val text: String)
-@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val debugCitationStyleId: String? = null)
+@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val debugCitationStyleId: String? = null, val debugCitationLanguage: String = "en-US")
 sealed class SessionRead {
     data class Ready(val session: Session, val project: DocxProject) : SessionRead()
     object Missing : SessionRead()
