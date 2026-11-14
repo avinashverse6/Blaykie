@@ -321,8 +321,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
     val saveCitationStyle: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
-    val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveCitationLanguage)
+    val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag, debugCitationLanguageExplicit = true)) } ?: false }
+    val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
+    CitationStyleSession(context, session, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
     if (loading) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return

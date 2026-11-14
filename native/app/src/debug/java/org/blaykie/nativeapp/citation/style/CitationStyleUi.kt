@@ -30,7 +30,6 @@ import org.blaykie.nativeapp.csl.StyleImportFailure
 import org.blaykie.nativeapp.csl.LocaleImportFailure
 import org.blaykie.nativeapp.csl.LocaleImportStore
 import org.blaykie.nativeapp.csl.LocaleMetadata
-import org.blaykie.nativeapp.csl.languageAfterRemoval
 import org.blaykie.nativeapp.csl.StyleSource
 import org.blaykie.nativeapp.csl.styleSelectionId
 import org.blaykie.nativeapp.csl.StylePreview
@@ -43,6 +42,8 @@ import org.blaykie.nativeapp.csl.RealPreviewClock
 import org.blaykie.nativeapp.csl.runStylePreview
 import org.blaykie.nativeapp.csl.previewFeedback
 import org.blaykie.nativeapp.csl.styleChoices
+import org.blaykie.nativeapp.csl.resolveStyleLanguage
+import org.blaykie.nativeapp.csl.styleLanguageSummary
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
 import org.blaykie.nativeapp.citation.processor.CitationCluster
@@ -54,7 +55,7 @@ private data class UiState(val choices: List<StyleChoice> = styleChoices(emptyLi
     val ready: Boolean = false, val message: String = "", val failedStyle: String? = null,
     val failedIds: Set<String> = emptySet(), val importing: Boolean = false, val failedWarmup: String? = null,
     val preview: StylePreview? = null, val previewing: Boolean = false,
-    val locales: List<LocaleMetadata> = emptyList(), val failedLanguage: String? = null)
+    val locales: List<LocaleMetadata> = emptyList(), val failedLanguage: String? = null, val requestedLanguage: String? = null)
 
 /** Retained by the activity's ViewModelStore, but holds only application context. */
 private class StyleController(context: Context) : ViewModel() {
@@ -64,25 +65,29 @@ private class StyleController(context: Context) : ViewModel() {
     private var key: String? = null
     private var selected: String? = null
     private var selectedLanguage: String = "en-US"
+    private var selectedExplicit = false
+    private val blockedLanguages = mutableSetOf<String>()
     private var host: CslWebViewHost? = null
     private var job: Job? = null
     private var previewJob: Job? = null
     private var generation = 0
 
-    fun activate(sessionKey: String, styleId: String?, language: String = "en-US", force: Boolean = false) {
-        if (!force && key == sessionKey && selected == styleId && selectedLanguage == language) return
+    fun activate(sessionKey: String, styleId: String?, language: String = "en-US", explicit: Boolean = false, force: Boolean = false) {
+        if (!force && key == sessionKey && selected == styleId && selectedLanguage == language && selectedExplicit == explicit) return
         val fallbackMessage = if (language.equals("en-US", true) && state.value.failedLanguage != null) state.value.message else ""
         val changedSession = key != sessionKey
+        if (changedSession || selected != styleId || selectedExplicit != explicit) blockedLanguages.clear()
         if (changedSession) { leave(); key = sessionKey; host = CslWebViewHost(app) }
         else { generation++; host?.cancel(); job?.cancel() }
         selected = styleId
         selectedLanguage = language
+        selectedExplicit = explicit
         val token = ++generation
         if (styleId == null && !changedSession && state.value.failedStyle != null) {
             state.value = state.value.copy(preparing = false, ready = false)
             return
         }
-        state.value = state.value.copy(preparing = styleId != null, ready = false, message = fallbackMessage, failedStyle = null, failedWarmup = null, failedLanguage = null)
+        state.value = state.value.copy(preparing = styleId != null, ready = false, message = fallbackMessage, failedStyle = null, failedWarmup = null, failedLanguage = null, requestedLanguage = null)
         job = scope.launch {
             try {
                 val choices = withContext(Dispatchers.IO) {
@@ -92,19 +97,25 @@ private class StyleController(context: Context) : ViewModel() {
                 val locales = withContext(Dispatchers.IO) { LocaleImportStore(File(app.filesDir, "locales")).list() }
                 if (token != generation) return@launch
                 state.value = state.value.copy(choices = choices, locales = locales)
+                val option = choices.singleOrNull { it.id == styleId && it.disabledReason == null }
+                val resolved = resolveStyleLanguage(option, language, explicit, locales, blockedLanguages)
+                if (!explicit && resolved.tag != language) {
+                    state.value = state.value.copy(preparing = styleId != null, requestedLanguage = resolved.tag)
+                    return@launch
+                }
                 if (!language.equals("en-US", true) && locales.none { it.tag.equals(language, true) }) {
                     state.value = state.value.copy(preparing = false, failedLanguage = language, message = "Language file unavailable; using English (US).")
                     return@launch
                 }
                 if (styleId == null) return@launch
-                val option = choices.singleOrNull { it.id == styleId && it.disabledReason == null }
-                    ?: throw IllegalArgumentException("This citation style is unavailable or unsupported.")
+                if (option == null) throw IllegalArgumentException("This citation style is unavailable or unsupported.")
                 var result = requireNotNull(host).warmUp(requireNotNull(option.id), language)
                 if (token != generation) return@launch
                 if (result.isFailure && !language.equals("en-US", true)) {
                     result = requireNotNull(host).warmUp(requireNotNull(option.id), "en-US")
                     if (token != generation) return@launch
                     if (result.isSuccess) {
+                        if (!explicit) blockedLanguages.add(language.lowercase())
                         state.value = state.value.copy(preparing = false, ready = false, failedLanguage = language,
                             message = "Language could not be loaded; using English (US).")
                         return@launch
@@ -168,7 +179,7 @@ private class StyleController(context: Context) : ViewModel() {
                 val feedback = previewFeedback(PreviewFeedback(selected, state.value.failedIds, state.value.message), id, outcome)
                 state.value = state.value.copy(importing = false, previewing = false, failedIds = feedback.failed, message = feedback.message,
                     preview = (outcome as? PreviewOutcome.Success)?.preview)
-                if (outcome is PreviewOutcome.Success && selected == id) key?.let { activate(it, id, selectedLanguage, force = true) }
+                if (outcome is PreviewOutcome.Success && selected == id) key?.let { activate(it, id, selectedLanguage, selectedExplicit, force = true) }
 
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
@@ -188,7 +199,8 @@ private class StyleController(context: Context) : ViewModel() {
                     imported to store.list()
                 }
                 state.value = state.value.copy(importing = false, locales = locales, message = "Imported language ${imported.tag}.")
-                if (selectedLanguage.equals(imported.tag, true)) key?.let { activate(it, selected, selectedLanguage, force = true) }
+                blockedLanguages.remove(imported.tag.lowercase())
+                key?.let { activate(it, selected, selectedLanguage, selectedExplicit, force = true) }
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 state.value = state.value.copy(importing = false, message = if (e is LocaleImportFailure) e.message.orEmpty() else "Could not import the language file.")
@@ -197,7 +209,8 @@ private class StyleController(context: Context) : ViewModel() {
     }
     fun removeLocale(locale: LocaleMetadata) {
         if (state.value.importing) return
-        state.value = state.value.copy(importing = true)
+        if (selectedLanguage.equals(locale.tag, true)) host?.cancel()
+        state.value = state.value.copy(importing = true, ready = if (selectedLanguage.equals(locale.tag, true)) false else state.value.ready)
         scope.launch {
             try {
                 val locales = withContext(Dispatchers.IO) {
@@ -206,6 +219,7 @@ private class StyleController(context: Context) : ViewModel() {
                     store.list()
                 }
                 state.value = state.value.copy(importing = false, locales = locales, message = "Imported language removed.")
+                key?.let { activate(it, selected, selectedLanguage, selectedExplicit, force = true) }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported language.") }
         }
@@ -251,7 +265,7 @@ private class StyleController(context: Context) : ViewModel() {
     }
     fun leave() {
         generation++; job?.cancel(); job = null; host?.destroy(); host = null
-        key = null; selected = null; selectedLanguage = "en-US"; state.value = UiState()
+        key = null; selected = null; selectedLanguage = "en-US"; selectedExplicit = false; blockedLanguages.clear(); state.value = UiState()
     }
     override fun onCleared() { leave(); scope.cancel() }
     class Factory(private val context: Context) : ViewModelProvider.Factory {
@@ -285,17 +299,20 @@ internal suspend fun renderCitationPreview(context: Context, session: Session, s
 }
 
 @Composable
-internal fun CitationStyleSession(context: Context, session: Session?, active: Boolean, loaded: Boolean, onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean) {
+internal fun CitationStyleSession(context: Context, session: Session?, active: Boolean, loaded: Boolean, onStyleChange: (String?) -> Boolean, onAutoLanguageChange: (String) -> Boolean) {
     val vm = controller(context)
     val state by vm.state.collectAsState()
-    LaunchedEffect(loaded, active, session?.sourceName, session?.debugCitationStyleId, session?.debugCitationLanguage) {
+    LaunchedEffect(loaded, active, session?.sourceName, session?.debugCitationStyleId, session?.debugCitationLanguage, session?.debugCitationLanguageExplicit) {
         if (loaded) {
-            if (active && session != null) vm.activate(session.sourceName, session.debugCitationStyleId, session.debugCitationLanguage)
+            if (active && session != null) vm.activate(session.sourceName, session.debugCitationStyleId, session.debugCitationLanguage, session.debugCitationLanguageExplicit)
             else vm.leave()
         }
     }
+    LaunchedEffect(state.requestedLanguage, session?.debugCitationLanguage, active) {
+        if (active && state.requestedLanguage != null && state.requestedLanguage != session?.debugCitationLanguage) onAutoLanguageChange(state.requestedLanguage!!)
+    }
     LaunchedEffect(state.failedLanguage, session?.debugCitationLanguage, active) {
-        if (active && state.failedLanguage != null && state.failedLanguage == session?.debugCitationLanguage) onLanguageChange("en-US")
+        if (active && state.failedLanguage != null && state.failedLanguage == session?.debugCitationLanguage) onAutoLanguageChange("en-US")
     }
     LaunchedEffect(state.failedWarmup, session?.debugCitationStyleId, active) {
         if (active && state.failedWarmup != null && state.failedWarmup == session?.debugCitationStyleId) onStyleChange(null)
@@ -316,13 +333,17 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text("Citation style", style = MaterialTheme.typography.labelLarge)
         Box {
-            TextButton(onClick = { expanded = true }) { Text(selected) }
+            TextButton(onClick = { expanded = true }) { Text("$selected · ${styleLanguageSummary(session?.debugCitationStyleId, session?.debugCitationLanguage ?: "en-US")}") }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 state.choices.forEach { choice ->
                     DropdownMenuItem(text = {
                         Column {
                             Text(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "")
                             if (choice.dependent) Text(DEPENDENT_STYLE_NOTE, style = MaterialTheme.typography.bodySmall)
+                            val resolution = resolveStyleLanguage(choice, session?.debugCitationLanguage ?: "en-US", session?.debugCitationLanguageExplicit ?: false, state.locales)
+                            val shownLanguage = if (choice.id == session?.debugCitationStyleId) session?.debugCitationLanguage ?: "en-US" else resolution.tag
+                            Text(styleLanguageSummary(choice.id, shownLanguage), style = MaterialTheme.typography.bodySmall)
+                            resolution.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         }
                     }, trailingIcon = if (choice.source == StyleSource.PRIVATE) ({
@@ -384,9 +405,7 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             text = { Text("Remove ${locale.tag} from this device?") },
             confirmButton = { TextButton(onClick = {
                 removingLocale = null
-                val selectedLanguage = session?.debugCitationLanguage ?: "en-US"
-                val replacement = languageAfterRemoval(selectedLanguage, locale.tag)
-                if (replacement == selectedLanguage || onLanguageChange(replacement)) vm.removeLocale(locale)
+                vm.removeLocale(locale)
             }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removingLocale = null }) { Text("Cancel") } })
     }
     removing?.let { choice ->
