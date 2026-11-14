@@ -81,7 +81,12 @@ with zipfile.ZipFile(apk) as z:
     related = [c for c in all_classes if c.startswith(('Lorg/blaykie/nativeapp/csl/', 'Lorg/blaykie/nativeapp/citation/style/', 'Lorg/blaykie/nativeapp/citation/processor/'))]
 permissions, exported, components = manifest(apk)
 base_permissions, base_exported, _ = manifest(baseline)
-assert permissions == base_permissions == {'android.permission.INTERNET'}, permissions
+notice('Release assets', assets)
+notice('Release permissions', sorted(permissions))
+notice('Baseline permissions', sorted(base_permissions))
+notice('Release CSL classes', related)
+print('::notice::Release APK: %d bytes; v1.0.1 rebuilt unsigned APK: %d bytes' % (os.path.getsize(apk), os.path.getsize(baseline)))
+assert permissions == base_permissions == {'android.permission.INTERNET'}, (permissions, base_permissions)
 assert exported == base_exported, (exported, base_exported)
 assert not any('spike' in (c['name'] or '').lower() for c in components), components
 print('Release APK assets:', *assets, sep='\n')
