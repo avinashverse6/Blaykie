@@ -68,6 +68,10 @@ jobs:
           if [ "$status" -eq 0 ]; then
             python3 - <<'PYCODE'
           import base64, glob, zlib, xml.etree.ElementTree as ET
+          for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*CslExportSamplesTest.xml'):
+              text = ET.parse(path).getroot().findtext('system-out', '')
+              for line in text.splitlines():
+                  if line.startswith('CSL_SAMPLE_XML '): print('::notice::' + line)
           for path in glob.glob('app/build/test-results/testDebugUnitTest/TEST-*CslSpikeTest.xml'):
               root = ET.parse(path).getroot()
               text = root.findtext('system-out', '')

@@ -92,6 +92,9 @@ class CslExportSamplesTest {
             assertEquals(1, prepareCslExport(lp, legacy, "match", false, style))
             for ((input, file) in listOf(plain to csl, plain to builtin, legacySource to legacy)) {
                 compareParts(input, file)
+                val xmlBytes = ZipFile(file).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml")).use { it.readBytes() } }
+                val compressed = java.io.ByteArrayOutputStream().also { buffer -> java.util.zip.DeflaterOutputStream(buffer).use { it.write(xmlBytes) } }.toByteArray()
+                println("CSL_SAMPLE_XML ${file.name} ${java.util.Base64.getEncoder().encodeToString(compressed)}")
                 val reopened = DocxProject(file)
                 val text = (0 until reopened.blockCount).joinToString(" ") { reopened.blockText(it) }
                 assertTrue(reopened.blockText(0).contains("(Example, 2020a)"))
