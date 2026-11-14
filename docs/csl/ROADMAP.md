@@ -26,7 +26,7 @@
 
 Done: style registry; processor interface and built-in adapter; session-scoped WebView host with self-test; item converter A (see docs/csl/COMPARISON.md); style picker and session saving; CSL citation insertion; bibliography as structured rich text; export through CSL with explicit fallback; sample-docx-csl CI artifact; B2-1 debug style import, validation, private storage and removal (phone verification pending).
 
-B2-2 partial: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug. Non-English dependent locale handling and full preview failure-message tests remain outstanding; B2-2 is not complete.
+B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug; timeout, failure and cancellation are tested without changing the active session. The dependent style's own language setting is deferred to B2-3. Phone verification remains outstanding.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
