@@ -31,7 +31,7 @@ internal enum class ExportPhase { IDLE, PREPARING, FALLBACK, CHOOSE, WAITING, WR
 internal data class ExportState(
     val phase: ExportPhase = ExportPhase.IDLE, val line: String = "match", val name: String = "",
     val message: String = "", val needsKey: Boolean = false, val omitted: Int = 0,
-    val shareFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0,
+    val shareFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0, val languageSummary: String = "",
 ) { override fun toString() = "ExportState(redacted)" }
 private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean, val verifiedCslFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0)
 internal class ExportController(private val context: Context, private val sessions: SessionStore, private val accounts: AccountStore) : ViewModel() {
@@ -46,7 +46,7 @@ internal class ExportController(private val context: Context, private val sessio
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val line = mutable.value.line
-        mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), message = "Preparing export…")
+        mutable.value = ExportState(phase = ExportPhase.PREPARING, line = line, name = exportName(session.fileName), languageSummary = if (cslSelected) "" else org.blaykie.nativeapp.csl.styleLanguageSummary(null, "en-US"), message = "Preparing export…")
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 var stage = FailureStage.PRIVATE
@@ -89,7 +89,7 @@ internal class ExportController(private val context: Context, private val sessio
                         check(!cancelled) { "Export cancelled." }
                         val title = requireNotNull(csl).title
                         prepared = ready.copy(verifiedCslFile = file, styleTitle = title, legacyCount = legacyCount)
-                        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = title, legacyCount = legacyCount, message = "Choose where to save the document.")
+                        mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = title, languageSummary = org.blaykie.nativeapp.csl.styleLanguageSummary(session.debugCitationStyleId, csl.language), legacyCount = legacyCount, message = "Choose where to save the document.")
                     } catch (e: Exception) {
                         mutable.value = preparationFailed(mutable.value)
                     }

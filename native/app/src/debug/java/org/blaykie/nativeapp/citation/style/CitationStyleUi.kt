@@ -257,7 +257,7 @@ private class StyleController(context: Context) : ViewModel() {
                 return web.bibliography(items, clusters).getOrThrow()
             }
         }
-        return ExportCslStyle(choice.title, processor)
+        return ExportCslStyle(choice.title, processor, selectedLanguage)
     }
     fun cancel() {
         generation++; host?.cancel(); job?.cancel(); selected = null
@@ -358,6 +358,10 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                     try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
                 })
             }
+        }
+        val currentChoice = state.choices.firstOrNull { it.id == session?.debugCitationStyleId }
+        resolveStyleLanguage(currentChoice, session?.debugCitationLanguage ?: "en-US", session?.debugCitationLanguageExplicit ?: false, state.locales).note?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall)
         }
         Text("Citation language", style = MaterialTheme.typography.labelLarge)
         Box {

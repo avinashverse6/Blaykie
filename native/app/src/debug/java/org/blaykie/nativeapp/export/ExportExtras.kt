@@ -7,7 +7,7 @@ import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.exportCslStyle
 
-internal data class ExportCslStyle(val title: String, val processor: org.blaykie.nativeapp.citation.processor.CitationProcessor)
+internal data class ExportCslStyle(val title: String, val processor: org.blaykie.nativeapp.citation.processor.CitationProcessor, val language: String = "en-US")
 
 /** Prepare and reopen privately; caller must not offer a destination unless this succeeds. */
 internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?): Int {
@@ -35,7 +35,7 @@ internal fun preparationFailed(state: ExportState): ExportState = state.copy(
 )
 internal fun chooseBuiltIn(state: ExportState, omitted: Int): ExportState {
     require(state.phase == ExportPhase.FALLBACK)
-    return state.copy(phase = ExportPhase.CHOOSE, omitted = omitted, styleTitle = "", legacyCount = 0, message = "Choose where to save the document.")
+    return state.copy(phase = ExportPhase.CHOOSE, omitted = omitted, styleTitle = "", languageSummary = org.blaykie.nativeapp.csl.styleLanguageSummary(null, "en-US"), legacyCount = 0, message = "Choose where to save the document.")
 }
 internal fun cancelPreparation(state: ExportState): ExportState {
     require(state.phase == ExportPhase.FALLBACK)
