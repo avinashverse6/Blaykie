@@ -17,7 +17,7 @@ internal class LocaleImportStore(private val directory: File, private val replac
         private val tagPattern = Regex("[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*")
         fun normalize(tag: String): String {
             require(tagPattern.matches(tag)) { "Invalid language tag" }
-            return Locale.forLanguageTag(tag).toLanguageTag().also { require(it != "und") }
+            return Locale.forLanguageTag(tag).toLanguageTag().also { require(it != "und" && it.equals(tag, ignoreCase = true)) }
         }
         fun nameFor(tag: String): String = MessageDigest.getInstance("SHA-256").digest(normalize(tag).lowercase(Locale.ROOT).toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 255) } + ".xml"
