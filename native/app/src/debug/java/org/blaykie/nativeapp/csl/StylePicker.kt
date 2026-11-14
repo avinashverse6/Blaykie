@@ -1,6 +1,6 @@
 package org.blaykie.nativeapp.csl
 
-internal data class StyleChoice(val id: String?, val title: String, val disabledReason: String? = null, val source: StyleSource? = null, val asset: String? = null)
+internal data class StyleChoice(val id: String?, val title: String, val disabledReason: String? = null, val source: StyleSource? = null, val asset: String? = null, val originalId: String? = null)
 
 /** Only independent, in-text author-date styles can be previewed in this step. */
 internal fun styleChoices(styles: List<StyleMetadata>): List<StyleChoice> {
@@ -14,6 +14,6 @@ internal fun styleChoices(styles: List<StyleMetadata>): List<StyleChoice> {
             style.styleClass != "in-text" || style.citationFormat != "author-date" -> "Only independent author-date styles are supported."
             else -> null
         }
-        StyleChoice(styleSelectionId(style), style.title, reason, style.source, style.asset)
+        StyleChoice(styleSelectionId(style), style.title, reason, style.source, style.asset, style.id)
     }
 }

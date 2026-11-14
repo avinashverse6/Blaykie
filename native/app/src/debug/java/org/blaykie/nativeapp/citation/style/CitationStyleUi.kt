@@ -101,6 +101,7 @@ private class StyleController(context: Context) : ViewModel() {
             "${narrativeAuthor(response.author, response.andTerm, authors.size, authors.filter { it.group }.map { it.last })} ${response.suppress}"
         } else response.cluster
     }
+    fun pickerError() { state.value = state.value.copy(message = "Could not open the file picker.") }
     fun importStyle(uri: Uri) {
         if (state.value.importing) return
         state.value = state.value.copy(importing = true, message = "Importing style…")
@@ -130,7 +131,7 @@ private class StyleController(context: Context) : ViewModel() {
                     check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
                     styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")))
                 }
-                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - choice.id, message = "Imported style removed.")
+                state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - requireNotNull(choice.id), message = "Imported style removed.")
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported style.") }
         }
@@ -177,7 +178,7 @@ internal fun citationOptionRestriction(context: Context, session: Session?, sear
     val styleId = session?.debugCitationStyleId ?: return null
     val choice = controllerFor(context).state.value.choices.firstOrNull { it.id == styleId }
     if (choice?.disabledReason != null) return choice.disabledReason
-    return citationRestriction(styleId, search.style, search.selectedItems().size, search.page, search.prefix)
+    return citationRestriction(choice?.originalId ?: styleId, search.style, search.selectedItems().size, search.page, search.prefix)
 }
 internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>): String? {
     val id = session.debugCitationStyleId ?: return null
@@ -232,7 +233,7 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                 }
                 DropdownMenuItem(text = { Text("Import style (.csl)") }, enabled = !state.importing, onClick = {
                     expanded = false
-                    try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { }
+                    try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
                 })
             }
         }
