@@ -34,7 +34,9 @@ B3-1a: the duplicated export controller and screen are unified in main behind a 
 
 B3-1b-1: the optional runtime, its feature-aware document/session adapters and the two verified processor assets are in `src/csl`, included in debug and in release only with `-PcslInRelease=true` (default false). Developer spikes, comparison helper and bundled APA style stay debug-only; the enabled release registry has no bundled style. The default release and its isolation check remain unchanged. The debug tests, unchanged default-release isolation check, and informational enabled-release compile and unit tests passed: https://github.com/avinashverse6/Blaykie/actions/runs/43577508356. The unused comparison converter remains debug-only.
 
-B3-1b remains **incomplete**: the persisted off-by-default setting is not exposed or connected to all host, insertion and export paths; a stricter release isolation check must be made separately when release integration is ready. The informational flag-on build is not a releasable build. B3-2 licenses must be completed before any release.
+B3-1b-2a: the custom-styles switch is exposed in Settings and guards document, preview, import, insertion and export paths. Debug defaults ON and the flag-on release defaults OFF through build-config values; saved settings override those defaults. Switching OFF closes tracked hosts and resets the session to built-in APA. JVM gate and settings tests ran for both variants, the existing debug/golden tests passed, and the default-release isolation check passed unchanged: https://github.com/avinashverse6/Blaykie/actions/runs/43589261047. Debug phone verification remains outstanding.
+
+B3-1b remains **incomplete**: the separately reviewed stricter release isolation check is still required. `cslInRelease` remains false and the informational flag-on build is not a releasable build. B3-2 licenses must be completed before any release.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
@@ -48,7 +50,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 - B2-3 locale (language) file import.
 
-- B3-1 remaining: wire the off-by-default runtime switch and picker into Settings, guard all optional host/insertion/export paths, and update the isolation check in ONE separately reviewed commit. B3-1a unified the export files; B3-1b-1 added a default-off build flag without changing the isolation check.
+- B3-1 remaining: perform phone verification and update the isolation check in ONE separately reviewed commit before enabling the release build flag. B3-1a unified export files; B3-1b-1 added the default-off build flag; B3-1b-2a wired the runtime switch without changing the isolation check.
 
 - B3-2 licenses: CC BY-SA 3.0 legal text (owner uploads it), SOURCES.md, THIRD_PARTY_NOTICES.md, About credit for the CSL project and citeproc-js under its AGPL option.
 
