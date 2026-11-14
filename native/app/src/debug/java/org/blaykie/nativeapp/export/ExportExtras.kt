@@ -25,8 +25,11 @@ internal suspend fun prepareCslExport(project: DocxProject, file: File, line: St
     }
 }
 
-internal fun beginExport(context: Context, controller: ExportController, session: Session) =
-    controller.begin(session, citationUsesCsl(session), exportCslStyle(context, session))
+internal fun beginExport(context: Context, controller: ExportController, session: Session) {
+    val style = exportCslStyle(context, session)
+    val selection = if (citationUsesCsl(session)) ProcessorSelection(style?.processor, style?.title.orEmpty(), style?.language.orEmpty()) else null
+    controller.begin(session, selection)
+}
 
 /** Explicit transitions keep a failed preparation from implicitly choosing a fallback. */
 internal fun preparationFailed(state: ExportState): ExportState = state.copy(
