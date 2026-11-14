@@ -32,6 +32,23 @@ class CslLocaleRhinoTest {
             assertTrue(madeUp.second, madeUp.second.contains("zothers"))
             assertTrue(madeUp.first, madeUp.first.contains("page"))
             assertNotEquals(english, madeUp)
+            val dependentXml = """<style xmlns="http://purl.org/net/xbiblio/csl" default-locale="xx-XX"><info><title>Child</title><id>test-child</id><link rel="independent-parent" href="test"/></info></style>"""
+            val independentXml = style.replace("class=\"in-text\"", "class=\"in-text\" default-locale=\"xx-XX\"")
+            val dependent = StyleRegistry.read("child.csl", dependentXml.byteInputStream(), StyleSource.PRIVATE)
+            val independent = StyleRegistry.read("parent.csl", independentXml.byteInputStream(), StyleSource.PRIVATE)
+            val noDefault = StyleRegistry.read("plain.csl", style.byteInputStream(), StyleSource.PRIVATE)
+            val locales = listOf(LocaleMetadata("xx-XX", "locale.xml"))
+            fun resolve(meta: StyleMetadata, explicit: Boolean = false, available: List<LocaleMetadata> = locales) =
+                resolveStyleLanguage(styleChoices(listOf(meta)).last(), "en-US", explicit, available)
+            val childLanguage = resolve(dependent)
+            assertEquals("xx-XX", childLanguage.tag)
+            assertTrue(render(childLanguage.tag).first.contains("zand"))
+            val missing = resolve(dependent, available = emptyList())
+            assertEquals("Language file xx-XX not imported; using English (US)", missing.note)
+            assertTrue(render(missing.tag).first.contains("and"))
+            assertTrue(render(resolve(dependent, explicit = true).tag).first.contains("and"))
+            assertTrue(render(resolve(independent).tag).first.contains("zand"))
+            assertTrue(render(resolve(noDefault).tag).first.contains("and"))
         } finally { Context.exit() }
     }
 }

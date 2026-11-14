@@ -27,6 +27,7 @@ class ExportFallbackTest {
         val fallback = chooseBuiltIn(failed, 0)
         assertEquals(ExportPhase.CHOOSE, fallback.phase)
         assertEquals("double", fallback.line)
+        assertEquals("Language: English (US)", fallback.languageSummary)
         assertFalse(cache.exists()) // selecting is not itself a write
         try { chooseBuiltIn(initial, 0); fail("fallback without failure") } catch (_: IllegalArgumentException) { }
     }

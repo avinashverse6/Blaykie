@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.csl
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import org.blaykie.nativeapp.session.Session
 import org.junit.Assert.*
 import org.junit.Test
@@ -28,5 +29,9 @@ class StyleLanguageTest {
         val prior = json.decodeFromString<Session>("""{"uri":"u","fileName":"f","sourceName":"s","debugCitationLanguage":"xx-XX"}""")
         assertFalse(old.debugCitationLanguageExplicit)
         assertTrue(prior.debugCitationLanguageExplicit)
+        val automatic = old.copy(debugCitationLanguage = "xx-XX", debugCitationLanguageExplicit = false)
+        assertEquals(automatic, json.decodeFromString<Session>(json.encodeToString(automatic)))
+        val explicitEnglish = old.copy(debugCitationLanguageExplicit = true)
+        assertEquals(explicitEnglish, json.decodeFromString<Session>(json.encodeToString(explicitEnglish)))
     }
 }
