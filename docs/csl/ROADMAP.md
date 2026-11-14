@@ -30,6 +30,8 @@ B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sampl
 
 B2-3b/B2-3c: debug-only locale import/removal, session language selection and persistence, style default-language selection for independent and dependent styles, English term fallback, picker/export language summaries, and JVM/Rhino tests are implemented. Explicit language selection overrides defaults; users can return to automatic. Built-in APA remains the default and uses English. Older sessions with a saved non-English language preserve it as explicit; older English selections cannot be distinguished from the former default. CI passed debug tests and unchanged release isolation: https://github.com/avinashverse6/Blaykie/actions/runs/43571755181. Phone verification remains pending; fictional test files are in docs/csl/phone-fixtures/.
 
+B3-1a: the duplicated export controller and screen are unified in main behind a neutral processor contract and variant-specific export hooks. Release uses the unchanged built-in writer and a no-op hook; optional preparation and presentation remain debug-only. Existing export tests, sample-document tests and the unchanged release-isolation check passed: https://github.com/avinashverse6/Blaykie/actions/runs/43574691834. Moving optional processing into release and any isolation-check changes remain out of scope for B3-1a.
+
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
 
@@ -42,7 +44,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 - B2-3 locale (language) file import.
 
-- B3-1 move engine, host and picker into release, picker under Settings, merge the duplicated export files, update the isolation check in ONE reviewed commit that the owner approves.
+- B3-1 remaining: move engine, host and picker into release, picker under Settings, and update the isolation check in ONE reviewed commit that the owner approves. B3-1a unified the export files without changing that check.
 
 - B3-2 licenses: CC BY-SA 3.0 legal text (owner uploads it), SOURCES.md, THIRD_PARTY_NOTICES.md, About credit for the CSL project and citeproc-js under its AGPL option.
 
@@ -52,10 +54,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 ## Known duplication
 
-- native/app/src/debug/java/org/blaykie/nativeapp/export/ExportController.kt
-- native/app/src/release/java/org/blaykie/nativeapp/export/ExportController.kt
-- native/app/src/debug/java/org/blaykie/nativeapp/export/ExportScreen.kt
-- native/app/src/release/java/org/blaykie/nativeapp/export/ExportScreen.kt
+The former debug/release copies of `export/ExportController.kt` and `export/ExportScreen.kt` are now single implementations under `src/main`. The neutral hook and processor contract also live in main; debug supplies optional preparation and UI, while release supplies a no-op hook and provider. Other variant-specific document and session code remains outside B3-1a.
 
 
 
