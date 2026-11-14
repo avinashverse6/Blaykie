@@ -9,6 +9,17 @@ class StyleRegistryTest {
         assertEquals(listOf(StyleMetadata("csl/apa.csl", "APA Style 7th edition", "http://www.zotero.org/styles/apa", "in-text", "author-date", false, StyleSource.BUNDLED)), styles)
     }
 
+    @Test fun emptyBundledInventoryStillLoadsPrivateStyles() {
+        val directory = java.nio.file.Files.createTempDirectory("private-styles").toFile()
+        try {
+            java.io.File(directory, "example.csl").writeText("""<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text"><info><title>Imported</title><id>example</id><category citation-format="author-date"/></info></style>""")
+            val styles = StyleRegistry.load({ error("No bundled asset should be opened") }, directory, bundledAssets = emptyList())
+            assertEquals(1, styles.size)
+            assertEquals(StyleSource.PRIVATE, styles.single().source)
+            assertEquals("example", styles.single().id)
+        } finally { directory.deleteRecursively() }
+    }
+
     @Test fun readsOtherMetadataWithoutHardCodedTitles() {
         val xml = """<style xmlns="http://purl.org/net/xbiblio/csl" class="note"><info><title>Example 2nd edition</title><id>example</id></info></style>"""
         val style = StyleRegistry.read("example.csl", xml.byteInputStream())

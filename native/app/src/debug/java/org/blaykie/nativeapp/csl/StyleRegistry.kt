@@ -18,8 +18,8 @@ internal object StyleRegistry {
     private const val CSL_NAMESPACE = "http://purl.org/net/xbiblio/csl"
 
     /** privateDirectory must be a directory under the application's private storage. */
-    fun load(open: (String) -> InputStream, privateDirectory: File? = null): List<StyleMetadata> {
-        val bundled = assets.map { asset -> open(asset).use { read(asset, it, StyleSource.BUNDLED) } }
+    fun load(open: (String) -> InputStream, privateDirectory: File? = null, bundledAssets: List<String> = assets): List<StyleMetadata> {
+        val bundled = bundledAssets.map { asset -> open(asset).use { read(asset, it, StyleSource.BUNDLED) } }
         val privateStyles = if (privateDirectory == null || !privateDirectory.exists()) emptyList() else {
             require(privateDirectory.isDirectory) { "Private style path is not a directory" }
             val dir = privateDirectory.canonicalFile
