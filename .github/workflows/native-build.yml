@@ -202,6 +202,19 @@ jobs:
           PYCODE
           fi
           exit "$status"
+      - name: Confirm runtime switch tests ran in release variant
+        working-directory: native
+        run: |
+          python3 - <<'PYCODE'
+          import glob, xml.etree.ElementTree as ET
+          for name in ['CustomStylesGateTest', 'SettingsTest']:
+              paths = glob.glob(f'app/build/test-results/testReleaseUnitTest/TEST-*{name}.xml')
+              assert len(paths) == 1, f'{name} release test report not found'
+              root = ET.parse(paths[0]).getroot()
+              assert int(root.get('tests', '0')) > 0 and int(root.get('failures', '0')) == 0 and int(root.get('errors', '0')) == 0, f'{name} failed'
+              print(f'{name}: {root.get("tests")} release tests passed')
+              print(f'::notice::{name}: {root.get("tests")} release tests passed')
+          PYCODE
       - name: Print experimental APK asset and class inventory (informational)
         if: always()
         working-directory: native
