@@ -36,7 +36,7 @@ class LocaleImportTest {
         val broken = LocaleImportStore(dir) { _, _ -> false }
         try { broken.import(first.byteInputStream()); fail("write accepted") } catch (_: IllegalStateException) { }
         assertEquals(replacement, file.readText()); assertTrue(dir.listFiles()!!.none { it.extension == "tmp" })
-        for (i in 1 until 10) store.import(xml("xx-X${i}").byteInputStream())
+        for (i in 1 until 10) store.import(xml("xx-${('A'.code + i).toChar()}Z").byteInputStream())
         reject(xml("fr-FR").toByteArray(), "10 imported")
         store.import(first.byteInputStream()); assertEquals(10, store.list().size)
         assertTrue(store.remove(name)); assertEquals(9, store.list().size)
