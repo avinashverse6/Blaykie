@@ -84,6 +84,19 @@ jobs:
           PYCODE
           fi
           exit "$status"
+      - name: Identify AndroidX permission contributor
+        working-directory: native
+        run: |
+          ./gradlew processReleaseMainManifest
+          python3 - <<'PYCODE'
+          p = 'app/build/outputs/logs/manifest-merger-release-report.txt'
+          lines = open(p).read().splitlines()
+          for i, line in enumerate(lines):
+              if 'DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION' in line:
+                  excerpt = '\n'.join(lines[i:i+12])
+                  print(excerpt)
+                  print('::notice::Manifest merger: ' + excerpt.replace('%', '%25').replace('\n', '%0A'))
+          PYCODE
       - name: Verify release isolation and compare APK sizes
         working-directory: native
         run: |
