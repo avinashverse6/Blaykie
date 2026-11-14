@@ -1,4 +1,9 @@
-import glob, hashlib, os, re, struct, subprocess, sys, zipfile
+import glob, hashlib, os, re, struct, subprocess, sys, traceback, zipfile
+
+def report_error(kind, value, tb):
+    print("::error::" + " | ".join(traceback.format_exception(kind, value, tb)).replace("\n", " ").replace("%", "%25"))
+    sys.__excepthook__(kind, value, tb)
+sys.excepthook = report_error
 
 apk, baseline, aapt = sys.argv[1:]
 expected_assets = {
