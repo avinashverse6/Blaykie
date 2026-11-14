@@ -322,6 +322,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     }
     val saveCitationStyle: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
     val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag, debugCitationLanguageExplicit = true)) } ?: false }
+    val useStyleLanguage: () -> Boolean = { session?.let { persist(it.copy(debugCitationLanguageExplicit = false)) } ?: false }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
     CitationStyleSession(context, session, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
     if (loading) {
@@ -374,7 +375,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
                 Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
-            CitationStyleRow(context, session, saveCitationStyle, saveCitationLanguage)
+            CitationStyleRow(context, session, saveCitationStyle, saveCitationLanguage, useStyleLanguage)
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))

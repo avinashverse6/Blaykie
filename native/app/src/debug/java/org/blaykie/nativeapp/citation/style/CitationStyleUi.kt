@@ -320,7 +320,7 @@ internal fun CitationStyleSession(context: Context, session: Session?, active: B
 }
 
 @Composable
-internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean) {
+internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean) {
     val vm = controller(context)
     val state by vm.state.collectAsState()
     var expanded by remember { mutableStateOf(false) }
@@ -369,6 +369,7 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                 Text(if (session?.debugCitationLanguage == null || session.debugCitationLanguage.equals("en-US", true)) "English (US), bundled" else session.debugCitationLanguage)
             }
             DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
+                DropdownMenuItem(text = { Text("Use style language (automatic)") }, enabled = !state.importing, onClick = { languageExpanded = false; onUseStyleLanguage() })
                 DropdownMenuItem(text = { Text("English (US), bundled") }, enabled = !state.importing, onClick = { languageExpanded = false; onLanguageChange("en-US") })
                 state.locales.forEach { locale ->
                     DropdownMenuItem(text = { Text(locale.tag) }, enabled = !state.importing,
