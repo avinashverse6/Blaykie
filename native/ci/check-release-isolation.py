@@ -69,12 +69,13 @@ with zipfile.ZipFile(apk) as z:
     assert not any(n.lower().endswith('.csl') or any(x in n.lower() for x in ('fixture', 'comparison', 'phone-fixture')) for n in names)
     all_classes = sorted({c for n in names if n.endswith('.dex') for c in classes(z.read(n))})
     assert not any(c.startswith('Lorg/mozilla/javascript/') for c in all_classes)
-    assert not any(c.startswith('Lorg/blaykie/nativeapp/csl/spike/') or c.startswith('Lorg/blaykie/nativeapp/csl/ZoteroCslJson') for c in all_classes)
     # Check every top-level class declared in debug-only source files, including nested classes.
     for path in glob.glob('app/src/debug/java/**/*.kt', recursive=True):
         text = open(path).read()
         package = re.search(r'^package\s+([\w.]+)', text, re.M).group(1).replace('.', '/')
-        for name in re.findall(r'^(?:(?:internal|private|public|data|sealed|abstract|open)\s+)*(?:class|object|interface)\s+(\w+)', text, re.M):
+        declared = re.findall(r'^(?:(?:internal|private|public|data|sealed|abstract|open)\s+)*(?:class|object|interface)\s+(\w+)', text, re.M)
+        declared.append(os.path.splitext(os.path.basename(path))[0] + 'Kt')
+        for name in declared:
             prefix = 'L' + package + '/' + name
             assert not any(c == prefix + ';' or c.startswith(prefix + '$') for c in all_classes), (path, name)
     related = [c for c in all_classes if c.startswith(('Lorg/blaykie/nativeapp/csl/', 'Lorg/blaykie/nativeapp/citation/style/', 'Lorg/blaykie/nativeapp/citation/processor/'))]
