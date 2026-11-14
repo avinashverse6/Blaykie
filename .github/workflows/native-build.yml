@@ -164,3 +164,79 @@ jobs:
           name: Blaykie-native-debug
           path: native/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  experimental-release:
+    name: Experimental optional-processor release (informational)
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Ensure Android platform
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35"
+          fi
+      - name: Compile optional release and run release unit tests
+        working-directory: native
+        run: |
+          set +e
+          ./gradlew -PcslInRelease=true assembleRelease testReleaseUnitTest > /tmp/experimental-release.log 2>&1
+          status=$?
+          cat /tmp/experimental-release.log
+          echo "Experimental release compile and tests exit status: $status"
+          if [ "$status" -ne 0 ]; then
+            python3 - <<'PYCODE'
+          import re
+          lines = open('/tmp/experimental-release.log').read().splitlines()
+          for line in [line for line in lines if re.search(r'(^e: |FAILED|Exception|Error|error:|What went wrong|failure)', line, re.I)][-40:]:
+              print('::warning::' + line.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PYCODE
+          fi
+          exit "$status"
+      - name: Print experimental APK asset and class inventory (informational)
+        if: always()
+        working-directory: native
+        run: |
+          python3 - <<'PYCODE'
+          import glob, struct, zipfile
+          try:
+              apks = glob.glob('app/build/outputs/apk/release/*.apk')
+              if not apks:
+                  print('Experimental release APK unavailable; inventory not produced.')
+              else:
+                  def dex_classes(data):
+                      strings_size, strings_off = struct.unpack_from('<II', data, 56)
+                      types_size, types_off = struct.unpack_from('<II', data, 64)
+                      classes_size, classes_off = struct.unpack_from('<II', data, 96)
+                      strings = []
+                      for i in range(strings_size):
+                          pos = struct.unpack_from('<I', data, strings_off + 4*i)[0]
+                          while data[pos] & 128: pos += 1
+                          pos += 1
+                          end = data.index(b'\0', pos)
+                          strings.append(data[pos:end].decode('utf-8', 'replace'))
+                      types = [strings[struct.unpack_from('<I', data, types_off + 4*i)[0]] for i in range(types_size)]
+                      return [types[struct.unpack_from('<I', data, classes_off + 32*i)[0]] for i in range(classes_size)]
+                  with zipfile.ZipFile(apks[0]) as z:
+                      assets = sorted(n for n in z.namelist() if n.startswith('assets/'))
+                      classes = sorted({c for n in z.namelist() if n.endswith('.dex') for c in dex_classes(z.read(n))
+                                        if 'org/blaykie/nativeapp/csl/' in c or 'org/blaykie/nativeapp/citation/style/' in c})
+                      print('Experimental release APK assets:')
+                      for asset in assets: print('  ' + asset)
+                      print('Experimental release citation classes:')
+                      for name in classes: print('  ' + name)
+                      if not classes: print('  (none)')
+                      print('::notice::Experimental release assets: ' + (', '.join(assets) if assets else '(none)'))
+                      print('::notice::Experimental citation classes: ' + (', '.join(classes) if classes else '(none)'))
+          except Exception as error:
+              print('Experimental inventory unavailable:', error)
+          PYCODE
