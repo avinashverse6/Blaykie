@@ -12,9 +12,9 @@ internal data class StyleMetadata(
     val parentId: String? = null, val defaultLocale: String? = null,
 )
 
-/** Debug-only inventory. This is not yet connected to a processor or a picker. */
+/** Debug builds include the test style; release builds use imported styles only. */
 internal object StyleRegistry {
-    private val assets = listOf("csl/apa.csl")
+    private val assets = if (org.blaykie.nativeapp.BuildConfig.DEBUG) listOf("csl/apa.csl") else emptyList()
     private const val CSL_NAMESPACE = "http://purl.org/net/xbiblio/csl"
 
     /** privateDirectory must be a directory under the application's private storage. */
