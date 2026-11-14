@@ -36,7 +36,7 @@ B3-1b-1: the optional runtime, its feature-aware document/session adapters and t
 
 B3-1b-2a: the custom-styles switch is exposed in Settings and guards document, preview, import, insertion and export paths. Debug defaults ON and the flag-on release defaults OFF through build-config values; saved settings override those defaults. Switching OFF closes tracked hosts and resets the session to built-in APA. JVM gate and settings tests ran for both variants, the existing debug/golden tests passed, and the default-release isolation check passed unchanged: https://github.com/avinashverse6/Blaykie/actions/runs/43589261047. Debug phone verification remains outstanding.
 
-B3-1b remains **incomplete**: the separately reviewed stricter release isolation check is still required. `cslInRelease` remains false and the informational flag-on build is not a releasable build. B3-2 licenses must be completed before any release.
+B3-1b-2b remains **blocked**: `cslInRelease` now defaults true, with the runtime switch default OFF in release. The new APK isolation check and release tests are in place, but CI fails the requested INTERNET-only assertion: both the rebuilt v1.0.1 APK and the current APK also request `io.github.avinashverse6.blaykie.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. This contradiction needs a decision before changing the check or manifest. Debug and flag-on release unit tests passed in https://github.com/avinashverse6/Blaykie/actions/runs/43593417217; release isolation is not green. Phone verification and B3-2 licenses remain required before release.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
@@ -50,7 +50,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 - B2-3 locale (language) file import.
 
-- B3-1 remaining: perform phone verification and update the isolation check in ONE separately reviewed commit before enabling the release build flag. B3-1a unified export files; B3-1b-1 added the default-off build flag; B3-1b-2a wired the runtime switch without changing the isolation check.
+- B3-1 remaining: resolve the v1.0.1 permission discrepancy, get the strengthened release isolation check green, and perform phone verification. The release build flag is now default-on, while the release runtime setting remains default-off.
 
 - B3-2 licenses: CC BY-SA 3.0 legal text (owner uploads it), SOURCES.md, THIRD_PARTY_NOTICES.md, About credit for the CSL project and citeproc-js under its AGPL option.
 
