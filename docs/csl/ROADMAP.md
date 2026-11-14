@@ -28,7 +28,7 @@ Done: style registry; processor interface and built-in adapter; session-scoped W
 
 B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug; timeout, failure and cancellation are tested without changing the active session. Dependent-style default-language rules remain deferred to B2-3c. Phone verification remains outstanding.
 
-B2-3b: debug-only locale import/removal, session language selection and persistence, selected-locale processing with English term fallback, and JVM/Rhino tests are implemented. Built-in APA remains the default and uses English. CI and phone verification of the latest changes remain pending; dependent-style default-language rules are not part of B2-3b.
+B2-3b: debug-only locale import/removal, session language selection and persistence, selected-locale processing with English term fallback, and JVM/Rhino tests are implemented. Built-in APA remains the default and uses English. CI passed debug tests and unchanged release isolation: https://github.com/avinashverse6/Blaykie/actions/runs/43570831195. Phone verification remains pending; dependent-style default-language rules are not part of B2-3b.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
