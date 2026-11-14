@@ -32,7 +32,9 @@ B2-3b/B2-3c: debug-only locale import/removal, session language selection and pe
 
 B3-1a: the duplicated export controller and screen are unified in main behind a neutral processor contract and variant-specific export hooks. Release uses the unchanged built-in writer and a no-op hook; optional preparation and presentation remain debug-only. Existing export tests, sample-document tests and the unchanged release-isolation check passed: https://github.com/avinashverse6/Blaykie/actions/runs/43574691834.
 
-B3-1b is **incomplete**. Preparatory work only: settings can persist an off-by-default flag (not yet exposed or connected), the optional processor provider can defer host construction behind a tested gate, and the debug registry can be supplied an empty bundled inventory. The production feature and its assets are still debug-only; no release behavior or isolation check was changed. The preparatory debug tests and existing isolation check passed: https://github.com/avinashverse6/Blaykie/actions/runs/43575843019. Still required: move the runtime, UI and verified assets; connect the persisted switch to every creation, insertion and export path; enforce no bundled release style; perform release unit tests; and make the separately reviewed stricter isolation-check commit. B3-2 licenses must be completed before any release.
+B3-1b-1: the optional runtime, its feature-aware document/session adapters and the two verified processor assets are in `src/csl`, included in debug and in release only with `-PcslInRelease=true` (default false). Developer spikes, comparison helper and bundled APA style stay debug-only; the enabled release registry has no bundled style. The default release and its isolation check remain unchanged. The debug tests and the informational enabled-release compile and unit tests passed: https://github.com/avinashverse6/Blaykie/actions/runs/43576813115. The unused comparison converter was subsequently returned to debug-only; its CI recheck is pending.
+
+B3-1b remains **incomplete**: the persisted off-by-default setting is not exposed or connected to all host, insertion and export paths; a stricter release isolation check must be made separately when release integration is ready. The informational flag-on build is not a releasable build. B3-2 licenses must be completed before any release.
 
 Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
 
@@ -46,7 +48,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 - B2-3 locale (language) file import.
 
-- B3-1 remaining: move engine, host and picker into release, picker under Settings, and update the isolation check in ONE reviewed commit that the owner approves. B3-1a unified the export files without changing that check.
+- B3-1 remaining: wire the off-by-default runtime switch and picker into Settings, guard all optional host/insertion/export paths, and update the isolation check in ONE separately reviewed commit. B3-1a unified the export files; B3-1b-1 added a default-off build flag without changing the isolation check.
 
 - B3-2 licenses: CC BY-SA 3.0 legal text (owner uploads it), SOURCES.md, THIRD_PARTY_NOTICES.md, About credit for the CSL project and citeproc-js under its AGPL option.
 
@@ -56,7 +58,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 ## Known duplication
 
-The former debug/release copies of `export/ExportController.kt` and `export/ExportScreen.kt` are now single implementations under `src/main`. The neutral hook and processor contract also live in main; debug supplies optional preparation and UI, while release supplies a no-op hook and provider. Other variant-specific document and session code remains outside B3-1a.
+The former debug/release copies of `export/ExportController.kt` and `export/ExportScreen.kt` are now single implementations under `src/main`. The neutral hook and processor contract also live in main; `src/csl` supplies optional preparation and UI, while default release supplies a no-op hook and provider. Feature-aware and default-release document, session and activity adapters remain variant-specific.
 
 
 
