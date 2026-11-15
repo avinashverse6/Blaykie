@@ -16,9 +16,6 @@ internal object AboutInfo {
     const val appName = "Blaykie"
     const val license = "Licensed under AGPL-3.0-or-later"
     const val source = "https://github.com/avinashverse6/Blaykie"
-    const val cslProject = "https://citationstyles.org/"
-    const val cslLicense = "https://creativecommons.org/licenses/by-sa/3.0/"
-    const val citeprocProject = "https://github.com/Juris-M/citeproc-js"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
     const val licenseAsset = "licenses/AGPL-3.0"
     const val apacheLicenseAsset = "licenses/Apache-2.0"
@@ -53,15 +50,7 @@ internal fun AboutScreen(onBack: () -> Unit) {
             Text("The app sends network requests only to api.zotero.org. Links open in your browser.", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { runCatching { uri.openUri(AboutInfo.source) } }) { Text("Source: ${AboutInfo.source}") }
             HorizontalDivider()
-            if (BuildConfig.CSL_RUNTIME_INCLUDED) {
-                Text("Citation styles", style = MaterialTheme.typography.titleMedium)
-                Text("English locale data by the Citation Style Language project and its contributors; CC BY-SA 3.0.", style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = { runCatching { uri.openUri(AboutInfo.cslProject) } }) { Text(AboutInfo.cslProject, style = MaterialTheme.typography.bodyMedium) }
-                TextButton(onClick = { runCatching { uri.openUri(AboutInfo.cslLicense) } }) { Text("English locale: CC BY-SA 3.0", style = MaterialTheme.typography.bodyMedium) }
-                Text("citeproc-js by Frank Bennett, used under its AGPL-3.0-or-later option.", style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = { runCatching { uri.openUri(AboutInfo.citeprocProject) } }) { Text(AboutInfo.citeprocProject, style = MaterialTheme.typography.bodyMedium) }
-                HorizontalDivider()
-            }
+            AboutExtraCredits()
             Text("Third-party libraries and artwork", style = MaterialTheme.typography.titleMedium)
             AboutInfo.libraries.forEach { library ->
                 Text("${library.name} — ${library.license}", style = MaterialTheme.typography.bodyMedium)
