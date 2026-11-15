@@ -33,11 +33,13 @@ android {
     buildTypes {
         getByName("debug") {
             buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "true")
+            buildConfigField("boolean", "CSL_RUNTIME_INCLUDED", "true")
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Blaykie (debug)"
         }
         getByName("release") {
             buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "false")
+            buildConfigField("boolean", "CSL_RUNTIME_INCLUDED", cslInRelease.toString())
             isMinifyEnabled = false
             isShrinkResources = false
             val releaseSigning = signingConfigs.getByName("release")
