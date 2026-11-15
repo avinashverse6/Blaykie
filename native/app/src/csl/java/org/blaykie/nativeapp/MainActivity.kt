@@ -354,29 +354,29 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     when (screen) {
         Screen.HOME -> Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Spacer(Modifier.height(24.dp))
+                Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.medium)) {
+                    Spacer(Modifier.height(Space.large))
                     Image(painterResource(R.drawable.home_logo), null, Modifier.size(96.dp).clip(RoundedCornerShape(14.dp)))
                     Text("Blaykie", style = MaterialTheme.typography.headlineMedium)
                     Text("Cite smarter. APA 7 in seconds.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                    Button(onClick = { requestDiscardAction("open") }, modifier = Modifier.fillMaxWidth()) { Text("Open a .docx") }
+                    AppPrimaryButton(onClick = { requestDiscardAction("open") }, modifier = Modifier.fillMaxWidth()) { Text("Open a .docx") }
                     if (session != null && project != null) {
-                        OutlinedButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) {
+                        AppSecondaryButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("Continue"); Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
-                        TextButton(onClick = { requestDiscardAction("end") }, modifier = Modifier.fillMaxWidth()) { Text("End session") }
+                        AppTextButton(onClick = { requestDiscardAction("end") }, modifier = Modifier.fillMaxWidth()) { Text("End session") }
                     }
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AppCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
                             Text("How it works", style = MaterialTheme.typography.titleSmall)
                             Text("1   Open your Word file", style = MaterialTheme.typography.bodySmall)
                             Text("2   Tap where a citation goes", style = MaterialTheme.typography.bodySmall)
                             Text("3   Pick it from Zotero, then export", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
+                    if (message.isNotEmpty()) AppErrorState(message)
                 }
             }
             SettingsGearButton(onClick = { navigate(Screen.SETTINGS) }, modifier = Modifier.align(Alignment.TopEnd))
@@ -586,7 +586,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             val labels = if (dialog == "theme") ThemeMode.entries.map { it.name } else TextSize.entries.map { it.name }
             labels.forEach { label ->
                 val selected = if (dialog == "theme") settings.theme.name == label else settings.textSize.name == label
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected, role = Role.RadioButton, onClick = {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).then(selectedOptionModifier(selected)).selectable(selected, role = Role.RadioButton, onClick = {
                     if (dialog == "theme") scope.launch { store.setTheme(ThemeMode.valueOf(label)) } else scope.launch { store.setTextSize(TextSize.valueOf(label)) }
                     dialog = ""
                 }), verticalAlignment = Alignment.CenterVertically) {
