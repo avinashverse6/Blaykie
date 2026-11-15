@@ -3,7 +3,6 @@ package org.blaykie.nativeapp
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -26,15 +25,12 @@ internal fun visualColors(dark: Boolean): ColorScheme {
     )
 }
 
-// Compose falls back to the system font for glyphs absent from the bundled heading fonts.
-private val headingFamily = FontFamily(
-    Font(R.font.poppins_regular, FontWeight.Normal),
-    Font(R.font.poppins_bold, FontWeight.Bold),
-)
+// Keep the family centralized so a verified display font can be introduced later.
+private val appFontFamily = FontFamily.SansSerif
 private fun heading(size: Int, line: Int, weight: FontWeight = FontWeight.Bold) =
-    TextStyle(fontFamily = headingFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
+    TextStyle(fontFamily = appFontFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
 private fun body(size: Int, line: Int, weight: FontWeight = FontWeight.Normal) =
-    TextStyle(fontFamily = FontFamily.SansSerif, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
+    TextStyle(fontFamily = appFontFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
 internal val visualTypography = Typography(
     displayLarge = heading(57,64), displayMedium = heading(45,52), displaySmall = heading(36,44),
     headlineLarge = heading(32,40), headlineMedium = heading(28,36), headlineSmall = heading(24,32),
