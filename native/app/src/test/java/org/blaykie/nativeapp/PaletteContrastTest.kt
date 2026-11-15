@@ -27,6 +27,8 @@ class PaletteContrastTest {
                 "variant" to (p.onSurfaceVariant to p.surfaceVariant), "variant on surface" to (p.onSurfaceVariant to p.surface),
                 "variant on background" to (p.onSurfaceVariant to p.background), "surface text on background" to (p.onSurface to p.background),
                 "surface text on variant" to (p.onSurface to p.surfaceVariant),
+                "selected text" to (p.onSurface to p.primaryContainer),
+                "selected control" to (p.primary to p.primaryContainer),
                 "primary on surface" to (p.primary to p.surface), "primary on background" to (p.primary to p.background),
                 "error on surface" to (p.error to p.surface), "error on background" to (p.error to p.background),
                 "inverse surface" to (other.surface to other.onSurface),
