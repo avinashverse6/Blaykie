@@ -15,7 +15,7 @@ internal fun visualColors(dark: Boolean): ColorScheme {
         secondary = Color(p.secondary), onSecondary = Color(p.onSecondary), secondaryContainer = Color(p.secondaryContainer), onSecondaryContainer = Color(p.onSecondaryContainer),
         tertiary = Color(p.tertiary), onTertiary = Color(p.onTertiary), tertiaryContainer = Color(p.tertiaryContainer), onTertiaryContainer = Color(p.onTertiaryContainer),
         error = Color(p.error), onError = Color(p.onError), errorContainer = Color(p.errorContainer), onErrorContainer = Color(p.onErrorContainer),
-        background = Color(p.surface), onBackground = Color(p.onSurface), surface = Color(p.surface), onSurface = Color(p.onSurface),
+        background = Color(p.background), onBackground = Color(p.onBackground), surface = Color(p.surface), onSurface = Color(p.onSurface),
         surfaceVariant = Color(p.surfaceVariant), onSurfaceVariant = Color(p.onSurfaceVariant), outline = Color(p.outline), outlineVariant = Color(p.outlineVariant),
         surfaceTint = Color(p.primary), inversePrimary = Color(if (dark) lightPalette.primary else darkPalette.primary),
         inverseSurface = Color(if (dark) lightPalette.onSurface else darkPalette.onSurface), inverseOnSurface = Color(if (dark) lightPalette.surface else darkPalette.surface),
