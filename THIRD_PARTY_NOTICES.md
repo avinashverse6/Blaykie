@@ -18,6 +18,19 @@ This inventory records dependencies explicitly declared in the repository, relev
 
 AndroidX Core, Lifecycle and other AndroidX/Compose libraries, Kotlin standard library, Kotlin coroutines, and Okio are also used directly or transitively. Their resolved versions are not pinned individually in the checked-in build files; inspect the Gradle runtime dependency graph for exact versions and license/notice information for a particular APK. Do not treat this inventory as a complete transitive SBOM.
 
+### Citation styles: release files
+
+The CSL-enabled native release ships the following separate, unmodified upstream files (snapshot commits are pinned repository snapshots):
+
+| File | Upstream project and URL | Pinned commit | Bytes | SHA-256 | License |
+|---|---|---|---:|---|---|
+| `citeproc.js` | citeproc-js, Frank Bennett: https://github.com/Juris-M/citeproc-js | `cc9153c45293af878de08cafddbefe6ea150c380` | 970020 | `db98d3341d39eb7a9f166231b6c51118ed499f79821daa3e41f1ea8d7f8d0cbb` | AGPL-3.0-or-later option |
+| `locales-en-US.xml` | CSL locales: https://github.com/citation-style-language/locales | `8bef426f89f38c0789223c50e53ec2197bc50bb3` | 32649 | `ac864c7c21166b4390d82c31792cdc509400727fa0060b43d8aa17e07f9cb079` | CC BY-SA 3.0 |
+
+The citeproc-js header is retained untouched. The English locale is a separate unmodified data file; its authors and contributors are listed in the byte-identical file, with their metadata retained. Credit the Citation Style Language project and contributors: https://citationstyles.org/. CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/.
+
+Blaykie's own code remains AGPL-3.0-or-later. Styles imported by users stay on their device and are not redistributed by Blaykie. This notice does not replace review of license-text and other distribution obligations.
+
 ### Native assets
 
 - Home logo and launcher icon: **original artwork by the author (inspired by the author's own cat), covered by the project license**. These are the supplied full icon and adaptive foreground/background, with density-sized legacy copies derived from the full icon.

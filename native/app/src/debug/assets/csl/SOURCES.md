@@ -1,6 +1,6 @@
-# CSL spike source files
+# CSL source files and release credits
 
-These files are copied unmodified. Snapshot commits identify upstream repository snapshots, not necessarily the last commit touching each file.
+These files are copied unmodified. Snapshot commits identify upstream repository snapshots, not necessarily the last commit touching each file. Only `citeproc.js` and `locales-en-US.xml` in this table ship in the CSL-enabled release; the other entries are debug-only.
 
 | File | Upstream repository | Snapshot commit | Bytes | SHA-256 | License |
 |---|---|---|---:|---|---|
@@ -10,3 +10,9 @@ These files are copied unmodified. Snapshot commits identify upstream repository
 | locales-en-US.xml | https://github.com/citation-style-language/locales | 8bef426f89f38c0789223c50e53ec2197bc50bb3 | 32649 | ac864c7c21166b4390d82c31792cdc509400727fa0060b43d8aa17e07f9cb079 | CC BY-SA 3.0 |
 
 Authors and contributor metadata are retained unchanged in the files. CSL styles and locales are maintained by the Citation Style Language project: https://citationstyles.org/.
+
+## Release credits and licensing
+
+- `citeproc.js` is citeproc-js by Frank Bennett, from https://github.com/Juris-M/citeproc-js, used under its **AGPL-3.0-or-later** option. Its upstream header is untouched.
+- `locales-en-US.xml` is a separate, unmodified data file from the Citation Style Language (CSL) locales project, https://github.com/citation-style-language/locales, under **CC BY-SA 3.0**: https://creativecommons.org/licenses/by-sa/3.0/. Its authors and contributors are listed in the file, which ships byte-identical and retains their metadata. The CSL project and contributors: https://citationstyles.org/.
+- Blaykie's own code remains **AGPL-3.0-or-later**. Styles imported by users stay on their device and are not redistributed by Blaykie.
