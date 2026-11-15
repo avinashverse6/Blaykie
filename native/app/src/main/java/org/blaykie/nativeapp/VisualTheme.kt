@@ -3,6 +3,7 @@ package org.blaykie.nativeapp
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -25,12 +26,19 @@ internal fun visualColors(dark: Boolean): ColorScheme {
     )
 }
 
-// Temporary system serif until the official font archive is provided.
-private fun text(size: Int, line: Int, weight: FontWeight = FontWeight.Normal) = TextStyle(fontFamily = FontFamily.Serif, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
+// Compose falls back to the system font for glyphs absent from the bundled heading fonts.
+private val headingFamily = FontFamily(
+    Font(R.font.poppins_regular, FontWeight.Normal),
+    Font(R.font.poppins_bold, FontWeight.Bold),
+)
+private fun heading(size: Int, line: Int, weight: FontWeight = FontWeight.Bold) =
+    TextStyle(fontFamily = headingFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
+private fun body(size: Int, line: Int, weight: FontWeight = FontWeight.Normal) =
+    TextStyle(fontFamily = FontFamily.SansSerif, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
 internal val visualTypography = Typography(
-    displayLarge = text(57,64), displayMedium = text(45,52), displaySmall = text(36,44),
-    headlineLarge = text(32,40), headlineMedium = text(28,36), headlineSmall = text(24,32),
-    titleLarge = text(22,28), titleMedium = text(18,24,FontWeight.Medium), titleSmall = text(16,22,FontWeight.Medium),
-    bodyLarge = text(18,26), bodyMedium = text(16,24), bodySmall = text(14,20),
-    labelLarge = text(16,22,FontWeight.Medium), labelMedium = text(14,20,FontWeight.Medium), labelSmall = text(12,18,FontWeight.Medium),
+    displayLarge = heading(57,64), displayMedium = heading(45,52), displaySmall = heading(36,44),
+    headlineLarge = heading(32,40), headlineMedium = heading(28,36), headlineSmall = heading(24,32),
+    titleLarge = heading(22,30), titleMedium = heading(18,26), titleSmall = heading(16,24),
+    bodyLarge = body(18,26), bodyMedium = body(16,24), bodySmall = body(14,20),
+    labelLarge = body(16,22,FontWeight.Medium), labelMedium = body(14,20,FontWeight.Medium), labelSmall = body(12,18,FontWeight.Medium),
 )

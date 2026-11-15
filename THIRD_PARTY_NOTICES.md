@@ -35,7 +35,7 @@ Blaykie's own code remains AGPL-3.0-or-later. Styles imported by users stay on t
 
 - Home logo and launcher icon: **original artwork by the author (inspired by the author's own cat), covered by the project license**. These are the supplied full icon and adaptive foreground/background, with density-sized legacy copies derived from the full icon.
 - Material Design settings, back and undo vector icons: Apache-2.0; source https://github.com/google/material-design-icons. The repository does not pin an upstream icon revision; see the vector resources for attribution comments.
-- The native app uses Android's system serif font; it does not bundle Liberation Serif or Poppins.
+- The native app uses the repository's `Poppins-Regular.ttf` and `Poppins-Bold.ttf` for headings; body text uses the Android system sans-serif, with system fallback for missing glyphs. These font copies are **not yet verified against an official Poppins release**. Before any release, the owner must verify each file's SHA-256 against the official release and supply the corresponding unmodified OFL 1.1 license text for bundling. Current repository SHA-256: Regular `7e65201e9b79159e2300267cc885e16c8dcef2424cdfa09a29bfb0980a94a7ba`; Bold `983676516167748b74de6f4771fb384c664fd913acb8b471122ecacf5da5ea6c`. The native app does not bundle Liberation Serif.
 
 ### Native test-only dependencies
 
