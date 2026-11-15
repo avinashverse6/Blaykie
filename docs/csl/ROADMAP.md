@@ -44,6 +44,8 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 
 
+Native typography: the app no longer bundles Poppins and uses system sans-serif. Bundled display font postponed; needs official OFL files verified before use.
+
 ## Remaining steps (one per session)
 
 - B2-1 style import: system file picker, validation (size limit, DOCTYPE and ENTITY rejection), private storage, list.
