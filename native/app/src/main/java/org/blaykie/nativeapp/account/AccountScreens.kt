@@ -20,6 +20,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import org.blaykie.nativeapp.R
+import org.blaykie.nativeapp.BrandChip
+import org.blaykie.nativeapp.BrandLogo
+import org.blaykie.nativeapp.BrandPrimaryButton
 import org.blaykie.nativeapp.AppCard
 import org.blaykie.nativeapp.AppErrorState
 import org.blaykie.nativeapp.AppPrimaryButton
@@ -67,8 +70,10 @@ private fun FirstRunScreen(state: AccountState, onOpenBrowser: () -> Unit, onKey
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-                Image(painterResource(R.drawable.home_logo), null, Modifier.size(96.dp).clip(AppShapes.medium))
+                BrandLogo(size = 64)
+                BrandChip("ZOTERO")
                 Text("Connect Zotero", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
+                Text("Connect your personal Zotero library to insert citations.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 AppCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
                         Text("1   Create a key for your personal library with read-only access.", style = MaterialTheme.typography.bodyMedium)
@@ -76,7 +81,7 @@ private fun FirstRunScreen(state: AccountState, onOpenBrowser: () -> Unit, onKey
                         Text("3   Paste it here.", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                AppPrimaryButton(onClick = onOpenBrowser, modifier = Modifier.fillMaxWidth()) { Text("Create a key on zotero.org") }
+                BrandPrimaryButton("Create a key on zotero.org", onOpenBrowser, Modifier.fillMaxWidth(), icon = null)
                 AppSecondaryButton(onClick = onKey, modifier = Modifier.fillMaxWidth()) { Text("I already have a key") }
                 AppTextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("Skip for now") }
                 Text("You can add a key later in Settings → Account.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
@@ -97,7 +102,8 @@ private fun KeyScreen(state: AccountState, onSave: (String) -> Unit, onCancel: (
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-                Image(painterResource(R.drawable.home_logo), null, Modifier.size(80.dp).clip(AppShapes.medium))
+                BrandLogo(size = 64)
+                BrandChip("ZOTERO")
                 Text("Zotero API key", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 Text("Paste your key. Your user ID is obtained from Zotero.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("API key") },

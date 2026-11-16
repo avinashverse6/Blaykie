@@ -39,10 +39,12 @@ internal fun BrandLogo(size: Int = 48) {
 }
 
 @Composable
-internal fun BrandPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun BrandPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: Int? = R.drawable.ic_document_plus) {
     Button(onClick = onClick, modifier = modifier.heightIn(min = 64.dp), shape = CircleShape) {
-        Icon(painterResource(R.drawable.ic_document_plus), contentDescription = null, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(Space.small))
+        if (icon != null) {
+            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(Space.small))
+        }
         Text(text, style = MaterialTheme.typography.labelLarge)
     }
 }
