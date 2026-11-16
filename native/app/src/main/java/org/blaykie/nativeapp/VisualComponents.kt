@@ -23,8 +23,8 @@ internal object AppShapes {
 }
 
 @Composable
-internal fun AppPrimaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Button(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), shape = AppShapes.small, content = content)
+internal fun AppPrimaryButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    Button(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), shape = AppShapes.small, content = content)
 }
 
 @Composable
@@ -33,8 +33,8 @@ internal fun AppSecondaryButton(onClick: () -> Unit, modifier: Modifier = Modifi
 }
 
 @Composable
-internal fun AppTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    TextButton(onClick = onClick, modifier = modifier.heightIn(min = 48.dp), shape = AppShapes.small, content = content)
+internal fun AppTextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 48.dp), shape = AppShapes.small, content = content)
 }
 
 @Composable
