@@ -332,19 +332,24 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                     Text("Cite smarter. APA 7 in seconds.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                     AppPrimaryButton(onClick = { requestDiscardAction("open") }, modifier = Modifier.fillMaxWidth()) { Text("Open a .docx") }
                     if (session != null && project != null) {
-                        AppSecondaryButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Continue"); Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        AppCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth().padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
+                                Text("Continue", style = MaterialTheme.typography.titleSmall)
+                                Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                                Text("${session?.edits?.size ?: 0} saved edit(s)", style = MaterialTheme.typography.bodySmall)
+                                AppSecondaryButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
                             }
                         }
                         AppTextButton(onClick = { requestDiscardAction("end") }, modifier = Modifier.fillMaxWidth()) { Text("End session") }
+                    } else {
+                        AppEmptyState("No document open yet.")
                     }
                     AppCard(modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
                             Text("How it works", style = MaterialTheme.typography.titleSmall)
-                            Text("1   Open your Word file", style = MaterialTheme.typography.bodySmall)
-                            Text("2   Tap where a citation goes", style = MaterialTheme.typography.bodySmall)
-                            Text("3   Pick it from Zotero, then export", style = MaterialTheme.typography.bodySmall)
+                            Text("1   Open a document", style = MaterialTheme.typography.bodySmall)
+                            Text("2   Insert citations from Zotero", style = MaterialTheme.typography.bodySmall)
+                            Text("3   Export a new file", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (message.isNotEmpty()) AppErrorState(message)
