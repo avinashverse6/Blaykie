@@ -239,7 +239,91 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
             Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
-            Screen.HOME -> HomeLayout(
+            Screen.HOME -> Unit
+        }
+    }
+    BackHandler(enabled = screen != Screen.HOME) { if (searchState.open) citationSearch.close() else back() }
+    LaunchedEffect(accountState.account, searchState.open) {
+        if (searchState.open) citationSearch.refreshAccount()
+    }
+    LaunchedEffect(Unit) {
+        val restored = withContext(Dispatchers.IO) {
+            when (val r = sessions.read()) {
+                is SessionRead.Ready -> Loaded(r.session, r.project, cards(r.project))
+                else -> r
+            }
+        }
+        when (restored) {
+            is Loaded -> {
+                accept(restored)
+                if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
+            }
+            SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
+            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
+        }
+        loading = false
+    }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            loading = true; message = ""
+            val opened = withContext(Dispatchers.IO) {
+                try {
+                    try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }
+                    val name = readName(context, uri)
+                    if (!name.endsWith(".docx", ignoreCase = true)) return@withContext null to "Please choose a .docx file."
+                    val result = sessions.open(uri.toString(), name) { file ->
+                        val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
+                        input.use { source -> file.outputStream().use { output -> source.copyTo(output) } }
+                    }
+                    Loaded(result.session, result.project, cards(result.project)) to ""
+                } catch (_: Exception) { null to "This file could not be read as a Word document." }
+            }
+            if (opened.first == null) message = opened.second
+            else { accept(opened.first!!); navigate(Screen.DOCUMENT) }
+            loading = false
+        }
+    }
+    fun performDiscardAction(action: String) {
+        when (action) {
+            "open" -> try { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) } catch (_: Exception) { message = "Could not open the file picker." }
+            "end" -> { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }
+        }
+    }
+    fun requestDiscardAction(action: String) {
+        val current = session; val p = project
+        val count = if (current != null && p != null) sessions.unexportedEdits(current, p) else 0
+        if (count > 0) { discardCount = count; discardAction = action }
+        else performDiscardAction(action)
+    }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
+    LaunchedEffect(exportState.phase) {
+        if (exportState.phase == ExportPhase.CHOOSE && exportController.chooserLaunched()) {
+            try { exportPicker.launch(exportState.name) } catch (_: Exception) { exportController.destination(null); exportController.message("Could not open the save dialog.") }
+        }
+    }
+    fun sendExport(open: Boolean) {
+        val file = exportState.shareFile ?: return
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.exports", file)
+            val intent = if (open) Intent(Intent.ACTION_VIEW).setDataAndType(uri, DOCX_MIME) else Intent(Intent.ACTION_SEND).setType(DOCX_MIME).putExtra(Intent.EXTRA_STREAM, uri)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.clipData = ClipData.newUri(context.contentResolver, "Exported document", uri)
+            context.startActivity(if (open) intent else Intent.createChooser(intent, "Share document"))
+        } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
+        catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
+    }
+    if (loading) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
+    if (discardAction != null) AlertDialog(
+        onDismissRequest = { discardAction = null },
+        title = { Text("Discard $discardCount unexported edits?") },
+        confirmButton = { TextButton(onClick = { val action = discardAction; discardAction = null; if (action != null) performDiscardAction(action) }) { Text("Discard") } },
+        dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
+    )
+    when (screen) {
+        Screen.HOME -> HomeLayout(
             textSize = settings.textSize,
             filename = if (session != null && project != null) session?.fileName else null,
             editCount = session?.edits?.size ?: 0,
