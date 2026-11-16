@@ -16,6 +16,8 @@ internal object AboutInfo {
     const val appName = "Blaykie"
     const val license = "Licensed under AGPL-3.0-or-later"
     const val source = "https://github.com/avinashverse6/Blaykie"
+    const val fontCredit = "Lora — SIL Open Font License 1.1"
+    const val fontSource = "https://fonts.google.com/specimen/Lora"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
     const val licenseAsset = "licenses/AGPL-3.0"
     const val apacheLicenseAsset = "licenses/Apache-2.0"
@@ -39,7 +41,9 @@ internal fun AboutScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val uri = LocalUriHandler.current
     var showApache by rememberSaveable { mutableStateOf(false) }
+    var showFontLicense by rememberSaveable { mutableStateOf(false) }
     val apacheText = remember { runCatching { context.assets.open(AboutInfo.apacheLicenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Apache-2.0 license text could not be loaded." } }
+    val fontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.lora_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
     val licenseText = remember { runCatching { context.assets.open(AboutInfo.licenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "License text could not be loaded." } }
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("About") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } })
@@ -51,6 +55,12 @@ internal fun AboutScreen(onBack: () -> Unit) {
             TextButton(onClick = { runCatching { uri.openUri(AboutInfo.source) } }) { Text("Source: ${AboutInfo.source}") }
             HorizontalDivider()
             AboutExtraCredits()
+            Text("Fonts", style = MaterialTheme.typography.titleMedium)
+            Text(AboutInfo.fontCredit, style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.fontSource) } }) { Text(AboutInfo.fontSource, style = MaterialTheme.typography.bodyMedium) }
+            TextButton(onClick = { showFontLicense = !showFontLicense }) { Text(if (showFontLicense) "Hide font license text" else "Read font license text") }
+            if (showFontLicense) Text(fontLicenseText, style = MaterialTheme.typography.bodyMedium)
+            HorizontalDivider()
             Text("Third-party libraries and artwork", style = MaterialTheme.typography.titleMedium)
             AboutInfo.libraries.forEach { library ->
                 Text("${library.name} — ${library.license}", style = MaterialTheme.typography.bodyMedium)

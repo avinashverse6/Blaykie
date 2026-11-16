@@ -3,6 +3,7 @@ package org.blaykie.nativeapp
 import androidx.compose.material3.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -25,8 +26,12 @@ internal fun visualColors(dark: Boolean): ColorScheme {
     )
 }
 
-// Keep the family centralized so a verified display font can be introduced later.
-private val appFontFamily = FontFamily.SansSerif
+// Missing glyphs use Android's system fallback, including in editable text.
+// Weight matching maps Medium to Regular and SemiBold to Bold.
+private val appFontFamily = FontFamily(
+    Font(R.font.lora_regular, FontWeight.Normal),
+    Font(R.font.lora_bold, FontWeight.Bold),
+)
 private fun heading(size: Int, line: Int, weight: FontWeight = FontWeight.Bold) =
     TextStyle(fontFamily = appFontFamily, fontSize = size.sp, lineHeight = line.sp, fontWeight = weight)
 private fun body(size: Int, line: Int, weight: FontWeight = FontWeight.Normal) =

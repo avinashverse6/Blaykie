@@ -35,6 +35,10 @@ class AboutInfoTest {
             assertTrue("Missing license ${library.license}", notices.contains(library.license))
             assertTrue("Missing source ${library.url}", notices.contains(library.url))
         }
+        assertEquals("Lora — SIL Open Font License 1.1", AboutInfo.fontCredit)
+        assertEquals("https://fonts.google.com/specimen/Lora", AboutInfo.fontSource)
+        assertTrue(notices.contains("Lora"))
+        assertArrayEquals(File(root, "native/LICENSES/Lora-OFL.txt").readBytes(), File(root, "native/app/src/main/res/raw/lora_ofl.txt").readBytes())
         assertEquals(Screen.SETTINGS, backTarget(Screen.ABOUT))
     }
 }
