@@ -250,142 +250,16 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
             Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
-            Screen.HOME -> Unit
-        }
-    }
-    BackHandler(enabled = screen != Screen.HOME) { if (searchState.open) citationSearch.close() else back() }
-    LaunchedEffect(accountState.account, searchState.open) {
-        if (searchState.open) citationSearch.refreshAccount()
-    }
-    LaunchedEffect(Unit) {
-        val restored = withContext(Dispatchers.IO) {
-            when (val r = sessions.read()) {
-                is SessionRead.Ready -> Loaded(r.session, r.project, cards(r.project))
-                else -> r
-            }
-        }
-        when (restored) {
-            is Loaded -> {
-                accept(restored)
-                if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
-            }
-            SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
-        }
-        loading = false
-    }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) scope.launch {
-            loading = true; message = ""
-            val opened = withContext(Dispatchers.IO) {
-                try {
-                    try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }
-                    val name = readName(context, uri)
-                    if (!name.endsWith(".docx", ignoreCase = true)) return@withContext null to "Please choose a .docx file."
-                    val result = sessions.open(uri.toString(), name) { file ->
-                        val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
-                        input.use { source -> file.outputStream().use { output -> source.copyTo(output) } }
-                    }
-                    Loaded(result.session, result.project, cards(result.project)) to ""
-                } catch (_: Exception) { null to "This file could not be read as a Word document." }
-            }
-            if (opened.first == null) message = opened.second
-            else { accept(opened.first!!); navigate(Screen.DOCUMENT) }
-            loading = false
-        }
-    }
-    fun performDiscardAction(action: String) {
-        when (action) {
-            "open" -> try { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) } catch (_: Exception) { message = "Could not open the file picker." }
-            "end" -> { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }
-        }
-    }
-    fun requestDiscardAction(action: String) {
-        val current = session; val p = project
-        val count = if (current != null && p != null) sessions.unexportedEdits(current, p) else 0
-        if (count > 0) { discardCount = count; discardAction = action }
-        else performDiscardAction(action)
-    }
-    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
-    LaunchedEffect(exportState.phase) {
-        if (exportState.phase == ExportPhase.CHOOSE && exportController.chooserLaunched()) {
-            try { exportPicker.launch(exportState.name) } catch (_: Exception) { exportController.destination(null); exportController.message("Could not open the save dialog.") }
-        }
-    }
-    fun sendExport(open: Boolean) {
-        val file = exportState.shareFile ?: return
-        try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.exports", file)
-            val intent = if (open) Intent(Intent.ACTION_VIEW).setDataAndType(uri, DOCX_MIME) else Intent(Intent.ACTION_SEND).setType(DOCX_MIME).putExtra(Intent.EXTRA_STREAM, uri)
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.clipData = ClipData.newUri(context.contentResolver, "Exported document", uri)
-            context.startActivity(if (open) intent else Intent.createChooser(intent, "Share document"))
-        } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
-        catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
-    }
-    val saveCitationStyle: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
-    val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag, debugCitationLanguageExplicit = true)) } ?: false }
-    val useStyleLanguage: () -> Boolean = { session?.let { persist(it.copy(debugCitationLanguageExplicit = false)) } ?: false }
-    val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
-    LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
-        val turnedOff = previousCustomStyles && !settings.customCitationStyles
-        if (!settings.customCitationStyles) exportController.disableOptionalExport()
-        previousCustomStyles = settings.customCitationStyles
-        val current = session
-        if (!settings.customCitationStyles && current != null) {
-            val reset = builtInSession(current)
-            val changed = reset != current
-            if ((!changed || persist(reset)) && (turnedOff || current.debugCitationStyleId != null)) {
-                message = "Custom citation styles off; using built-in APA."
-            }
-        }
-    }
-    if (loading) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        return
-    }
-    if (discardAction != null) AlertDialog(
-        onDismissRequest = { discardAction = null },
-        title = { Text("Discard $discardCount unexported edits?") },
-        confirmButton = { TextButton(onClick = { val action = discardAction; discardAction = null; if (action != null) performDiscardAction(action) }) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
-    )
-    when (screen) {
-        Screen.HOME -> Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-                    Spacer(Modifier.height(Space.large))
-                    Image(painterResource(R.drawable.home_logo), null, Modifier.size(96.dp).clip(RoundedCornerShape(14.dp)))
-                    Text("Blaykie", style = MaterialTheme.typography.headlineMedium)
-                    Text("Cite smarter. APA 7 in seconds.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                    AppPrimaryButton(onClick = { requestDiscardAction("open") }, modifier = Modifier.fillMaxWidth()) { Text("Open a .docx") }
-                    if (session != null && project != null) {
-                        AppCard(modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.fillMaxWidth().padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                                Text("Continue", style = MaterialTheme.typography.titleSmall)
-                                Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.bodyMedium)
-                                Text("${session?.edits?.size ?: 0} saved edit(s)", style = MaterialTheme.typography.bodySmall)
-                                AppSecondaryButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
-                            }
-                        }
-                        AppTextButton(onClick = { requestDiscardAction("end") }, modifier = Modifier.fillMaxWidth()) { Text("End session") }
-                    } else {
-                        AppEmptyState("No document open yet.")
-                    }
-                    AppCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                            Text("How it works", style = MaterialTheme.typography.titleSmall)
-                            Text("1   Open a document", style = MaterialTheme.typography.bodySmall)
-                            Text("2   Insert citations from Zotero", style = MaterialTheme.typography.bodySmall)
-                            Text("3   Export a new file", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    if (message.isNotEmpty()) AppErrorState(message)
-                }
-            }
-            SettingsGearButton(onClick = { navigate(Screen.SETTINGS) }, modifier = Modifier.align(Alignment.TopEnd))
-        }
+            Screen.HOME -> HomeLayout(
+            textSize = settings.textSize,
+            filename = if (session != null && project != null) session?.fileName else null,
+            editCount = session?.edits?.size ?: 0,
+            message = message,
+            onOpen = { requestDiscardAction("open") },
+            onContinue = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) },
+            onEnd = { requestDiscardAction("end") },
+            onSettings = { navigate(Screen.SETTINGS) },
+        )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { navigate(Screen.HOME) }) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Close") }
@@ -506,13 +380,6 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Last crash", crashText)) }) { Text("Copy") }
             Text(crashText, modifier = Modifier.verticalScroll(rememberScrollState()))
         }
-    }
-}
-
-@Composable
-private fun SettingsGearButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    IconButton(onClick = onClick, modifier = modifier.size(48.dp)) {
-        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
