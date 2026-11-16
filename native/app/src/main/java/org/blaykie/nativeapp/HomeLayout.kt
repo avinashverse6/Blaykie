@@ -130,20 +130,16 @@ private fun StepBadge(step: HomeStep) {
 
 @Composable
 private fun HorizontalSteps() {
-    Column {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            homeSteps.forEachIndexed { index, step ->
-                StepBadge(step)
-                if (index < homeSteps.lastIndex) HorizontalDivider(Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline)
-            }
-        }
-        Spacer(Modifier.height(Space.small))
-        Row(Modifier.fillMaxWidth()) {
-            homeSteps.forEach { step ->
-                Column(Modifier.weight(1f).padding(end = 8.dp)) {
-                    Text(step.number, style = MaterialTheme.typography.titleMedium)
-                    Text(step.label, style = MaterialTheme.typography.bodySmall)
+    Row(Modifier.fillMaxWidth()) {
+        homeSteps.forEachIndexed { index, step ->
+            Column(Modifier.weight(1f)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    StepBadge(step)
+                    if (index < homeSteps.lastIndex) HorizontalDivider(Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline)
                 }
+                Spacer(Modifier.height(Space.small))
+                Text(step.number, style = MaterialTheme.typography.titleMedium)
+                Text(step.label, modifier = Modifier.padding(end = 8.dp), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
