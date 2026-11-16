@@ -35,7 +35,11 @@ Blaykie's own code remains AGPL-3.0-or-later. Styles imported by users stay on t
 
 - Home logo and launcher icon: **original artwork by the author (inspired by the author's own cat), covered by the project license**. These are the supplied full icon and adaptive foreground/background, with density-sized legacy copies derived from the full icon.
 - Material Design settings, back and undo vector icons: Apache-2.0; source https://github.com/google/material-design-icons. The repository does not pin an upstream icon revision; see the vector resources for attribution comments.
-- The native app uses Android system sans-serif and does not bundle Poppins or Liberation Serif. Bundled display font postponed; needs official OFL files verified before use. The repository-root Poppins files remain for the Kivy app; see its inventory below.
+- The native app uses unmodified static **Lora** Regular and Bold, version 3.008, supplied from Google Fonts (https://fonts.google.com/specimen/Lora; https://github.com/google/fonts). Lora is distributed under the SIL Open Font License 1.1. The supplied OFL text states: `Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".` The unmodified license is in `native/LICENSES/Lora-OFL.txt` and shipped as the `lora_ofl` raw resource and shown in About.
+  - `lora_regular.ttf`: 133888 bytes; SHA-256 `7ed00e7c9cdf16ab7e2fd2361fe45d4f0b61263cd60aae398b27b7ee08108827`.
+  - `lora_bold.ttf`: 133828 bytes; SHA-256 `7d74015e950c2fb66519c7295b8155621d22200ae2ca2a4c6b43ce3c490cac87`.
+  - `Lora-OFL.txt` / `lora_ofl.txt`: 4516 bytes each; SHA-256 `41cf75bf229a1435b7df209ac7419622516eff7e8cab79260fb0fb9b1cc8ced2`.
+- The native app does not bundle Poppins or Liberation Serif. The repository-root Poppins files remain for the Kivy app; see its inventory below.
 
 ### Native test-only dependencies
 

@@ -44,7 +44,7 @@ Phone checks done so far: host self-test, style picker and insertion checklist; 
 
 
 
-Native typography: the app no longer bundles Poppins and uses system sans-serif. Bundled display font postponed; needs official OFL files verified before use.
+Native typography: the app uses unmodified static Lora Regular and Bold version 3.008 supplied from Google Fonts (https://fonts.google.com/specimen/Lora), SIL OFL 1.1. Regular SHA-256 `7ed00e7c9cdf16ab7e2fd2361fe45d4f0b61263cd60aae398b27b7ee08108827`; Bold SHA-256 `7d74015e950c2fb66519c7295b8155621d22200ae2ca2a4c6b43ce3c490cac87`; unmodified OFL SHA-256 `41cf75bf229a1435b7df209ac7419622516eff7e8cab79260fb0fb9b1cc8ced2`. The supplied OFL copyright line is: `Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".` The license is stored in `native/LICENSES/Lora-OFL.txt` and a raw resource for About. Poppins is not bundled in the native app. Phone verification of scaling and system glyph fallback remains outstanding.
 
 ## Remaining steps (one per session)
 
