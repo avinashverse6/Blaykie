@@ -357,6 +357,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             filename = if (session != null && project != null) session?.fileName else null,
             editCount = session?.edits?.size ?: 0,
             message = message,
+            extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
             onOpen = { requestDiscardAction("open") },
             onContinue = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) },
             onEnd = { requestDiscardAction("end") },

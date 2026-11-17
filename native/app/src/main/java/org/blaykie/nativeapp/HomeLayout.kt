@@ -52,6 +52,7 @@ internal fun BrandPrimaryButton(text: String, onClick: () -> Unit, modifier: Mod
 @Composable
 internal fun HomeLayout(
     textSize: TextSize, filename: String?, editCount: Int, message: String,
+    extraStep: HomeExtraStep? = null,
     onOpen: () -> Unit, onContinue: () -> Unit, onEnd: () -> Unit, onSettings: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp)) {
@@ -106,19 +107,23 @@ internal fun HomeLayout(
         Text("How Blaykie works", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(Space.medium))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val vertical = verticalHomeSteps(maxWidth.value, textSize, LocalDensity.current.fontScale)
-            if (vertical) VerticalSteps() else HorizontalSteps()
+            val steps = homeSteps(extraStep)
+            val vertical = verticalHomeSteps(maxWidth.value, textSize, LocalDensity.current.fontScale) ||
+                (extraStep != null && maxWidth.value < 480f)
+            if (vertical) VerticalSteps(steps) else HorizontalSteps(steps)
         }
         Spacer(Modifier.height(Space.extraLarge))
     }
 }
 
-private data class HomeStep(val number: String, val label: String, val icon: Int?)
-private val homeSteps = listOf(
-    HomeStep("01", "Open your document", R.drawable.ic_document_outline),
-    HomeStep("02", "Insert Zotero citations", null),
-    HomeStep("03", "Export a new .docx", R.drawable.ic_export_arrow),
-)
+internal data class HomeExtraStep(val label: String, val icon: Int)
+internal data class HomeStep(val number: String, val label: String, val icon: Int?)
+internal fun homeSteps(extra: HomeExtraStep?): List<HomeStep> = buildList {
+    add(HomeStep("01", "Open your document", R.drawable.ic_document_outline))
+    if (extra != null) add(HomeStep("02", extra.label, extra.icon))
+    add(HomeStep(if (extra == null) "02" else "03", "Insert Zotero citations", null))
+    add(HomeStep(if (extra == null) "03" else "04", "Export a new doc with bibliography", R.drawable.ic_export_arrow))
+}
 
 @Composable
 private fun StepBadge(step: HomeStep) {
@@ -129,13 +134,13 @@ private fun StepBadge(step: HomeStep) {
 }
 
 @Composable
-private fun HorizontalSteps() {
+private fun HorizontalSteps(steps: List<HomeStep>) {
     Row(Modifier.fillMaxWidth()) {
-        homeSteps.forEachIndexed { index, step ->
+        steps.forEachIndexed { index, step ->
             Column(Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     StepBadge(step)
-                    if (index < homeSteps.lastIndex) HorizontalDivider(Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline)
+                    if (index < steps.lastIndex) HorizontalDivider(Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline)
                 }
                 Spacer(Modifier.height(Space.small))
                 Text(step.number, style = MaterialTheme.typography.titleMedium)
@@ -146,9 +151,9 @@ private fun HorizontalSteps() {
 }
 
 @Composable
-private fun VerticalSteps() {
+private fun VerticalSteps(steps: List<HomeStep>) {
     Column {
-        homeSteps.forEachIndexed { index, step ->
+        steps.forEachIndexed { index, step ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StepBadge(step)
                 Spacer(Modifier.width(Space.medium))
@@ -157,7 +162,7 @@ private fun VerticalSteps() {
                     Text(step.label, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            if (index < homeSteps.lastIndex) VerticalDivider(Modifier.padding(start = 19.dp).height(16.dp), color = MaterialTheme.colorScheme.outline)
+            if (index < steps.lastIndex) VerticalDivider(Modifier.padding(start = 19.dp).height(16.dp), color = MaterialTheme.colorScheme.outline)
         }
     }
 }
