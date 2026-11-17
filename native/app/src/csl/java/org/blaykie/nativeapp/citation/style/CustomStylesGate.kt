@@ -19,6 +19,15 @@ internal class CustomStylesGate<H>(private val destroy: (H) -> Unit) {
     /** Built-in APA never needs a session host, even when the feature is enabled. */
     fun openForStyle(styleId: String?, factory: () -> H): H? =
         if (styleId == null) null else open(factory)
+    /** A different style must never inherit the previous style's session host. */
+    fun retainForStyle(host: H?, previous: String?, next: String?): H? {
+        if (host == null) return null
+        if (next == null || previous != next) {
+            close(host)
+            return null
+        }
+        return host
+    }
     fun close(host: H) { if (hosts.remove(host)) destroy(host) }
     fun closeAll() {
         val closing = hosts.toList(); hosts.clear()

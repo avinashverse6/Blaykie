@@ -92,7 +92,7 @@ private class StyleController(context: Context) : ViewModel() {
         if (changedSession || selected != styleId || selectedExplicit != explicit) blockedLanguages.clear()
         if (changedSession) { leave(); key = sessionKey }
         else { generation++; host?.cancel(); job?.cancel() }
-        if (styleId == null) { host?.let(gate::close); host = null }
+        host = gate.retainForStyle(host, selected, styleId)
         selected = styleId
         selectedLanguage = language
         selectedExplicit = explicit

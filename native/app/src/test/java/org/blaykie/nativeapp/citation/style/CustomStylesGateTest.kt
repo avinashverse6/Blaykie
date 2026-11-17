@@ -50,6 +50,28 @@ class CustomStylesGateTest {
         assertEquals(1, constructions)
     }
 
+    @Test fun changingStyleDestroysOldSessionHostBeforeOpeningReplacement() {
+        var constructions = 0
+        val destroyed = mutableListOf<Int>()
+        val gate = CustomStylesGate<FakeHost> { destroyed.add(it.id) }
+        gate.setEnabled(true)
+        var host = gate.openForStyle("first") { FakeHost(++constructions) }
+        assertEquals(host, gate.retainForStyle(host, "first", "first"))
+        assertTrue(destroyed.isEmpty())
+        host = gate.retainForStyle(host, "first", "second")
+        assertNull(host)
+        assertEquals(listOf(1), destroyed)
+        host = gate.openForStyle("second") { FakeHost(++constructions) }
+        assertEquals(2, host?.id)
+        host = gate.retainForStyle(host, "second", null)
+        assertNull(host)
+        assertEquals(listOf(1, 2), destroyed)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(false)
+        assertNull(gate.openForStyle("second") { FakeHost(++constructions) })
+        assertEquals(2, constructions)
+    }
+
     @Test fun disablingDestroysActiveAndPreviewHostsAndRestoresBuiltInSession() {
         var constructions = 0
         val destroyed = mutableListOf<Int>()
