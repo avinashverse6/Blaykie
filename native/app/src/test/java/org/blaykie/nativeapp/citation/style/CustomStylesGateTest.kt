@@ -31,6 +31,25 @@ class CustomStylesGateTest {
         assertEquals(0, constructions)
     }
 
+    @Test fun sessionHostRequiresEnabledFeatureAndCustomStyle() {
+        var constructions = 0
+        val destroyed = mutableListOf<Int>()
+        val gate = CustomStylesGate<FakeHost> { destroyed.add(it.id) }
+        assertNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(true)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        assertEquals(0, constructions)
+        val active = requireNotNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertEquals(1, constructions)
+        gate.close(active)
+        assertEquals(listOf(1), destroyed)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(false)
+        assertNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertEquals(1, constructions)
+    }
+
     @Test fun disablingDestroysActiveAndPreviewHostsAndRestoresBuiltInSession() {
         var constructions = 0
         val destroyed = mutableListOf<Int>()
