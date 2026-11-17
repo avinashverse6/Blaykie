@@ -62,6 +62,7 @@ import org.blaykie.nativeapp.account.AccountSection
 import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
+import org.blaykie.nativeapp.citation.style.SettingsExtraSection
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.style.builtInSession
 import org.blaykie.nativeapp.citation.style.CitationStyleRow
@@ -545,6 +546,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
                 Switch(checked = settings.customCitationStyles, onCheckedChange = { enabled -> scope.launch { store.setCustomCitationStyles(enabled) } })
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsExtraSection(settings, store)
             Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             SettingsRow("About Blaykie", "") { onAbout() }
             SettingsRow("Last crash", "") { onCrash() }

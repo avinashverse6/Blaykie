@@ -12,6 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import org.blaykie.nativeapp.OptionalSettingsBindings
+import org.blaykie.nativeapp.Settings
+import org.blaykie.nativeapp.SettingsStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import kotlinx.coroutines.*
@@ -164,6 +168,20 @@ private class StyleController(context: Context) : ViewModel() {
     fun closePreview() { state.value = state.value.copy(preview = null) }
     fun cancelPreview() { if (state.value.previewing) previewJob?.cancel() }
     fun pickerError() { state.value = state.value.copy(message = "Could not open the file picker.") }
+    fun refreshInventory() {
+        if (!gate.enabled || state.value.importing) return
+        operationJob?.cancel()
+        operationJob = scope.launch {
+            try {
+                val (choices, locales) = withContext(Dispatchers.IO) {
+                    styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles"))) to
+                        LocaleImportStore(File(app.filesDir, "locales")).list()
+                }
+                if (gate.enabled) state.value = state.value.copy(choices = choices, locales = locales)
+            } catch (e: CancellationException) { throw e }
+            catch (_: Exception) { if (gate.enabled) state.value = state.value.copy(message = "Could not load styles or languages.") }
+        }
+    }
     fun importStyle(uri: Uri) {
         if (!gate.enabled || state.value.importing) return
         state.value = state.value.copy(importing = true, message = "Importing style…")
@@ -340,9 +358,42 @@ internal fun CitationStyleSession(context: Context, session: Session?, enabled: 
     }
 }
 
+internal fun settingsSectionVisible(enabled: Boolean): Boolean = enabled
+
+@Composable
+internal fun SettingsExtraSection(settings: Settings, store: SettingsStore) {
+    if (!settingsSectionVisible(settings.customCitationStyles)) return
+    val activity = LocalContext.current as ComponentActivity
+    val vm = remember(activity) {
+        ViewModelProvider(activity, StyleController.Factory(activity.applicationContext))
+            .get("settings-style-picker", StyleController::class.java)
+    }
+    val scope = rememberCoroutineScope()
+    val bindings = OptionalSettingsBindings(settings.styleId, settings.languageTag,
+        { value -> scope.launch { store.setStyleId(value) } },
+        { value -> scope.launch { store.setLanguageTag(value) } })
+    DisposableEffect(vm) {
+        vm.setEnabled(true)
+        onDispose { vm.setEnabled(false) }
+    }
+    LaunchedEffect(vm) { vm.refreshInventory() }
+    Text("Citations", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+    CitationStylePicker(vm, bindings.styleId, bindings.languageTag ?: "en-US", bindings.languageTag != null, true,
+        { value -> bindings.chooseStyle(value); true },
+        { value -> bindings.chooseLanguage(value); true },
+        { bindings.chooseLanguage(null); true })
+    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+}
+
 @Composable
 internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean) {
-    val vm = controller(context)
+    CitationStylePicker(controller(context), session?.debugCitationStyleId, session?.debugCitationLanguage ?: "en-US",
+        session?.debugCitationLanguageExplicit ?: false, false, onStyleChange, onLanguageChange, onUseStyleLanguage)
+}
+
+@Composable
+private fun CitationStylePicker(vm: StyleController, styleId: String?, language: String, explicit: Boolean, settingsMode: Boolean,
+                                onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean) {
     val state by vm.state.collectAsState()
     var expanded by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<StyleChoice?>(null) }
@@ -350,19 +401,20 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
     var removingLocale by remember { mutableStateOf<LocaleMetadata?>(null) }
     val localePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importLocale) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importStyle) }
-    val selected = state.choices.firstOrNull { it.id == session?.debugCitationStyleId }?.title ?: "APA 7 (built-in)"
+    val selected = state.choices.firstOrNull { it.id == styleId }?.title
+        ?: if (settingsMode && styleId != null) "Unavailable style" else "APA 7 (built-in)"
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text("Citation style", style = MaterialTheme.typography.labelLarge)
         Box {
-            TextButton(onClick = { expanded = true }) { Text("$selected · ${styleLanguageSummary(session?.debugCitationStyleId, session?.debugCitationLanguage ?: "en-US")}") }
+            TextButton(onClick = { expanded = true }) { Text(if (settingsMode) selected else "$selected · ${styleLanguageSummary(styleId, language)}") }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 state.choices.forEach { choice ->
                     DropdownMenuItem(text = {
                         Column {
                             Text(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "")
                             if (choice.dependent) Text(DEPENDENT_STYLE_NOTE, style = MaterialTheme.typography.bodySmall)
-                            val resolution = resolveStyleLanguage(choice, session?.debugCitationLanguage ?: "en-US", session?.debugCitationLanguageExplicit ?: false, state.locales)
-                            val shownLanguage = if (choice.id == session?.debugCitationStyleId) session?.debugCitationLanguage ?: "en-US" else resolution.tag
+                            val resolution = resolveStyleLanguage(choice, language, explicit, state.locales)
+                            val shownLanguage = if (choice.id == styleId) language else resolution.tag
                             Text(styleLanguageSummary(choice.id, shownLanguage), style = MaterialTheme.typography.bodySmall)
                             resolution.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -380,14 +432,15 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                 })
             }
         }
-        val currentChoice = state.choices.firstOrNull { it.id == session?.debugCitationStyleId }
-        resolveStyleLanguage(currentChoice, session?.debugCitationLanguage ?: "en-US", session?.debugCitationLanguageExplicit ?: false, state.locales).note?.let {
+        if (settingsMode) Text("Applies to citations you insert from now on and to export. Earlier citations in a session are re-rendered at export; citations from older files stay as they are.", style = MaterialTheme.typography.bodySmall)
+        val currentChoice = state.choices.firstOrNull { it.id == styleId }
+        resolveStyleLanguage(currentChoice, language, explicit, state.locales).note?.let {
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
         Text("Citation language", style = MaterialTheme.typography.labelLarge)
         Box {
             TextButton(onClick = { languageExpanded = true }) {
-                Text(if (session?.debugCitationLanguage == null || session.debugCitationLanguage.equals("en-US", true)) "English (US), bundled" else session.debugCitationLanguage)
+                Text(if (settingsMode && !explicit) "Automatic" else if (language.equals("en-US", true)) "English (US), bundled" else language)
             }
             DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
                 DropdownMenuItem(text = { Text("Use style language (automatic)") }, enabled = !state.importing, onClick = { languageExpanded = false; onUseStyleLanguage() })
@@ -403,7 +456,7 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
                 })
             }
         }
-        if (session?.debugCitationStyleId == null) Text("Language applies to CSL styles; built-in APA uses English.", style = MaterialTheme.typography.bodySmall)
+        if (styleId == null) Text("Language applies to CSL styles; built-in APA uses English.", style = MaterialTheme.typography.bodySmall)
         if (state.previewing) Row {
             Text("Preparing style preview", modifier = Modifier.weight(1f))
             TextButton(onClick = vm::cancelPreview) { Text("Cancel preview") }
@@ -439,8 +492,8 @@ internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange
             text = { Text("Remove ${choice.title} from this device?") },
             confirmButton = { TextButton(onClick = {
                 removing = null
-                if (session?.debugCitationStyleId != choice.id || onStyleChange(null)) {
-                    if (session?.debugCitationStyleId == choice.id) vm.cancel()
+                if (styleId != choice.id || onStyleChange(null)) {
+                    if (styleId == choice.id) vm.cancel()
                     vm.removeStyle(choice)
                 }
             }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })

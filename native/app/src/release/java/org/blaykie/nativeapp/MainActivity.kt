@@ -62,6 +62,7 @@ import org.blaykie.nativeapp.account.AccountSection
 import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
+import org.blaykie.nativeapp.citation.style.SettingsExtraSection
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
@@ -482,6 +483,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             SettingsRow("Theme", settings.theme.name) { dialog = "theme" }
             SettingsRow("Text size", settings.textSize.name) { dialog = "size" }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsExtraSection(settings, store)
             Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             SettingsRow("About Blaykie", "") { onAbout() }
             SettingsRow("Last crash", "") { onCrash() }
