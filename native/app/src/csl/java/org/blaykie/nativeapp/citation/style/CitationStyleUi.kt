@@ -86,8 +86,9 @@ private class StyleController(context: Context) : ViewModel() {
         val fallbackMessage = if (language.equals("en-US", true) && state.value.failedLanguage != null) state.value.message else ""
         val changedSession = key != sessionKey
         if (changedSession || selected != styleId || selectedExplicit != explicit) blockedLanguages.clear()
-        if (changedSession) { leave(); key = sessionKey; host = gate.open { CslWebViewHost(app) } }
+        if (changedSession) { leave(); key = sessionKey }
         else { generation++; host?.cancel(); job?.cancel() }
+        if (styleId == null) { host?.let(gate::close); host = null }
         selected = styleId
         selectedLanguage = language
         selectedExplicit = explicit
@@ -118,7 +119,8 @@ private class StyleController(context: Context) : ViewModel() {
                 }
                 if (styleId == null) return@launch
                 if (option == null) throw IllegalArgumentException("This citation style is unavailable or unsupported.")
-                var result = requireNotNull(host).warmUp(requireNotNull(option.id), language)
+                val activeHost = host ?: gate.openForStyle(styleId) { CslWebViewHost(app) }?.also { host = it }
+                var result = requireNotNull(activeHost).warmUp(requireNotNull(option.id), language)
                 if (token != generation) return@launch
                 if (result.isFailure && !language.equals("en-US", true)) {
                     result = requireNotNull(host).warmUp(requireNotNull(option.id), "en-US")
@@ -273,7 +275,7 @@ private class StyleController(context: Context) : ViewModel() {
         return ExportCslStyle(choice.title, processor, selectedLanguage)
     }
     fun cancel() {
-        generation++; host?.cancel(); job?.cancel(); selected = null
+        generation++; host?.cancel(); job?.cancel(); host?.let(gate::close); host = null; selected = null
         state.value = state.value.copy(preparing = false, ready = false, message = "", failedStyle = null)
     }
     fun leave() {
