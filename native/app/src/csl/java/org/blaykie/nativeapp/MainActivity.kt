@@ -66,6 +66,10 @@ import org.blaykie.nativeapp.citation.style.SettingsExtraSection
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.style.builtInSession
 import org.blaykie.nativeapp.citation.style.CitationStyleRow
+import org.blaykie.nativeapp.citation.style.reconcileSelections
+import org.blaykie.nativeapp.csl.StyleRegistry
+import org.blaykie.nativeapp.csl.LocaleImportStore
+import org.blaykie.nativeapp.csl.styleChoices
 import org.blaykie.nativeapp.citation.style.CitationStyleSession
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.citationOptionRestriction
@@ -180,6 +184,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var selectionStart by rememberSaveable { mutableIntStateOf(0) }
     var selectionEnd by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
+    var selectionSync by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
     var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
@@ -188,9 +193,23 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     val latestCustomStyles by rememberUpdatedState(settings.customCitationStyles)
     var previousCustomStyles by remember { mutableStateOf(settings.customCitationStyles) }
 
-    fun accept(loaded: Loaded) {
-        session = loaded.session; project = loaded.project; blockCards = loaded.cards
-        val draft = loaded.session.draft
+    suspend fun resolveSelections(value: Session, adopt: Boolean, enabled: Boolean): Session {
+        val (choices, locales) = withContext(Dispatchers.IO) {
+            val styles = runCatching { StyleRegistry.load({ context.assets.open(it) }, java.io.File(context.filesDir, "styles")) }.getOrDefault(emptyList())
+            val locales = runCatching { LocaleImportStore(java.io.File(context.filesDir, "locales")).list() }.getOrDefault(emptyList())
+            styleChoices(styles) to locales
+        }
+        val selected = settingsStore.updateOptionalSelection { stored ->
+            reconcileSelections(stored, value, adopt, choices, locales).first
+        }
+        val resolved = reconcileSelections(selected, value, false, choices, locales).second
+        return if (enabled) resolved else builtInSession(resolved)
+    }
+    suspend fun accept(loaded: Loaded, adopt: Boolean) {
+        val resolved = resolveSelections(loaded.session, adopt, latestCustomStyles)
+        if (resolved != loaded.session) sessions.save(resolved)
+        session = resolved; project = loaded.project; blockCards = loaded.cards
+        val draft = resolved.draft
         if (draft != null) {
             val restoreSelection = screen == Screen.EDITOR && selectionBlock == draft.block
             val start = if (restoreSelection) selectionStart.coerceIn(0, draft.text.length) else 0
@@ -267,8 +286,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         }
         when (restored) {
             is Loaded -> {
-                accept(restored)
-                if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
+                try {
+                    accept(restored, adopt = true)
+                    if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { navigate(Screen.HOME); message = "Could not load the session settings." }
             }
             SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
             else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
@@ -291,7 +313,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 } catch (_: Exception) { null to "This file could not be read as a Word document." }
             }
             if (opened.first == null) message = opened.second
-            else { accept(opened.first!!); navigate(Screen.DOCUMENT) }
+            else try { accept(opened.first!!, adopt = false); navigate(Screen.DOCUMENT) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not load the session settings." }
             loading = false
         }
     }
@@ -324,11 +348,34 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
-    val saveCitationStyle: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
-    val saveCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag, debugCitationLanguageExplicit = true)) } ?: false }
-    val useStyleLanguage: () -> Boolean = { session?.let { persist(it.copy(debugCitationLanguageExplicit = false)) } ?: false }
+    val saveCitationStyle: (String?) -> Boolean = { id ->
+        if (session == null) false else { scope.launch { settingsStore.setStyleId(id) }; true }
+    }
+    val saveCitationLanguage: (String) -> Boolean = { tag ->
+        if (session == null) false else { scope.launch { settingsStore.setLanguageTag(tag) }; true }
+    }
+    val useStyleLanguage: () -> Boolean = {
+        if (session == null) false else { scope.launch { settingsStore.setLanguageTag(null) }; true }
+    }
+    val useBuiltInForSession: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
+    LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen) {
+        val current = session ?: return@LaunchedEffect
+        selectionSync = true
+        try {
+            val resolved = resolveSelections(current, false, settings.customCitationStyles)
+            val latest = session
+            if (latest != null && latest.sourceName == current.sourceName) {
+                val updated = latest.copy(debugCitationStyleId = resolved.debugCitationStyleId,
+                    debugCitationLanguage = resolved.debugCitationLanguage,
+                    debugCitationLanguageExplicit = resolved.debugCitationLanguageExplicit)
+                if (updated != latest) persist(updated)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { message = "Could not load the session settings." }
+        finally { selectionSync = false }
+    }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading, saveCitationStyle, saveAutomaticCitationLanguage)
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
     LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
         val turnedOff = previousCustomStyles && !settings.customCitationStyles
         if (!settings.customCitationStyles) exportController.disableOptionalExport()
@@ -342,7 +389,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }
         }
     }
-    if (loading) {
+    if (loading || selectionSync) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
