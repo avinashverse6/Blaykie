@@ -1,6 +1,9 @@
 package org.blaykie.nativeapp.citation.style
 
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import org.blaykie.nativeapp.OptionalSelectionState
+import org.blaykie.nativeapp.putOptionalSelection
+import org.blaykie.nativeapp.readOptionalSelection
 import org.blaykie.nativeapp.csl.LocaleMetadata
 import org.blaykie.nativeapp.csl.StyleChoice
 import org.blaykie.nativeapp.session.Session
@@ -21,6 +24,31 @@ class SessionSelectionsTest {
         assertEquals("de-DE", next.debugCitationLanguage); assertFalse(next.debugCitationLanguageExplicit)
         val (_, builtIn) = reconcileSelections(chosen.copy(styleId = null), old, true, choices, locales)
         assertNull(builtIn.debugCitationStyleId)
+    }
+    @Test fun removedStyleAndLanguageFallBackIndependently() {
+        val stored = OptionalSelectionState("new", "fr-FR", true)
+        val (styleMissing, noStyle) = reconcileSelections(stored, old, false, listOf(choices[0]), locales)
+        assertNotNull(styleMissing.styleMessage); assertNull(styleMissing.languageMessage)
+        assertNull(noStyle.debugCitationStyleId); assertEquals("fr-FR", noStyle.debugCitationLanguage)
+        val (localeMissing, noLocale) = reconcileSelections(stored, old, false, choices, listOf(locales[1]))
+        assertNull(localeMissing.styleMessage); assertNotNull(localeMissing.languageMessage)
+        assertEquals("new", noLocale.debugCitationStyleId)
+        assertEquals("de-DE", noLocale.debugCitationLanguage)
+        assertFalse(noLocale.debugCitationLanguageExplicit)
+    }
+    @Test fun adoptionMarkerAndMessagesRoundTripInFakePreferences() {
+        val preferences = mutablePreferencesOf()
+        val initial = readOptionalSelection(preferences)
+        assertFalse(initial.styleInitialized)
+        val (adopted, _) = reconcileSelections(initial, old, true, emptyList(), emptyList())
+        preferences.putOptionalSelection(adopted)
+        assertEquals(adopted, readOptionalSelection(preferences))
+        val cleared = adopted.copy(styleId = null, languageTag = null, styleMessage = null, languageMessage = null)
+        preferences.putOptionalSelection(cleared)
+        val (after, session) = reconcileSelections(readOptionalSelection(preferences), old, true, choices, locales)
+        assertEquals(cleared, after)
+        assertNull(session.debugCitationStyleId)
+        assertFalse(session.debugCitationLanguageExplicit)
     }
     @Test fun unavailableItemsFallBackWithoutLosingStoredSelections() {
         val stored = OptionalSelectionState("old", "fr-FR", true)
