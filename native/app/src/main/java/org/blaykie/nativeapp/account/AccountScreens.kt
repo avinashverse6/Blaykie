@@ -5,120 +5,124 @@ import android.content.Intent
 import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextAlign
-import org.blaykie.nativeapp.R
-import org.blaykie.nativeapp.BrandChip
-import org.blaykie.nativeapp.BrandLogo
-import org.blaykie.nativeapp.BrandPrimaryButton
-import org.blaykie.nativeapp.AppCard
-import org.blaykie.nativeapp.AppErrorState
-import org.blaykie.nativeapp.AppPrimaryButton
-import org.blaykie.nativeapp.AppSecondaryButton
-import org.blaykie.nativeapp.AppShapes
-import org.blaykie.nativeapp.AppTextButton
-import org.blaykie.nativeapp.Space
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import org.blaykie.nativeapp.AppErrorState
+import org.blaykie.nativeapp.BrandLogo
+import org.blaykie.nativeapp.R
+import org.blaykie.nativeapp.Space
+
+internal fun canConnectKey(key: String, checking: Boolean, warning: Boolean): Boolean =
+    key.isNotBlank() && !checking && !warning
+
+internal fun nextKeyVisibility(visible: Boolean): Boolean = !visible
 
 @Composable
 internal fun AccountGate(activity: Activity, controller: AccountController, content: @Composable () -> Unit) {
     val state by controller.state.collectAsState()
     val holder = rememberSaveableStateHolder()
     DisposableEffect(activity, state.route) {
-        if (state.route == AccountRoute.KEY) {
+        if (state.route == AccountRoute.KEY || state.route == AccountRoute.FIRST_RUN) {
             val wasSecure = activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0
             activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             onDispose { if (!wasSecure) activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
         } else onDispose { }
     }
+    val openBrowser = {
+        try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.zotero.org/settings/keys/new"))) } catch (_: Exception) { }
+    }
     when (state.route) {
-        AccountRoute.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) { CircularProgressIndicator() }
+        AccountRoute.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         AccountRoute.APP -> holder.SaveableStateProvider("application") { content() }
         AccountRoute.FIRST_RUN -> {
             BackHandler { }
-            FirstRunScreen(state, onOpenBrowser = {
-                try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.zotero.org/settings/keys/new"))) } catch (_: Exception) { }
-            }, onKey = { controller.openKey(true) }, onSkip = { controller.skip() })
+            KeyScreen(state, firstRun = true, onOpenBrowser = openBrowser, onSave = { controller.verify(it) },
+                onCancel = { controller.openKey(true); controller.cancelKey() },
+                onSkip = { controller.skip() }, onUseAnyway = { controller.useAnyway() })
         }
         AccountRoute.KEY -> {
             BackHandler { controller.cancelKey() }
-            KeyScreen(state, onSave = { controller.verify(it) }, onCancel = { controller.cancelKey() }, onUseAnyway = { controller.useAnyway() })
+            KeyScreen(state, firstRun = false, onOpenBrowser = openBrowser, onSave = { controller.verify(it) },
+                onCancel = { controller.cancelKey() }, onSkip = {}, onUseAnyway = { controller.useAnyway() })
         }
     }
 }
 
 @Composable
-private fun FirstRunScreen(state: AccountState, onOpenBrowser: () -> Unit, onKey: () -> Unit, onSkip: () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
-            .padding(horizontal = Space.large, vertical = Space.extraLarge),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-                BrandLogo(size = 64)
-                BrandChip("ZOTERO")
-                Text("Connect Zotero", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-                Text("Connect your personal Zotero library to insert citations.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                AppCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(Space.medium), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                        Text("1   Create a key for your personal library with read-only access.", style = MaterialTheme.typography.bodyMedium)
-                        Text("2   Copy it and return to Blaykie.", style = MaterialTheme.typography.bodyMedium)
-                        Text("3   Paste it here.", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                BrandPrimaryButton("Create a key on zotero.org", onOpenBrowser, Modifier.fillMaxWidth(), icon = null)
-                AppSecondaryButton(onClick = onKey, modifier = Modifier.fillMaxWidth()) { Text("I already have a key") }
-                AppTextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) { Text("Skip for now") }
-                Text("You can add a key later in Settings → Account.", style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                if (state.message.isNotEmpty()) AppErrorState(state.message)
-            }
-        }
-    }
-}
-
-@Composable
-private fun KeyScreen(state: AccountState, onSave: (String) -> Unit, onCancel: () -> Unit, onUseAnyway: () -> Unit) {
+private fun KeyScreen(state: AccountState, firstRun: Boolean, onOpenBrowser: () -> Unit,
+                      onSave: (String) -> Unit, onCancel: () -> Unit, onSkip: () -> Unit, onUseAnyway: () -> Unit) {
     // Deliberately not saveable: the field is never placed in saved instance state.
     var key by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).heightIn(min = maxHeight)
-            .padding(horizontal = Space.large, vertical = Space.extraLarge),
-            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-                BrandLogo(size = 64)
-                BrandChip("ZOTERO")
-                Text("Zotero API key", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-                Text("Paste your key. Your user ID is obtained from Zotero.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("API key") },
-                    enabled = !state.checking && !state.warning, singleLine = true, shape = AppShapes.small,
-                    visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = { TextButton(onClick = { visible = !visible }) { Text(if (visible) "Hide" else "Show") } },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.small)) {
-                    AppPrimaryButton(enabled = !state.checking && !state.warning, onClick = { onSave(key) }) { Text("Save") }
-                    AppTextButton(enabled = !state.checking, onClick = { key = ""; onCancel() }) { Text("Cancel") }
+    DisposableEffect(Unit) { onDispose { key = "" } }
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
+        .padding(horizontal = Space.large, vertical = Space.large), verticalArrangement = Arrangement.spacedBy(Space.medium)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (!firstRun) {
+                IconButton(onClick = { key = ""; onCancel() }, enabled = !state.checking, modifier = Modifier.size(48.dp)) {
+                    Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back")
                 }
-                if (state.checking) CircularProgressIndicator()
-                if (state.message.isNotEmpty()) AppErrorState(state.message)
+                Spacer(Modifier.width(Space.small))
             }
+            BrandLogo(size = 40)
+            Spacer(Modifier.width(Space.medium))
+            Text("Blaykie", style = MaterialTheme.typography.headlineSmall)
+        }
+        Spacer(Modifier.height(Space.medium))
+        Text(if (firstRun) "Connect your Zotero library" else "Change your key", style = MaterialTheme.typography.headlineMedium)
+        Text("Paste your Zotero API key to insert citations.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(Space.small))
+        OutlinedTextField(value = key, onValueChange = { key = it }, label = { Text("Zotero API key") },
+            enabled = !state.checking && !state.warning, singleLine = true, shape = RoundedCornerShape(16.dp),
+            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                TextButton(onClick = { visible = nextKeyVisibility(visible) }, enabled = !state.checking && !state.warning,
+                    modifier = Modifier.semantics { contentDescription = if (visible) "Hide Zotero API key" else "Show Zotero API key" }) {
+                    Text(if (visible) "Hide" else "Show")
+                }
+            }, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp))
+        Button(onClick = { onSave(key) }, enabled = canConnectKey(key, state.checking, state.warning),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape) {
+            if (state.checking) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(Space.small))
+            }
+            Text("Connect")
+        }
+        Text("Stored encrypted on this phone", modifier = Modifier.align(Alignment.CenterHorizontally),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.message.isNotEmpty()) AppErrorState(state.message)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            HorizontalDivider(Modifier.weight(1f))
+            Text("or", Modifier.padding(horizontal = Space.medium), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            HorizontalDivider(Modifier.weight(1f))
+        }
+        OutlinedButton(onClick = onOpenBrowser, enabled = !state.checking && !state.warning,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape) { Text("Get a key on zotero.org") }
+        if (firstRun) {
+            TextButton(onClick = { key = ""; onSkip() }, enabled = !state.checking && !state.warning,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Skip for now") }
+            Text("You can add a key later in Settings → Account.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     if (state.warning) AlertDialog(
