@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp
 
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,6 +30,22 @@ class SettingsTest {
         assertEquals(false, parseSettings(null, null, null, false).customCitationStyles)
         assertEquals(false, parseSettings(null, null, false, true).customCitationStyles)
         assertEquals(true, parseSettings(null, null, true, false).customCitationStyles)
+    }
+
+    @Test fun selectionsRoundTripAndClearIndependently() {
+        val preferences = mutablePreferencesOf()
+        assertEquals(null to null, readSelections(preferences))
+        preferences.putStyleId("style-id")
+        preferences.putLanguageTag("fr-FR")
+        val (styleId, languageTag) = readSelections(preferences)
+        assertEquals("style-id" to "fr-FR", styleId to languageTag)
+        val parsed = parseSettings(null, null, null, false, styleId, languageTag)
+        assertEquals("style-id", parsed.styleId)
+        assertEquals("fr-FR", parsed.languageTag)
+        preferences.putStyleId(null)
+        assertEquals(null to "fr-FR", readSelections(preferences))
+        preferences.putLanguageTag(null)
+        assertEquals(null to null, readSelections(preferences))
     }
 
     @Test fun textSizesScaleInOrder() {
