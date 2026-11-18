@@ -241,17 +241,22 @@ private class StyleController(context: Context) : ViewModel() {
     }
     fun removeLocale(locale: LocaleMetadata) {
         if (!gate.enabled || state.value.importing) return
-        if (selectedLanguage.equals(locale.tag, true)) host?.cancel()
-        state.value = state.value.copy(importing = true, ready = if (selectedLanguage.equals(locale.tag, true)) false else state.value.ready)
+        state.value = state.value.copy(importing = true)
         operationJob = scope.launch {
             try {
-                val locales = withContext(Dispatchers.IO) {
-                    val store = LocaleImportStore(File(app.filesDir, "locales"))
-                    check(store.remove(locale.asset))
-                    store.list()
+                val (locales, affected) = withContext(NonCancellable) {
+                    val (before, after) = withContext(Dispatchers.IO) {
+                        val before = loadSelectionInventory(app)
+                        val store = LocaleImportStore(File(app.filesDir, "locales"))
+                        check(store.remove(locale.asset))
+                        before to loadSelectionInventory(app)
+                    }
+                    after.locales to reconcileInventoryRemoval(app, before, after)
                 }
-                state.value = state.value.copy(importing = false, locales = locales, message = "Imported language removed.")
-                key?.let { activate(it, selected, selectedLanguage, selectedExplicit, force = true) }
+                val usedByHost = affected && selectedLanguage.equals(locale.tag, true)
+                if (usedByHost) host?.cancel()
+                state.value = state.value.copy(importing = false, locales = locales,
+                    ready = if (usedByHost) false else state.value.ready, message = "Imported language removed.")
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported language.") }
         }
@@ -262,9 +267,14 @@ private class StyleController(context: Context) : ViewModel() {
         state.value = state.value.copy(importing = true)
         operationJob = scope.launch {
             try {
-                val choices = withContext(Dispatchers.IO) {
-                    check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
-                    styleChoices(StyleRegistry.load({ app.assets.open(it) }, File(app.filesDir, "styles")))
+                val choices = withContext(NonCancellable) {
+                    val (before, after) = withContext(Dispatchers.IO) {
+                        val before = loadSelectionInventory(app)
+                        check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
+                        before to loadSelectionInventory(app)
+                    }
+                    reconcileInventoryRemoval(app, before, after)
+                    after.choices
                 }
                 val selectedChoice = choices.firstOrNull { it.id == selected }
                 val unavailable = selected != null && (selectedChoice == null || selectedChoice.disabledReason != null)
@@ -492,10 +502,7 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
             text = { Text("Remove ${choice.title} from this device?") },
             confirmButton = { TextButton(onClick = {
                 removing = null
-                if (styleId != choice.id || onStyleChange(null)) {
-                    if (styleId == choice.id) vm.cancel()
-                    vm.removeStyle(choice)
-                }
+                vm.removeStyle(choice)
             }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } })
     }
 }

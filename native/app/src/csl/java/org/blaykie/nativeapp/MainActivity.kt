@@ -67,6 +67,7 @@ import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.style.builtInSession
 import org.blaykie.nativeapp.citation.style.CitationStyleRow
 import org.blaykie.nativeapp.citation.style.reconcileSelections
+import org.blaykie.nativeapp.citation.style.inventoryRevision
 import org.blaykie.nativeapp.csl.StyleRegistry
 import org.blaykie.nativeapp.csl.LocaleImportStore
 import org.blaykie.nativeapp.csl.styleChoices
@@ -358,7 +359,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         if (session == null) false else { scope.launch { settingsStore.setLanguageTag(null) }; true }
     }
     val useBuiltInForSession: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
-    LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen) {
+    val removalRevision by inventoryRevision.collectAsState()
+    LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen, removalRevision) {
         val current = session ?: return@LaunchedEffect
         selectionSync = true
         try {

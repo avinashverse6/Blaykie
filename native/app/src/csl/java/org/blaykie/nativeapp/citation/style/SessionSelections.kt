@@ -35,3 +35,15 @@ internal fun reconcileSelections(
         languageMessage = if (missingLanguage) "Selected citation language is unavailable; using automatic language." else null,
     ) to result
 }
+
+internal data class SelectionInventory(val choices: List<StyleChoice>, val locales: List<LocaleMetadata>)
+internal data class RemovalReconciliation(val settings: OptionalSelectionState, val changed: Boolean)
+
+/** Compare effective selections, including automatic style languages and dependent styles. */
+internal fun reconcileRemoval(stored: OptionalSelectionState, before: SelectionInventory, after: SelectionInventory): RemovalReconciliation {
+    val probe = Session("", "", "")
+    val old = reconcileSelections(stored, probe, false, before.choices, before.locales)
+    val updated = reconcileSelections(stored, probe, false, after.choices, after.locales)
+    return if (old != updated) RemovalReconciliation(updated.first, true)
+    else RemovalReconciliation(stored, false)
+}
