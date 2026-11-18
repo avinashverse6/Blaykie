@@ -1,0 +1,73 @@
+# CSL roadmap (Blaykie)
+
+
+
+## Decisions
+
+- Built-in Kotlin APA 7 is the default and the fallback.
+
+- Other styles come only from user-imported .csl files (and optionally a locale file). We do not bundle Harvard, Chicago, ASA or MLA.
+
+- CSL runs in a hidden WebView with citeproc-js. Rhino stays only in JVM tests.
+
+- Supported: independent author-date styles. Numeric, note-based and dependent styles are disabled with a reason (a dependent style needs its parent imported).
+
+- No durable citation records in the DOCX; the codec is parked and unused. Footnote styles are out of scope.
+
+- Known limitation: citeproc-js joins Devanagari and Gujarati family and given names without a comma.
+
+- The " &amp; " between authors in narrative citations is replaced by the locale's "and" in a targeted post-processing step.
+
+- Release isolation: the release app contains no CSL code until step B3-1; the isolation check is never weakened or edited to pass. v1.0.1's Zotero field identifiers CSL_CITATION and CSL_BIBLIOGRAPHY stay in release.
+
+
+
+## Status
+
+Done: style registry; processor interface and built-in adapter; session-scoped WebView host with self-test; item converter A (see docs/csl/COMPARISON.md); style picker and session saving; CSL citation insertion; bibliography as structured rich text; export through CSL with explicit fallback; sample-docx-csl CI artifact; B2-1 debug style import, validation, private storage and removal (phone verification pending).
+
+B2-2/B2-2b: dependent parent lookup, unavailable-parent handling and timed sample previews are implemented in debug; timeout, failure and cancellation are tested without changing the active session. Phone verification remains outstanding.
+
+B2-3b/B2-3c: debug-only locale import/removal, session language selection and persistence, style default-language selection for independent and dependent styles, English term fallback, picker/export language summaries, and JVM/Rhino tests are implemented. Explicit language selection overrides defaults; users can return to automatic. Built-in APA remains the default and uses English. Older sessions with a saved non-English language preserve it as explicit; older English selections cannot be distinguished from the former default. CI passed debug tests and unchanged release isolation: https://github.com/avinashverse6/Blaykie/actions/runs/43571755181. Phone verification remains pending; fictional test files are in docs/csl/phone-fixtures/.
+
+B3-1a: the duplicated export controller and screen are unified in main behind a neutral processor contract and variant-specific export hooks. Release uses the unchanged built-in writer and a no-op hook; optional preparation and presentation remain debug-only. Existing export tests, sample-document tests and the unchanged release-isolation check passed: https://github.com/avinashverse6/Blaykie/actions/runs/43574691834.
+
+B3-1b-1: the optional runtime, its feature-aware document/session adapters and the two verified processor assets are in `src/csl`, included in debug and in release only with `-PcslInRelease=true` (default false). Developer spikes, comparison helper and bundled APA style stay debug-only; the enabled release registry has no bundled style. The default release and its isolation check remain unchanged. The debug tests, unchanged default-release isolation check, and informational enabled-release compile and unit tests passed: https://github.com/avinashverse6/Blaykie/actions/runs/43577508356. The unused comparison converter remains debug-only.
+
+B3-1b-2a: the custom-styles switch is exposed in Settings and guards document, preview, import, insertion and export paths. Debug defaults ON and the flag-on release defaults OFF through build-config values; saved settings override those defaults. Switching OFF closes tracked hosts and resets the session to built-in APA. JVM gate and settings tests ran for both variants, the existing debug/golden tests passed, and the default-release isolation check passed unchanged: https://github.com/avinashverse6/Blaykie/actions/runs/43589261047. Debug phone verification remains outstanding.
+
+B3-1b-2b: `cslInRelease` defaults true, with the runtime switch default OFF in release. The strengthened APK isolation check requires the exact verified runtime assets and their recorded hashes, rejects fixtures and debug/Rhino classes, and compares exported components against the rebuilt v1.0.1 APK. Its exact permission set matches v1.0.1: INTERNET and the AndroidX core signature receiver permission; the release manifest merger identifies androidx.core:core:1.13.1 as its contributor. Debug and release unit tests and isolation passed: https://github.com/avinashverse6/Blaykie/actions/runs/43595918745. Phone verification and B3-2 licenses remain required before release.
+
+B3-2: `SOURCES.md` and `THIRD_PARTY_NOTICES.md` record the pinned release files, licenses, credits and hashes; About credits the CSL project and citeproc-js whenever the runtime is included, even with the switch OFF; those credits now live in the optional source set, with a no-op adapter for the build without that runtime. The README documents the experimental import flow and limitations. Debug tests, release tests and the unchanged release isolation check passed: https://github.com/avinashverse6/Blaykie/actions/runs/43667145864. About text uses Material typography and theme colors; visual checks at larger font sizes in both themes remain for a release phone. No CC BY-SA 3.0 legal text was added: the owner must supply verified byte-for-byte text and review bundling and other distribution obligations with counsel before release.
+
+Phone checks done so far: host self-test, style picker and insertion checklist; all three sample exports opened in Google Docs. The CSL APA sample was reported without visible hanging indents, and the legacy sample was reported as formatted differently from built-in APA (details unspecified). Rechecking the revised samples remains outstanding. B2-1 phone check: an imported ASA style worked and its exported references appeared correct in Google Docs.
+
+
+
+Native typography: the app uses unmodified static Lora Regular and Bold version 3.008 supplied from Google Fonts (https://fonts.google.com/specimen/Lora), SIL OFL 1.1. Regular SHA-256 `7ed00e7c9cdf16ab7e2fd2361fe45d4f0b61263cd60aae398b27b7ee08108827`; Bold SHA-256 `7d74015e950c2fb66519c7295b8155621d22200ae2ca2a4c6b43ce3c490cac87`; unmodified OFL SHA-256 `41cf75bf229a1435b7df209ac7419622516eff7e8cab79260fb0fb9b1cc8ced2`. The supplied OFL copyright line is: `Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".` The license is stored in `native/LICENSES/Lora-OFL.txt` and a raw resource for About. Poppins is not bundled in the native app. Phone verification of scaling and system glyph fallback remains outstanding.
+
+## Remaining steps (one per session)
+
+- B2-1 style import: system file picker, validation (size limit, DOCTYPE and ENTITY rejection), private storage, list.
+
+- B2-2 dependent styles and parent handling, preview with a sample item, clear error messages.
+
+- B2-3 locale (language) file import.
+
+- B3-1 remaining: perform phone verification. The release build flag is default-on, while the release runtime setting remains default-off; the strengthened isolation check is green.
+
+- B3-2 remaining: owner supplies verified CC BY-SA 3.0 legal text and reviews bundling/other obligations; visually verify About in both themes and larger text on a release phone.
+
+- B3-3 version 1.1.0 and release notes (the owner creates the tag).
+
+
+
+## Known duplication
+
+The former debug/release copies of `export/ExportController.kt` and `export/ExportScreen.kt` are now single implementations under `src/main`. The neutral hook and processor contract also live in main; `src/csl` supplies optional preparation and UI, while default release supplies a no-op hook and provider. Feature-aware and default-release document, session and activity adapters remain variant-specific.
+
+
+
+## Working rules for any session
+
+Small commits and a push after each; never force push or reset --hard; never weaken a check; one step per session; end with what is done and what is left; ask before adding a dependency; no tag, release, PR or merge unless the owner asks.

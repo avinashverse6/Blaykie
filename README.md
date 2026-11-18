@@ -10,6 +10,12 @@ The native app opens a Word `.docx`, lets you edit supported paragraphs and inse
 
 When a native release is published, download its APK from the [Releases](../../releases) page, open it on an Android 7.0 (API 24) or newer device, and allow installation from your chosen source if Android asks. Verify the APK using the accompanying SHA-256 checksum; a debug build is a separate app and does not share the release app's data.
 
+### Custom citation styles (experimental)
+
+Custom styles use Citation Style Language (CSL) to format citations and references. The feature is **off by default in release**; enable **Custom citation styles (experimental)** in Settings, then open a document. Built-in APA remains available.
+
+Use independent author-date styles. In the document, open **Citation style** and choose **Import style (.csl)** to pick a file on your device. To add a language, open **Citation language**, choose **Import language (locale .xml)**, then select the imported language. Imported files stay on your device. CSL numeric and note styles are not supported yet. Hindi and Gujarati names have a known limitation: name parts are joined without a comma.
+
 ### Privacy
 
 Your Zotero API key is stored encrypted on the phone. The app has no analytics and sends app network requests only to `api.zotero.org`; the key-creation button opens `zotero.org` in your browser.

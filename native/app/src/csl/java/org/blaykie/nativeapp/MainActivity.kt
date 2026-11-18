@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -62,12 +63,27 @@ import org.blaykie.nativeapp.account.AccountSection
 import org.blaykie.nativeapp.account.AccountState
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.account.AndroidKeyCipher
+import org.blaykie.nativeapp.citation.style.SettingsExtraSection
 import org.blaykie.nativeapp.citation.CitationSearchController
+import org.blaykie.nativeapp.citation.style.builtInSession
+import org.blaykie.nativeapp.citation.style.CitationStyleBanner
+import org.blaykie.nativeapp.citation.style.CitationStyleSubtitle
+import org.blaykie.nativeapp.citation.style.reconcileSelections
+import org.blaykie.nativeapp.citation.style.inventoryRevision
+import org.blaykie.nativeapp.csl.StyleRegistry
+import org.blaykie.nativeapp.csl.LocaleImportStore
+import org.blaykie.nativeapp.csl.styleChoices
+import org.blaykie.nativeapp.citation.style.CitationStyleSession
+import org.blaykie.nativeapp.citation.style.citationUsesCsl
+import org.blaykie.nativeapp.citation.style.citationOptionRestriction
+import org.blaykie.nativeapp.citation.style.renderCitationPreview
+import org.blaykie.nativeapp.citation.style.citationInsertionNote
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
+import org.blaykie.nativeapp.export.beginExport
 import org.blaykie.nativeapp.export.ExportScreen
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
@@ -171,14 +187,33 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var selectionStart by rememberSaveable { mutableIntStateOf(0) }
     var selectionEnd by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
+    var selectionSync by remember { mutableStateOf(false) }
+    var sessionStyleFallback by remember { mutableStateOf<Pair<String, String>?>(null) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
     var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
     var discardCount by rememberSaveable { mutableIntStateOf(0) }
+    var inserting by remember { mutableStateOf(false) }
+    val latestCustomStyles by rememberUpdatedState(settings.customCitationStyles)
+    var previousCustomStyles by remember { mutableStateOf(settings.customCitationStyles) }
 
-    fun accept(loaded: Loaded) {
-        session = loaded.session; project = loaded.project; blockCards = loaded.cards
-        val draft = loaded.session.draft
+    suspend fun resolveSelections(value: Session, adopt: Boolean, enabled: Boolean): Session {
+        val (choices, locales) = withContext(Dispatchers.IO) {
+            val styles = runCatching { StyleRegistry.load({ context.assets.open(it) }, java.io.File(context.filesDir, "styles")) }.getOrDefault(emptyList())
+            val locales = runCatching { LocaleImportStore(java.io.File(context.filesDir, "locales")).list() }.getOrDefault(emptyList())
+            styleChoices(styles) to locales
+        }
+        val selected = settingsStore.updateOptionalSelection { stored ->
+            reconcileSelections(stored, value, adopt, choices, locales).first
+        }
+        val resolved = reconcileSelections(selected, value, false, choices, locales).second
+        return if (enabled) resolved else builtInSession(resolved)
+    }
+    suspend fun accept(loaded: Loaded, adopt: Boolean) {
+        val resolved = resolveSelections(loaded.session, adopt, latestCustomStyles)
+        if (resolved != loaded.session) sessions.save(resolved)
+        session = resolved; project = loaded.project; blockCards = loaded.cards
+        val draft = resolved.draft
         if (draft != null) {
             val restoreSelection = screen == Screen.EDITOR && selectionBlock == draft.block
             val start = if (restoreSelection) selectionStart.coerceIn(0, draft.text.length) else 0
@@ -255,8 +290,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         }
         when (restored) {
             is Loaded -> {
-                accept(restored)
-                if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
+                try {
+                    accept(restored, adopt = true)
+                    if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                catch (_: Exception) { navigate(Screen.HOME); message = "Could not load the session settings." }
             }
             SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
             else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
@@ -279,7 +317,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 } catch (_: Exception) { null to "This file could not be read as a Word document." }
             }
             if (opened.first == null) message = opened.second
-            else { accept(opened.first!!); navigate(Screen.DOCUMENT) }
+            else try { accept(opened.first!!, adopt = false); navigate(Screen.DOCUMENT) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not load the session settings." }
             loading = false
         }
     }
@@ -312,7 +352,50 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
-    if (loading) {
+    val useBuiltInForSession: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
+    LaunchedEffect(session?.sourceName, settings.styleId, settings.customCitationStyles) {
+        if (!settings.customCitationStyles || sessionStyleFallback != (session?.sourceName to settings.styleId)) sessionStyleFallback = null
+    }
+    val useBuiltInForCurrentSession: () -> Boolean = {
+        val current = session
+        val style = settings.styleId
+        if (current == null || style == null || !useBuiltInForSession(null)) false
+        else { sessionStyleFallback = current.sourceName to style; true }
+    }
+    val removalRevision by inventoryRevision.collectAsState()
+    LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen, removalRevision) {
+        val current = session ?: return@LaunchedEffect
+        selectionSync = true
+        try {
+            val selection = resolveSelections(current, false, settings.customCitationStyles)
+            val resolved = if (sessionStyleFallback == (current.sourceName to settings.styleId)) builtInSession(selection) else selection
+            val latest = session
+            if (latest != null && latest.sourceName == current.sourceName) {
+                val updated = latest.copy(debugCitationStyleId = resolved.debugCitationStyleId,
+                    debugCitationLanguage = resolved.debugCitationLanguage,
+                    debugCitationLanguageExplicit = resolved.debugCitationLanguageExplicit)
+                if (updated != latest) persist(updated)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { message = "Could not load the session settings." }
+        finally { selectionSync = false }
+    }
+    val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
+    LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
+        val turnedOff = previousCustomStyles && !settings.customCitationStyles
+        if (!settings.customCitationStyles) exportController.disableOptionalExport()
+        previousCustomStyles = settings.customCitationStyles
+        val current = session
+        if (!settings.customCitationStyles && current != null) {
+            val reset = builtInSession(current)
+            val changed = reset != current
+            if ((!changed || persist(reset)) && (turnedOff || current.debugCitationStyleId != null)) {
+                message = "Custom citation styles off; using built-in APA."
+            }
+        }
+    }
+    if (loading || selectionSync) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
@@ -323,100 +406,91 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
     )
     when (screen) {
-        Screen.HOME -> Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Spacer(Modifier.height(24.dp))
-                    Image(painterResource(R.drawable.home_logo), null, Modifier.size(96.dp).clip(RoundedCornerShape(14.dp)))
-                    Text("Blaykie", style = MaterialTheme.typography.headlineMedium)
-                    Text("Cite smarter. APA 7 in seconds.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                    Button(onClick = { requestDiscardAction("open") }, modifier = Modifier.fillMaxWidth()) { Text("Open a .docx") }
-                    if (session != null && project != null) {
-                        OutlinedButton(onClick = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) }, modifier = Modifier.fillMaxWidth()) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Continue"); Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                        TextButton(onClick = { requestDiscardAction("end") }, modifier = Modifier.fillMaxWidth()) { Text("End session") }
-                    }
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("How it works", style = MaterialTheme.typography.titleSmall)
-                            Text("1   Open your Word file", style = MaterialTheme.typography.bodySmall)
-                            Text("2   Tap where a citation goes", style = MaterialTheme.typography.bodySmall)
-                            Text("3   Pick it from Zotero, then export", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
-                }
-            }
-            SettingsGearButton(onClick = { navigate(Screen.SETTINGS) }, modifier = Modifier.align(Alignment.TopEnd))
-        }
+        Screen.HOME -> HomeLayout(
+            textSize = settings.textSize,
+            filename = if (session != null && project != null) session?.fileName else null,
+            editCount = session?.edits?.size ?: 0,
+            message = message,
+            extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
+            onOpen = { requestDiscardAction("open") },
+            onContinue = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) },
+            onEnd = { requestDiscardAction("end") },
+            onSettings = { navigate(Screen.SETTINGS) },
+        )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { navigate(Screen.HOME) }) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Close") }
-                Column(Modifier.weight(1f)) {
-                    Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${project?.citations()?.size ?: 0} citation(s) added", style = MaterialTheme.typography.bodySmall)
-                }
-                IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
-                Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
-            }
+            DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
+                onClose = { navigate(Screen.HOME) }, onUndo = { undoSession() },
+                onExport = { exportController.reset(); navigate(Screen.EXPORT) },
+                extraSubtitle = { CitationStyleSubtitle(context, session, settings.customCitationStyles) },
+            )
+            CitationStyleBanner(context, session, settings.customCitationStyles, settings.styleId, useBuiltInForCurrentSession)
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
-                Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+                DocumentTonalBanner {
+                    Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall)
+                }
             }
-            if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+            if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
+            val edits = session?.edits.orEmpty()
+            val markers = remember(edits) { documentMarkers(edits) }
+            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+                if (blockCards.isEmpty()) item { AppEmptyState("This document has no readable paragraphs.") }
                 items(blockCards, key = { it.index }) { card ->
-                    Card(onClick = {
+                    DocumentBlock(card.kind, card.text, markers[card.index], onClick = {
                         if (card.kind == "table" || card.kind == "other") message = "Tables and special blocks cannot be edited."
                         else {
                             field = TextFieldValue(card.text)
                             selectionBlock = card.index; selectionStart = 0; selectionEnd = 0
                             session?.let { if (persist(it.copy(draft = Draft(card.index, card.text)))) { message = ""; navigate(Screen.EDITOR) } }
                         }
-                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Column(Modifier.padding(16.dp)) {
-                            if (card.kind == "table") Text("Table", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(card.text, color = if (card.kind == "table" || card.kind == "other") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                                style = if (card.kind.startsWith("heading")) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    })
                 }
             }
         }
         Screen.EDITOR -> if (searchState.open) {
-            CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) }, onInsert = {
-                val p = project; val s = session; val chosen = searchState.selectedItems()
+            CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
+                cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting, onInsert = {
+                val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
                 if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
                 else if (p != null && s != null) {
-                    try {
-                        p.insertCitation(searchState.block, searchState.position, searchState.position, chosen, searchState.style, searchState.page.trim(), searchState.prefix.trim())
-                        val operation = EditOperation(block = searchState.block, type = "citation", position = searchState.position, items = chosen, style = searchState.style, page = searchState.page.trim(), prefix = searchState.prefix.trim())
-                        if (!persist(s.copy(edits = s.edits + operation, draft = null))) p.undo()
-                        else {
-                            val citation = p.citations().last().text
-                            citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
-                            message = "Citation added: " + citation.take(50)
+                    fun insert(preview: String?, fallback: Boolean) {
+                        val current = session
+                        if (current == null || current.sourceName != s.sourceName || project !== p || citationSearch.state.value != snapshot) {
+                            if (citationSearch.state.value.open) citationSearch.message("Selection changed. Please try again.")
+                            return
                         }
-                    } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
+                        try {
+                            p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, snapshot.page.trim(), snapshot.prefix.trim(), preview)
+                            val operation = EditOperation(block = snapshot.block, type = "citation", position = snapshot.position, items = chosen,
+                                style = snapshot.style, page = snapshot.page.trim(), prefix = snapshot.prefix.trim(), previewText = preview)
+                            if (!persist(current.copy(edits = current.edits + operation, draft = null))) p.undo()
+                            else {
+                                val citation = p.citations().last().text
+                                citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
+                                message = "Citation added: " + citation.take(50) + when {
+                                    else -> citationInsertionNote(fallback, preview != null)
+                                }
+                            }
+                        } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
+                        catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
+                    }
+                    if (!citationUsesCsl(s, settings.customCitationStyles)) insert(null, false)
+                    else if (!inserting && citationOptionRestriction(context, s, snapshot, settings.customCitationStyles) == null) {
+                        inserting = true
+                        scope.launch {
+                            try {
+                                val existing = p.citations().flatMap { it.items }
+                                val preview = renderCitationPreview(context, s, snapshot, existing + chosen, latestCustomStyles)
+                                if (latestCustomStyles) insert(preview, preview == null)
+                                else if (citationSearch.state.value.open) citationSearch.message("Custom citation styles are off. Please try again.")
+                            } finally { inserting = false }
+                        }
+                    }
                 }
             })
-        } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.Center) {
-                Text("Paragraph ${session?.draft?.block ?: ""}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.CenterVertically))
-                Button(onClick = { if (finishEditor()) navigate(Screen.DOCUMENT) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Done") }
-                TextButton(onClick = {
-                    val draft = session?.draft
-                    val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
-                    if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
-                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Insert citation") }
-                TextButton(onClick = {
-                    val currentBlock = session?.draft?.block
-                    if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
-                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Undo") }
-            }
+        } else Column(Modifier.fillMaxSize()) {
+            ParagraphEditorTopBar(session?.draft?.block) { if (finishEditor()) navigate(Screen.DOCUMENT) }
+            if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
             ParagraphTextField(value = field, onValueChange = { next ->
                 // Normalize only newly inserted line breaks and tabs, not existing document content.
                 val old = field.text; val fresh = next.text
@@ -430,11 +504,18 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 selectionBlock = session?.draft?.block ?: -1
                 selectionStart = field.selection.start; selectionEnd = field.selection.end
                 if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
-            }, modifier = Modifier.fillMaxWidth().weight(1f))
-            if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
+            }, modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp))
+            ParagraphEditorActions(onInsert = {
+                val draft = session?.draft
+                val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
+                if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
+            }, onUndo = {
+                val currentBlock = session?.draft?.block
+                if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
+            })
         }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
@@ -450,13 +531,6 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     }
 }
 
-@Composable
-private fun SettingsGearButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    IconButton(onClick = onClick, modifier = modifier.size(48.dp)) {
-        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
 /** A bounded viewport around an intrinsically tall text field. Keeping the scroll
  * outside the field lets us reveal the cursor again when only the IME size changes. */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
@@ -468,9 +542,10 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val density = LocalDensity.current
     val outline = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-    BoxWithConstraints(modifier.border(if (focused) 2.dp else 1.dp, outline, RoundedCornerShape(4.dp))) {
+    BoxWithConstraints(modifier.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+        .border(if (focused) 2.dp else 1.dp, outline, RoundedCornerShape(16.dp))) {
         val viewportHeight = constraints.maxHeight
-        val minTextHeight = (maxHeight - 24.dp).coerceAtLeast(0.dp)
+        val minTextHeight = (maxHeight - 32.dp).coerceAtLeast(0.dp)
         LaunchedEffect(value.selection, layout, viewportHeight, focused) {
             val result = layout
             if (focused && result != null && result.layoutInput.text.text == value.text) {
@@ -479,7 +554,7 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
                 requester.bringIntoView(caret.copy(top = caret.top - margin, bottom = caret.bottom + margin))
             }
         }
-        Box(Modifier.fillMaxSize().imeNestedScroll().verticalScroll(scroll).padding(12.dp)) {
+        Box(Modifier.fillMaxSize().imeNestedScroll().verticalScroll(scroll).padding(16.dp)) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
@@ -499,18 +574,27 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
     val scope = rememberCoroutineScope()
     var dialog by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") } })
+        SettingsTopBar("Settings", onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Account", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            SettingsSectionTitle("Account")
             AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Text("Appearance", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            SettingsRow("Theme", settings.theme.name) { dialog = "theme" }
-            SettingsRow("Text size", settings.textSize.name) { dialog = "size" }
+            SettingsSectionTitle("Appearance")
+            SettingsListRow("Theme", settings.theme.name) { dialog = "theme" }
+            SettingsListRow("Text size", settings.textSize.name) { dialog = "size" }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            SettingsRow("About Blaykie", "") { onAbout() }
-            SettingsRow("Last crash", "") { onCrash() }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Custom citation styles (experimental)", style = MaterialTheme.typography.bodyLarge)
+                    Text("Import styles and languages for citations and references.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = settings.customCitationStyles, onCheckedChange = { enabled -> scope.launch { store.setCustomCitationStyles(enabled) } })
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsExtraSection(settings, store)
+            SettingsSectionTitle("About")
+            SettingsListRow("About Blaykie") { onAbout() }
+            SettingsListRow("Last crash") { onCrash() }
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text("App version", style = MaterialTheme.typography.bodyLarge)
                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -524,7 +608,7 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             val labels = if (dialog == "theme") ThemeMode.entries.map { it.name } else TextSize.entries.map { it.name }
             labels.forEach { label ->
                 val selected = if (dialog == "theme") settings.theme.name == label else settings.textSize.name == label
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(selected, role = Role.RadioButton, onClick = {
+                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).then(selectedOptionModifier(selected)).selectable(selected, role = Role.RadioButton, onClick = {
                     if (dialog == "theme") scope.launch { store.setTheme(ThemeMode.valueOf(label)) } else scope.launch { store.setTextSize(TextSize.valueOf(label)) }
                     dialog = ""
                 }), verticalAlignment = Alignment.CenterVertically) {
@@ -533,12 +617,4 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             }
         }
     }, confirmButton = { TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
-}
-
-@Composable
-private fun SettingsRow(title: String, value: String, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = false, role = Role.Button, onClick = onClick).padding(vertical = 8.dp), verticalArrangement = Arrangement.Center) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        if (value.isNotEmpty()) Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
 }

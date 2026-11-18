@@ -91,6 +91,60 @@ class DocxProjectTest {
         assertEquals(0, project.legacyCitationCount())
         assertEquals(listOf(Citation(1, listOf("ABCD2345"), "(Lovelace, 2020)")), project.citations())
     }
+    @Test fun documentWideCitationInputsFollowDocumentOrderAndSkipDeletedCitations() {
+        val project = DocxProject(makeDocx())
+        project.insertCitation(1, second.length, second.length, listOf(item), page = "14", prefix = "see")
+        project.insertCitation(0, first.length, first.length, listOf(item), style = "narrative")
+        val input = project.citationExportInput()
+        assertEquals(listOf("2", "1"), input.clusters.map { it.id })
+        assertEquals("narrative", input.clusters.first().mode)
+        assertEquals("14", input.clusters.last().page)
+        assertEquals("see", input.clusters.last().prefix)
+        assertEquals(listOf(item), input.items)
+        assertEquals(0, input.legacyCount)
+        project.deleteRange(0, first.length + 1, project.blockText(0).length)
+        assertEquals(listOf("1"), project.citationExportInput().clusters.map { it.id })
+    }
+    @Test fun structuredExportPreservesPartsAndUsesPanelSpacingAndRichRuns() {
+        val source = makeDocx(); val before = source.readBytes(); val project = DocxProject(source)
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val input = project.citationExportInput()
+        val result = org.blaykie.nativeapp.citation.processor.BibliographyResult(
+            listOf(org.blaykie.nativeapp.citation.processor.BibliographyEntry(listOf(item.key), listOf(
+                org.blaykie.nativeapp.citation.processor.RichRun("Styled & title", italic = true, bold = true, underline = true, smallCaps = true)))),
+            org.blaykie.nativeapp.citation.processor.BibliographyLayout(hangingIndent = true, lineSpacing = 2.0),
+            listOf(org.blaykie.nativeapp.citation.processor.ClusterResult(input.clusters.single().id, "(Custom & citation)")))
+        val file = output(); project.exportWithProcessor(file, "1.5", false, result)
+        DocxProject(file)
+        val originalParts = zipContent(source); val parts = zipContent(file)
+        assertArrayEquals(before, source.readBytes())
+        originalParts.filterKeys { it != "word/document.xml" }.forEach { (name, bytes) -> assertArrayEquals(bytes, parts.getValue(name)) }
+        val xml = parts.getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertTrue(xml.contains("(Custom &amp; citation)")); assertTrue(xml.contains("Styled &amp; title"))
+        assertTrue(xml.contains("<w:i/>")); assertTrue(xml.contains("<w:b/>")); assertTrue(xml.contains("<w:u w:val=\"single\"/>")); assertTrue(xml.contains("<w:smallCaps/>"))
+        assertTrue(xml.contains("w:hanging=\"720\"")); assertTrue(xml.contains("w:line=\"360\""))
+        try { project.buildXmlWithProcessor("match", false, result.copy(citations = emptyList())); fail("missing result accepted") } catch (_: IllegalArgumentException) { }
+    }
+    @Test fun bibliographyLayoutHintsControlIndentAndEntrySpacing() {
+        val project = DocxProject(makeDocx())
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val input = project.citationExportInput()
+        val result = org.blaykie.nativeapp.citation.processor.BibliographyResult(
+            listOf(org.blaykie.nativeapp.citation.processor.BibliographyEntry(listOf(item.key), listOf(org.blaykie.nativeapp.citation.processor.RichRun("Reference")))),
+            org.blaykie.nativeapp.citation.processor.BibliographyLayout(hangingIndent = true, entrySpacing = 1.0, lineSpacing = 2.0),
+            listOf(org.blaykie.nativeapp.citation.processor.ClusterResult(input.clusters.single().id, "(Example, 2020)")))
+        fun entry(layout: org.blaykie.nativeapp.citation.processor.BibliographyLayout): String {
+            val xml = project.buildXmlWithProcessor("1.5", false, result.copy(layout = layout))
+            return Regex("<w:p><w:pPr>(.*?)</w:pPr>(.*?)Reference</w:t></w:r></w:p>", RegexOption.DOT_MATCHES_ALL).findAll(xml).last().value
+        }
+        val withHint = entry(result.layout)
+        assertTrue(withHint.contains("<w:ind w:left=\"720\" w:hanging=\"720\"/>"))
+        assertTrue(withHint.contains("w:afterLines=\"150\"")); assertTrue(withHint.contains("w:after=\"360\"")); assertTrue(withHint.contains("w:line=\"360\""))
+        val noHint = entry(result.layout.copy(hangingIndent = null, entrySpacing = null))
+        assertFalse(noHint.contains("<w:ind")); assertFalse(noHint.contains("w:afterLines")); assertTrue(noHint.contains("w:after=\"0\""))
+        assertFalse(entry(result.layout.copy(hangingIndent = false)).contains("<w:ind"))
+        assertFalse(entry(result.layout.copy(entrySpacing = 0.0)).contains("w:afterLines"))
+    }
     @Test fun deleteRange() {
         val project = DocxProject(makeDocx()); val start = second.indexOf("enough")
         project.deleteRange(1, start, start + 6, tidy = false)

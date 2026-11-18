@@ -52,6 +52,8 @@ internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userI
 }
 
 internal fun mayStartExport(phase: ExportPhase): Boolean = phase == ExportPhase.IDLE || phase == ExportPhase.DONE
+internal fun shouldCancelOptionalExport(optional: Boolean, phase: ExportPhase): Boolean =
+    optional && phase in setOf(ExportPhase.PREPARING, ExportPhase.FALLBACK, ExportPhase.CHOOSE, ExportPhase.WAITING)
 
 internal class SourceDestinationConflict : IllegalArgumentException()
 internal fun writeVerifiedExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, sameSource: Boolean, beforeCopy: () -> Unit, destination: () -> OutputStream) {

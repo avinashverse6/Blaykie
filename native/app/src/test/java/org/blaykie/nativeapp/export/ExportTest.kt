@@ -42,6 +42,23 @@ class ExportTest {
         assertEquals(a.keys.toList(), b.keys.toList())
         for (name in a.keys) assertArrayEquals(name, a.getValue(name), b.getValue(name))
     }
+    @Test fun cslPreparationFailsClosedAndBuiltInFallbackIsExplicit() = kotlinx.coroutines.runBlocking {
+        val source = file("source.docx"); val original = source.readBytes(); val project = DocxProject(source)
+        val position = project.blockText(1).length
+        project.insertCitation(1, position, position, listOf(item().citationItem()))
+        val cache = File(temp.root, "private.docx")
+        try { prepareCslExport(project, cache, "match", false, null); fail("not-ready style accepted") } catch (_: IllegalArgumentException) { }
+        assertFalse(cache.exists()); assertArrayEquals(original, source.readBytes())
+        val broken = object : org.blaykie.nativeapp.citation.processor.CitationProcessor {
+            override suspend fun citation(items: List<org.blaykie.nativeapp.docx.CitationItem>, mode: String, page: String, prefix: String, context: List<org.blaykie.nativeapp.docx.CitationItem>): String = error("failed")
+            override suspend fun bibliography(items: List<org.blaykie.nativeapp.docx.CitationItem>, clusters: List<org.blaykie.nativeapp.citation.processor.CitationCluster>): org.blaykie.nativeapp.citation.processor.BibliographyResult = error("failed")
+        }
+        try { prepareCslExport(project, cache, "match", false, ExportCslStyle("Style", broken)); fail("renderer failure accepted") } catch (_: IllegalStateException) { }
+        assertFalse(cache.exists()); assertArrayEquals(original, source.readBytes())
+        // The caller must explicitly choose the normal built-in path after failure.
+        project.export(cache, "match")
+        assertZipEqual(resource("golden-match.docx"), cache)
+    }
     @Test fun pythonGoldenAllThreeSpacingOptionsWithUnicodeAndCitation() {
         val source = file("source.docx"); val before = source.readBytes(); val project = DocxProject(source)
         val pos = project.blockText(1).length; project.insertCitation(1, pos, pos, listOf(item().citationItem()))

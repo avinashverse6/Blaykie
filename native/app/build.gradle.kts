@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+val cslInRelease = providers.gradleProperty("cslInRelease").map { value ->
+    require(value == "true" || value == "false") { "cslInRelease must be true or false" }
+    value == "true"
+}.orElse(false).get()
+
 android {
     namespace = "org.blaykie.nativeapp"
     compileSdk = 35
@@ -27,10 +32,14 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "true")
+            buildConfigField("boolean", "CSL_RUNTIME_INCLUDED", "true")
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Blaykie (debug)"
         }
         getByName("release") {
+            buildConfigField("boolean", "CUSTOM_STYLES_DEFAULT", "false")
+            buildConfigField("boolean", "CSL_RUNTIME_INCLUDED", cslInRelease.toString())
             isMinifyEnabled = false
             isShrinkResources = false
             val releaseSigning = signingConfigs.getByName("release")
@@ -56,7 +65,22 @@ android {
             }
         }
     }
-    sourceSets.getByName("test").resources.srcDir("src/debug/assets")
+    sourceSets {
+        getByName("debug") {
+            java.srcDir("src/csl/java")
+            res.srcDir("src/csl/res")
+            assets.srcDir("src/csl/assets")
+        }
+        getByName("release") {
+            if (cslInRelease) {
+                // Replace the ordinary release adapters with the feature-aware implementations.
+                java.setSrcDirs(listOf("src/csl/java"))
+                res.srcDir("src/csl/res")
+                assets.srcDir("src/csl/assets")
+            }
+        }
+        getByName("test").resources.srcDirs("src/debug/assets", "src/csl/assets")
+    }
     buildFeatures { compose = true; buildConfig = true }
     composeOptions { kotlinCompilerExtensionVersion = "1.5.15" }
     compileOptions {

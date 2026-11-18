@@ -23,12 +23,22 @@ class AboutInfoTest {
         val apache = File(root, "native/app/src/main/assets/${AboutInfo.apacheLicenseAsset}").readBytes()
         val sha256 = java.security.MessageDigest.getInstance("SHA-256").digest(apache).joinToString("") { "%02x".format(it.toInt() and 255) }
         assertEquals("cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30", sha256)
+        if (BuildConfig.DEBUG) assertTrue(BuildConfig.CSL_RUNTIME_INCLUDED)
         val notices = File(root, "THIRD_PARTY_NOTICES.md").readText()
+        val citationCredits = File(root, "native/app/src/csl/java/org/blaykie/nativeapp/AboutExtraCredits.kt").readText()
+        listOf("https://citationstyles.org/", "https://creativecommons.org/licenses/by-sa/3.0/", "https://github.com/Juris-M/citeproc-js").forEach {
+            assertTrue("Missing citation credit $it", notices.contains(it))
+            assertTrue("Missing About credit $it", citationCredits.contains(it))
+        }
         AboutInfo.libraries.forEach { library ->
             assertTrue("Missing ${library.name}", notices.contains(library.name))
             assertTrue("Missing license ${library.license}", notices.contains(library.license))
             assertTrue("Missing source ${library.url}", notices.contains(library.url))
         }
+        assertEquals("Lora — SIL Open Font License 1.1", AboutInfo.fontCredit)
+        assertEquals("https://fonts.google.com/specimen/Lora", AboutInfo.fontSource)
+        assertTrue(notices.contains("Lora"))
+        assertArrayEquals(File(root, "native/LICENSES/Lora-OFL.txt").readBytes(), File(root, "native/app/src/main/res/raw/lora_ofl.txt").readBytes())
         assertEquals(Screen.SETTINGS, backTarget(Screen.ABOUT))
     }
 }

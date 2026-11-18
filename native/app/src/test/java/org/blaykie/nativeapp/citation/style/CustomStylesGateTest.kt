@@ -1,0 +1,93 @@
+package org.blaykie.nativeapp.citation.style
+
+import java.io.File
+import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.export.optionalExportSelection
+import org.blaykie.nativeapp.session.Session
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
+
+class CustomStylesGateTest {
+    @get:Rule val temp = TemporaryFolder()
+    private data class FakeHost(val id: Int)
+    private fun selected() = Session("content://source", "source.docx", "source.docx", debugCitationStyleId = "example", debugCitationLanguage = "xx-XX", debugCitationLanguageExplicit = true)
+
+    @Test fun offDocumentAndExportNeverInvokeHostFactory() {
+        val source = File(temp.root, "source.docx").apply {
+            writeBytes(requireNotNull(this@CustomStylesGateTest.javaClass.classLoader?.getResourceAsStream("m4c/source.docx")).use { it.readBytes() })
+        }
+        val document = DocxProject(source)
+        assertTrue(document.blockCount > 0)
+        var constructions = 0
+        val gate = CustomStylesGate<FakeHost> { error("No host exists") }
+        gate.setEnabled(false)
+        val documentHost = gate.open { constructions++; FakeHost(constructions) }
+        val previewHost = gate.open { constructions++; FakeHost(constructions) }
+        val selection = optionalExportSelection(false, selected()) { constructions++; null }
+        assertNull(documentHost); assertNull(previewHost); assertNull(selection)
+        assertFalse(citationUsesCsl(selected(), false))
+        assertEquals(0, constructions)
+    }
+
+    @Test fun sessionHostRequiresEnabledFeatureAndCustomStyle() {
+        var constructions = 0
+        val destroyed = mutableListOf<Int>()
+        val gate = CustomStylesGate<FakeHost> { destroyed.add(it.id) }
+        assertNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(true)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        assertEquals(0, constructions)
+        val active = requireNotNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertEquals(1, constructions)
+        gate.close(active)
+        assertEquals(listOf(1), destroyed)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(false)
+        assertNull(gate.openForStyle("custom") { FakeHost(++constructions) })
+        assertEquals(1, constructions)
+    }
+
+    @Test fun changingStyleDestroysOldSessionHostBeforeOpeningReplacement() {
+        var constructions = 0
+        val destroyed = mutableListOf<Int>()
+        val gate = CustomStylesGate<FakeHost> { destroyed.add(it.id) }
+        gate.setEnabled(true)
+        var host = gate.openForStyle("first") { FakeHost(++constructions) }
+        assertEquals(host, gate.retainForStyle(host, "first", "first"))
+        assertTrue(destroyed.isEmpty())
+        host = gate.retainForStyle(host, "first", "second")
+        assertNull(host)
+        assertEquals(listOf(1), destroyed)
+        host = gate.openForStyle("second") { FakeHost(++constructions) }
+        assertEquals(2, host?.id)
+        host = gate.retainForStyle(host, "second", null)
+        assertNull(host)
+        assertEquals(listOf(1, 2), destroyed)
+        assertNull(gate.openForStyle(null) { FakeHost(++constructions) })
+        gate.setEnabled(false)
+        assertNull(gate.openForStyle("second") { FakeHost(++constructions) })
+        assertEquals(2, constructions)
+    }
+
+    @Test fun disablingDestroysActiveAndPreviewHostsAndRestoresBuiltInSession() {
+        var constructions = 0
+        val destroyed = mutableListOf<Int>()
+        val gate = CustomStylesGate<FakeHost> { destroyed.add(it.id) }
+        gate.setEnabled(true)
+        gate.open { FakeHost(++constructions) }
+        gate.open { FakeHost(++constructions) }
+        gate.setEnabled(false)
+        assertEquals(setOf(1, 2), destroyed.toSet())
+        val fallback = builtInSession(selected())
+        assertNull(fallback.debugCitationStyleId)
+        assertEquals("en-US", fallback.debugCitationLanguage)
+        assertFalse(fallback.debugCitationLanguageExplicit)
+        assertNull(gate.open { FakeHost(++constructions) })
+        assertEquals(2, constructions)
+        gate.setEnabled(false)
+        assertEquals(2, destroyed.size)
+    }
+}

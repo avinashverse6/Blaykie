@@ -18,11 +18,28 @@ This inventory records dependencies explicitly declared in the repository, relev
 
 AndroidX Core, Lifecycle and other AndroidX/Compose libraries, Kotlin standard library, Kotlin coroutines, and Okio are also used directly or transitively. Their resolved versions are not pinned individually in the checked-in build files; inspect the Gradle runtime dependency graph for exact versions and license/notice information for a particular APK. Do not treat this inventory as a complete transitive SBOM.
 
+### Citation styles: release files
+
+The CSL-enabled native release ships the following separate, unmodified upstream files (snapshot commits are pinned repository snapshots):
+
+| File | Upstream project and URL | Pinned commit | Bytes | SHA-256 | License |
+|---|---|---|---:|---|---|
+| `citeproc.js` | citeproc-js, Frank Bennett: https://github.com/Juris-M/citeproc-js | `cc9153c45293af878de08cafddbefe6ea150c380` | 970020 | `db98d3341d39eb7a9f166231b6c51118ed499f79821daa3e41f1ea8d7f8d0cbb` | AGPL-3.0-or-later option |
+| `locales-en-US.xml` | CSL locales: https://github.com/citation-style-language/locales | `8bef426f89f38c0789223c50e53ec2197bc50bb3` | 32649 | `ac864c7c21166b4390d82c31792cdc509400727fa0060b43d8aa17e07f9cb079` | CC BY-SA 3.0 |
+
+The citeproc-js header is retained untouched. The English locale is a separate unmodified data file; its authors and contributors are listed in the byte-identical file, with their metadata retained. Credit the Citation Style Language project and contributors: https://citationstyles.org/. CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/.
+
+Blaykie's own code remains AGPL-3.0-or-later. Styles imported by users stay on their device and are not redistributed by Blaykie. This notice does not replace review of license-text and other distribution obligations.
+
 ### Native assets
 
 - Home logo and launcher icon: **original artwork by the author (inspired by the author's own cat), covered by the project license**. These are the supplied full icon and adaptive foreground/background, with density-sized legacy copies derived from the full icon.
 - Material Design settings, back and undo vector icons: Apache-2.0; source https://github.com/google/material-design-icons. The repository does not pin an upstream icon revision; see the vector resources for attribution comments.
-- The native app uses Android's system serif font; it does not bundle Liberation Serif or Poppins.
+- The native app uses unmodified static **Lora** Regular and Bold, version 3.008, supplied from Google Fonts (https://fonts.google.com/specimen/Lora; https://github.com/google/fonts). Lora is distributed under the SIL Open Font License 1.1. The supplied OFL text states: `Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".` The unmodified license is in `native/LICENSES/Lora-OFL.txt` and shipped as the `lora_ofl` raw resource and shown in About.
+  - `lora_regular.ttf`: 133888 bytes; SHA-256 `7ed00e7c9cdf16ab7e2fd2361fe45d4f0b61263cd60aae398b27b7ee08108827`.
+  - `lora_bold.ttf`: 133828 bytes; SHA-256 `7d74015e950c2fb66519c7295b8155621d22200ae2ca2a4c6b43ce3c490cac87`.
+  - `Lora-OFL.txt` / `lora_ofl.txt`: 4516 bytes each; SHA-256 `41cf75bf229a1435b7df209ac7419622516eff7e8cab79260fb0fb9b1cc8ced2`.
+- The native app does not bundle Poppins or Liberation Serif. The repository-root Poppins files remain for the Kivy app; see its inventory below.
 
 ### Native test-only dependencies
 

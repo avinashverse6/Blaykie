@@ -4,6 +4,11 @@ import org.blaykie.nativeapp.docx.CitationAuthor
 import org.blaykie.nativeapp.docx.CitationFormatting
 import org.blaykie.nativeapp.docx.CitationItem
 import org.junit.Assert.*
+import kotlinx.serialization.json.*
+import org.mozilla.javascript.Context
+import org.mozilla.javascript.ScriptableObject
+import org.blaykie.nativeapp.csl.CitationItemToCsl
+import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.junit.Test
 
 class CslSpikeTest {
@@ -39,6 +44,56 @@ class CslSpikeTest {
         println("CSL bibliography:\n${result.bibliography.joinToString("\n")}")
         println("Kotlin bibliography:\n${CitationFormatting.referenceList(items)}")
     }
+    @Test fun goldenConverterComparison() {
+        val golden = Json.parseToJsonElement(requireNotNull(javaClass.classLoader?.getResourceAsStream("apa-round2-golden.json")).bufferedReader().use { it.readText() }).jsonObject
+        val items = golden.getValue("items").jsonArray.map { e ->
+            val item = e.jsonObject
+            ZoteroItem(item.getValue("key").jsonPrimitive.content, item.getValue("data").jsonObject).citationItem()
+        } + listOf(
+            CitationItem("BOOK1", "An example book", listOf(CitationAuthor("Ada", "Lovelace")), "2020", itemType="book", publisher="Example Press"),
+            CitationItem("CHAPTER1", "An example chapter", listOf(CitationAuthor("Ada", "Lovelace")), "2021", itemType="bookSection", bookTitle="Collected works", editors=listOf(CitationAuthor("Grace", "Hopper")), pages="10-20", publisher="Example Press"),
+            CitationItem("GUJARATI", "ગુજરાતી અભ્યાસ", listOf(CitationAuthor("અનિતા", "પટેલ")), "2022", itemType="webpage", url="https://example.org/gujarati")
+        )
+        val records = JsonArray(items.map(CitationItemToCsl::convert))
+        val cx = Context.enter()
+        val outputs: JsonArray
+        try {
+            cx.optimizationLevel = -1; cx.languageVersion = Context.VERSION_ES6
+            val scope = cx.initStandardObjects()
+            ScriptableObject.putProperty(scope, "spikeStyle", asset("apa.csl"))
+            ScriptableObject.putProperty(scope, "spikeLocale", asset("locales-en-US.xml"))
+            ScriptableObject.putProperty(scope, "spikeItems", records.toString())
+            cx.evaluateString(scope, asset("citeproc.js"), "citeproc.js", 1, null)
+            val json = cx.evaluateString(scope, """
+                var records=JSON.parse(String(spikeItems)), lookup={};
+                records.forEach(function(item){lookup[item.id]=item;});
+                var sys={retrieveLocale:function(){return String(spikeLocale);},retrieveItem:function(id){return lookup[id];}};
+                var engine=new CSL.Engine(sys,String(spikeStyle),'en-US'); engine.setOutputFormat('text');
+                var out=records.map(function(item){
+                    engine.updateItems([item.id]);
+                    var p=engine.makeCitationCluster([{id:item.id}]);
+                    var a=engine.makeCitationCluster([{id:item.id,'author-only':true}]);
+                    var s=engine.makeCitationCluster([{id:item.id,'suppress-author':true}]);
+                    var bib=engine.makeBibliography();
+                    return {id:item.id,parenthetical:p,narrative:(a+' '+s).trim(),bibliography:bib[1][0].trim()};
+                }); JSON.stringify(out);
+            """.trimIndent(), "comparison.js", 1, null).toString()
+            outputs = Json.parseToJsonElement(json).jsonArray
+        } finally { Context.exit() }
+        assertEquals(items.size, outputs.size)
+        items.zip(outputs).forEach { (item, result) ->
+            val csl = result.jsonObject
+            val row = buildJsonObject {
+                put("id", item.key); put("type", item.itemType)
+                for (mode in listOf("parenthetical", "narrative", "bibliography")) {
+                    val builtin = if (mode == "bibliography") CitationFormatting.referenceList(listOf(item)).trim() else CitationFormatting.citationText(listOf(item), mode)
+                    put(mode, buildJsonObject { put("builtin", builtin); put("csl", csl.getValue(mode).jsonPrimitive.content) })
+                }
+            }
+            println("COMPARISON_ROW " + row.toString())
+        }
+    }
+
     @Test fun diagnoseWithSmallJvmThreadStack() {
         println("Citation codec JVM parser: ${org.blaykie.nativeapp.docx.CitationRecordCodec.parserClassName()}")
         val files = listOf("citeproc.js", "apa.csl", "locales-en-US.xml").associateWith(::asset)
