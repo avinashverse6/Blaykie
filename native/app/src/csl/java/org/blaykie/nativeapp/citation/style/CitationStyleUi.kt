@@ -244,19 +244,22 @@ private class StyleController(context: Context) : ViewModel() {
         state.value = state.value.copy(importing = true)
         operationJob = scope.launch {
             try {
-                val (locales, affected) = withContext(NonCancellable) {
+                val locales = withContext(NonCancellable) {
                     val (before, after) = withContext(Dispatchers.IO) {
                         val before = loadSelectionInventory(app)
                         val store = LocaleImportStore(File(app.filesDir, "locales"))
                         check(store.remove(locale.asset))
                         before to loadSelectionInventory(app)
                     }
-                    after.locales to reconcileInventoryRemoval(app, before, after)
+                    reconcileInventoryRemoval(app, before, after) {
+                        if (selectedLanguage.equals(locale.tag, true)) {
+                            host?.cancel()
+                            state.value = state.value.copy(ready = false)
+                        }
+                    }
+                    after.locales
                 }
-                val usedByHost = affected && selectedLanguage.equals(locale.tag, true)
-                if (usedByHost) host?.cancel()
-                state.value = state.value.copy(importing = false, locales = locales,
-                    ready = if (usedByHost) false else state.value.ready, message = "Imported language removed.")
+                state.value = state.value.copy(importing = false, locales = locales, message = "Imported language removed.")
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { state.value = state.value.copy(importing = false, message = "Could not remove the imported language.") }
         }
@@ -273,12 +276,16 @@ private class StyleController(context: Context) : ViewModel() {
                         check(StyleImportStore(File(app.filesDir, "styles")).remove(asset)) { "Could not remove style." }
                         before to loadSelectionInventory(app)
                     }
-                    reconcileInventoryRemoval(app, before, after)
+                    reconcileInventoryRemoval(app, before, after) {
+                        if (selected != null && after.choices.none { it.id == selected && it.disabledReason == null }) {
+                            host?.cancel()
+                            state.value = state.value.copy(ready = false)
+                        }
+                    }
                     after.choices
                 }
                 val selectedChoice = choices.firstOrNull { it.id == selected }
                 val unavailable = selected != null && (selectedChoice == null || selectedChoice.disabledReason != null)
-                if (unavailable) host?.cancel()
                 state.value = state.value.copy(choices = choices, importing = false, failedIds = state.value.failedIds - requireNotNull(choice.id),
                     ready = if (unavailable) false else state.value.ready, failedWarmup = if (unavailable) selected else null,
                     message = if (unavailable) selectedChoice?.disabledReason ?: "Style could not be loaded." else "Imported style removed.")

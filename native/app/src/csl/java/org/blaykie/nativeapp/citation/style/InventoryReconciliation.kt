@@ -19,7 +19,10 @@ internal fun loadSelectionInventory(context: Context): SelectionInventory = Sele
 )
 
 /** Record the fallback atomically before notifying any open session. */
-internal suspend fun reconcileInventoryRemoval(context: Context, before: SelectionInventory, after: SelectionInventory): Boolean {
+internal suspend fun reconcileInventoryRemoval(
+    context: Context, before: SelectionInventory, after: SelectionInventory,
+    beforeNotify: () -> Unit = {},
+): Boolean {
     var changed = false
     try {
         SettingsStore(context).updateOptionalSelection { stored ->
@@ -27,7 +30,9 @@ internal suspend fun reconcileInventoryRemoval(context: Context, before: Selecti
         }
     } finally {
         // Even if writing the message fails, make the active session re-check availability.
-        if (changed) mutableInventoryRevision.value += 1
+        if (changed) {
+            try { beforeNotify() } finally { mutableInventoryRevision.value += 1 }
+        }
     }
     return changed
 }
