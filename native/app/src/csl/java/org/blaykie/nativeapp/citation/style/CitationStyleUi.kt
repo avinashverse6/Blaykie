@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import org.blaykie.nativeapp.OptionalSettingsBindings
+import org.blaykie.nativeapp.DocumentTonalBanner
 import org.blaykie.nativeapp.Settings
 import org.blaykie.nativeapp.SettingsStore
 import androidx.lifecycle.ViewModel
@@ -390,11 +391,11 @@ internal fun CitationStyleBanner(context: Context, session: Session?, enabled: B
     val state by vm.state.collectAsState()
     when (citationBanner(enabled, configuredStyle, session?.debugCitationStyleId, state.preparing, state.failedStyle)) {
         CitationBanner.None -> Unit
-        CitationBanner.Preparing -> Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        CitationBanner.Preparing -> DocumentTonalBanner {
             Text("Preparing citation style", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { if (onFallback()) vm.cancel() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", maxLines = 1) }
         }
-        CitationBanner.Failed -> Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        CitationBanner.Failed -> DocumentTonalBanner {
             Text("Citation style could not be prepared.", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
             TextButton(onClick = { if (onFallback()) vm.cancel() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Use built-in APA", maxLines = 1) }
         }

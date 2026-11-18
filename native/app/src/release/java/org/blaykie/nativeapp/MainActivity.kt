@@ -335,36 +335,30 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             onSettings = { navigate(Screen.SETTINGS) },
         )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { navigate(Screen.HOME) }) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Close") }
-                Column(Modifier.weight(1f)) {
-                    Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("${project?.citations()?.size ?: 0} citation(s) added", style = MaterialTheme.typography.bodySmall)
-                }
-                IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
-                Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
-            }
+            DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
+                onClose = { navigate(Screen.HOME) }, onUndo = { undoSession() },
+                onExport = { exportController.reset(); navigate(Screen.EXPORT) },
+            )
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
-                Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
+                DocumentTonalBanner {
+                    Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall)
+                }
             }
-            if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp))
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+            if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
+            val edits = session?.edits.orEmpty()
+            val markers = remember(edits) { documentMarkers(edits) }
+            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+                if (blockCards.isEmpty()) item { AppEmptyState("This document has no readable paragraphs.") }
                 items(blockCards, key = { it.index }) { card ->
-                    Card(onClick = {
+                    DocumentBlock(card.kind, card.text, markers[card.index], onClick = {
                         if (card.kind == "table" || card.kind == "other") message = "Tables and special blocks cannot be edited."
                         else {
                             field = TextFieldValue(card.text)
                             selectionBlock = card.index; selectionStart = 0; selectionEnd = 0
                             session?.let { if (persist(it.copy(draft = Draft(card.index, card.text)))) { message = ""; navigate(Screen.EDITOR) } }
                         }
-                    }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                        Column(Modifier.padding(16.dp)) {
-                            if (card.kind == "table") Text("Table", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(card.text, color = if (card.kind == "table" || card.kind == "other") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                                style = if (card.kind.startsWith("heading")) MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                    })
                 }
             }
         }
