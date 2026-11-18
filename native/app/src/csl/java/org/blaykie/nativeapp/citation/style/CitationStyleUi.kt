@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import org.blaykie.nativeapp.OptionalSettingsBindings
@@ -375,6 +376,41 @@ internal fun CitationStyleSession(context: Context, session: Session?, enabled: 
     }
 }
 
+@Composable
+internal fun CitationStyleSubtitle(context: Context, session: Session?, enabled: Boolean) {
+    val state by controller(context).state.collectAsState()
+    val text = citationSubtitle(enabled, session?.debugCitationStyleId, state.ready,
+        session?.debugCitationLanguage ?: "en-US", state.choices)
+    if (text != null) Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
+
+@Composable
+internal fun CitationStyleBanner(context: Context, session: Session?, enabled: Boolean, configuredStyle: String?, onFallback: () -> Boolean) {
+    val vm = controller(context)
+    val state by vm.state.collectAsState()
+    when (citationBanner(enabled, configuredStyle, session?.debugCitationStyleId, state.preparing, state.failedStyle)) {
+        CitationBanner.None -> Unit
+        CitationBanner.Preparing -> Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Preparing citation style", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { if (onFallback()) vm.cancel() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel", maxLines = 1) }
+        }
+        CitationBanner.Failed -> Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("Citation style could not be prepared.", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = { if (onFallback()) vm.cancel() }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Use built-in APA", maxLines = 1) }
+        }
+    }
+}
+
+@Composable
+private fun SettingsFallbackMessage(message: String?, dismiss: () -> Unit) {
+    if (message == null) return
+    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        TextButton(onClick = dismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
+    }
+}
+
 internal fun settingsSectionVisible(enabled: Boolean): Boolean = enabled
 
 @Composable
@@ -398,19 +434,16 @@ internal fun SettingsExtraSection(settings: Settings, store: SettingsStore) {
     CitationStylePicker(vm, bindings.styleId, bindings.languageTag ?: "en-US", bindings.languageTag != null, true,
         { value -> bindings.chooseStyle(value); true },
         { value -> bindings.chooseLanguage(value); true },
-        { bindings.chooseLanguage(null); true })
+        { bindings.chooseLanguage(null); true }, settings.styleMessage, settings.languageMessage,
+        { scope.launch { store.updateOptionalSelection(::dismissStyleMessage) } },
+        { scope.launch { store.updateOptionalSelection(::dismissLanguageMessage) } })
     HorizontalDivider(Modifier.padding(vertical = 8.dp))
 }
 
 @Composable
-internal fun CitationStyleRow(context: Context, session: Session?, onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean) {
-    CitationStylePicker(controller(context), session?.debugCitationStyleId, session?.debugCitationLanguage ?: "en-US",
-        session?.debugCitationLanguageExplicit ?: false, false, onStyleChange, onLanguageChange, onUseStyleLanguage)
-}
-
-@Composable
 private fun CitationStylePicker(vm: StyleController, styleId: String?, language: String, explicit: Boolean, settingsMode: Boolean,
-                                onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean) {
+                                onStyleChange: (String?) -> Boolean, onLanguageChange: (String) -> Boolean, onUseStyleLanguage: () -> Boolean,
+                                styleMessage: String?, languageMessage: String?, dismissStyle: () -> Unit, dismissLanguage: () -> Unit) {
     val state by vm.state.collectAsState()
     var expanded by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<StyleChoice?>(null) }
@@ -449,6 +482,7 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
                 })
             }
         }
+        SettingsFallbackMessage(styleMessage, dismissStyle)
         if (settingsMode) Text("Applies to citations you insert from now on and to export. Earlier citations in a session are re-rendered at export; citations from older files stay as they are.", style = MaterialTheme.typography.bodySmall)
         val currentChoice = state.choices.firstOrNull { it.id == styleId }
         resolveStyleLanguage(currentChoice, language, explicit, state.locales).note?.let {
@@ -473,6 +507,7 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
                 })
             }
         }
+        SettingsFallbackMessage(languageMessage, dismissLanguage)
         if (styleId == null) Text("Language applies to CSL styles; built-in APA uses English.", style = MaterialTheme.typography.bodySmall)
         if (state.previewing) Row {
             Text("Preparing style preview", modifier = Modifier.weight(1f))

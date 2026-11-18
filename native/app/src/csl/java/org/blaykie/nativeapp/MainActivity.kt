@@ -65,7 +65,8 @@ import org.blaykie.nativeapp.account.AndroidKeyCipher
 import org.blaykie.nativeapp.citation.style.SettingsExtraSection
 import org.blaykie.nativeapp.citation.CitationSearchController
 import org.blaykie.nativeapp.citation.style.builtInSession
-import org.blaykie.nativeapp.citation.style.CitationStyleRow
+import org.blaykie.nativeapp.citation.style.CitationStyleBanner
+import org.blaykie.nativeapp.citation.style.CitationStyleSubtitle
 import org.blaykie.nativeapp.citation.style.reconcileSelections
 import org.blaykie.nativeapp.citation.style.inventoryRevision
 import org.blaykie.nativeapp.csl.StyleRegistry
@@ -186,6 +187,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var selectionEnd by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var selectionSync by remember { mutableStateOf(false) }
+    var sessionStyleFallback by remember { mutableStateOf<Pair<String, String>?>(null) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
     var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
@@ -349,22 +351,23 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
-    val saveCitationStyle: (String?) -> Boolean = { id ->
-        if (session == null) false else { scope.launch { settingsStore.setStyleId(id) }; true }
-    }
-    val saveCitationLanguage: (String) -> Boolean = { tag ->
-        if (session == null) false else { scope.launch { settingsStore.setLanguageTag(tag) }; true }
-    }
-    val useStyleLanguage: () -> Boolean = {
-        if (session == null) false else { scope.launch { settingsStore.setLanguageTag(null) }; true }
-    }
     val useBuiltInForSession: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
+    LaunchedEffect(session?.sourceName, settings.styleId, settings.customCitationStyles) {
+        if (!settings.customCitationStyles || sessionStyleFallback != (session?.sourceName to settings.styleId)) sessionStyleFallback = null
+    }
+    val useBuiltInForCurrentSession: () -> Boolean = {
+        val current = session
+        val style = settings.styleId
+        if (current == null || style == null || !useBuiltInForSession(null)) false
+        else { sessionStyleFallback = current.sourceName to style; true }
+    }
     val removalRevision by inventoryRevision.collectAsState()
     LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen, removalRevision) {
         val current = session ?: return@LaunchedEffect
         selectionSync = true
         try {
-            val resolved = resolveSelections(current, false, settings.customCitationStyles)
+            val selection = resolveSelections(current, false, settings.customCitationStyles)
+            val resolved = if (sessionStyleFallback == (current.sourceName to settings.styleId)) builtInSession(selection) else selection
             val latest = session
             if (latest != null && latest.sourceName == current.sourceName) {
                 val updated = latest.copy(debugCitationStyleId = resolved.debugCitationStyleId,
@@ -419,11 +422,12 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 Column(Modifier.weight(1f)) {
                     Text(session?.fileName.orEmpty(), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${project?.citations()?.size ?: 0} citation(s) added", style = MaterialTheme.typography.bodySmall)
+                    CitationStyleSubtitle(context, session, settings.customCitationStyles)
                 }
                 IconButton(onClick = { undoSession() }) { Icon(painterResource(R.drawable.ic_undo), contentDescription = "Undo") }
                 Button(onClick = { exportController.reset(); navigate(Screen.EXPORT) }) { Text("Export") }
             }
-            if (settings.customCitationStyles) CitationStyleRow(context, session, saveCitationStyle, saveCitationLanguage, useStyleLanguage)
+            CitationStyleBanner(context, session, settings.customCitationStyles, settings.styleId, useBuiltInForCurrentSession)
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))

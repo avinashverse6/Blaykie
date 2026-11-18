@@ -31,8 +31,10 @@ internal fun reconcileSelections(
         debugCitationLanguageExplicit = effectiveLanguage != null,
     )
     return selection.copy(
-        styleMessage = if (missingStyle) "Selected citation style is unavailable; using built-in APA." else null,
-        languageMessage = if (missingLanguage) "Selected citation language is unavailable; using automatic language." else null,
+        styleMessage = if (missingStyle && selection.styleMessageDismissedFor != selection.styleId) "Selected citation style is unavailable; using built-in APA." else null,
+        languageMessage = if (missingLanguage && !selection.languageMessageDismissedFor.equals(selection.languageTag, ignoreCase = true)) "Selected citation language is unavailable; using automatic language." else null,
+        styleMessageDismissedFor = selection.styleMessageDismissedFor.takeIf { missingStyle && it == selection.styleId },
+        languageMessageDismissedFor = selection.languageMessageDismissedFor.takeIf { missingLanguage && it.equals(selection.languageTag, ignoreCase = true) },
     ) to result
 }
 

@@ -29,15 +29,19 @@ private val languageTagKey = stringPreferencesKey("selected_language_tag")
 private val styleInitializedKey = booleanPreferencesKey("selected_style_initialized")
 private val styleMessageKey = stringPreferencesKey("selected_style_message")
 private val languageMessageKey = stringPreferencesKey("selected_language_message")
+private val styleDismissedKey = stringPreferencesKey("selected_style_message_dismissed_for")
+private val languageDismissedKey = stringPreferencesKey("selected_language_message_dismissed_for")
 
 internal data class OptionalSelectionState(
     val styleId: String?, val languageTag: String?, val styleInitialized: Boolean,
     val styleMessage: String? = null, val languageMessage: String? = null,
+    val styleMessageDismissedFor: String? = null, val languageMessageDismissedFor: String? = null,
 )
 internal fun readOptionalSelection(preferences: Preferences) = OptionalSelectionState(
     preferences[styleIdKey], preferences[languageTagKey],
     preferences[styleInitializedKey] == true || preferences[styleIdKey] != null,
     preferences[styleMessageKey], preferences[languageMessageKey],
+    preferences[styleDismissedKey], preferences[languageDismissedKey],
 )
 internal fun MutablePreferences.putOptionalSelection(value: OptionalSelectionState) {
     putStyleId(value.styleId)
@@ -45,6 +49,8 @@ internal fun MutablePreferences.putOptionalSelection(value: OptionalSelectionSta
     this[styleInitializedKey] = value.styleInitialized
     if (value.styleMessage == null) remove(styleMessageKey) else this[styleMessageKey] = value.styleMessage
     if (value.languageMessage == null) remove(languageMessageKey) else this[languageMessageKey] = value.languageMessage
+    if (value.styleMessageDismissedFor == null) remove(styleDismissedKey) else this[styleDismissedKey] = value.styleMessageDismissedFor
+    if (value.languageMessageDismissedFor == null) remove(languageDismissedKey) else this[languageDismissedKey] = value.languageMessageDismissedFor
 }
 
 internal fun MutablePreferences.putStyleId(value: String?) {
@@ -52,6 +58,17 @@ internal fun MutablePreferences.putStyleId(value: String?) {
 }
 internal fun MutablePreferences.putLanguageTag(value: String?) {
     if (value == null) remove(languageTagKey) else this[languageTagKey] = value
+}
+internal fun MutablePreferences.selectStyle(value: String?) {
+    putStyleId(value)
+    this[styleInitializedKey] = true
+    remove(styleMessageKey)
+    remove(styleDismissedKey)
+}
+internal fun MutablePreferences.selectLanguage(value: String?) {
+    putLanguageTag(value)
+    remove(languageMessageKey)
+    remove(languageDismissedKey)
 }
 internal fun readSelections(preferences: Preferences): Pair<String?, String?> =
     preferences[styleIdKey] to preferences[languageTagKey]
@@ -87,15 +104,11 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun setStyleId(value: String?) {
-        context.settingsStore.edit {
-            it.putStyleId(value)
-            it[styleInitializedKey] = true
-            it.remove(styleMessageKey)
-        }
+        context.settingsStore.edit { it.selectStyle(value) }
     }
 
     suspend fun setLanguageTag(value: String?) {
-        context.settingsStore.edit { it.putLanguageTag(value); it.remove(languageMessageKey) }
+        context.settingsStore.edit { it.selectLanguage(value) }
     }
 
     internal suspend fun updateOptionalSelection(transform: (OptionalSelectionState) -> OptionalSelectionState): OptionalSelectionState {
