@@ -406,7 +406,7 @@ private fun SettingsFallbackMessage(message: String?, dismiss: () -> Unit) {
     if (message == null) return
     Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Text(message, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(onClick = dismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Dismiss") }
     }
 }
