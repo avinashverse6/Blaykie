@@ -22,6 +22,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -487,20 +488,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                     }
                 }
             })
-        } else Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.Center) {
-                Text("Paragraph ${session?.draft?.block ?: ""}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.CenterVertically))
-                Button(onClick = { if (finishEditor()) navigate(Screen.DOCUMENT) }, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Done") }
-                TextButton(onClick = {
-                    val draft = session?.draft
-                    val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
-                    if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
-                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Insert citation") }
-                TextButton(onClick = {
-                    val currentBlock = session?.draft?.block
-                    if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
-                }, contentPadding = PaddingValues(horizontal = 4.dp)) { Text("Undo") }
-            }
+        } else Column(Modifier.fillMaxSize()) {
+            ParagraphEditorTopBar(session?.draft?.block) { if (finishEditor()) navigate(Screen.DOCUMENT) }
+            if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
             ParagraphTextField(value = field, onValueChange = { next ->
                 // Normalize only newly inserted line breaks and tabs, not existing document content.
                 val old = field.text; val fresh = next.text
@@ -514,8 +504,15 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 selectionBlock = session?.draft?.block ?: -1
                 selectionStart = field.selection.start; selectionEnd = field.selection.end
                 if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
-            }, modifier = Modifier.fillMaxWidth().weight(1f))
-            if (message.isNotEmpty()) Text(message, color = MaterialTheme.colorScheme.error)
+            }, modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp))
+            ParagraphEditorActions(onInsert = {
+                val draft = session?.draft
+                val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
+                if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
+            }, onUndo = {
+                val currentBlock = session?.draft?.block
+                if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
+            })
         }
         Screen.EXPORT -> project?.let { p ->
             ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
@@ -545,9 +542,10 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val density = LocalDensity.current
     val outline = if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-    BoxWithConstraints(modifier.border(if (focused) 2.dp else 1.dp, outline, RoundedCornerShape(4.dp))) {
+    BoxWithConstraints(modifier.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
+        .border(if (focused) 2.dp else 1.dp, outline, RoundedCornerShape(16.dp))) {
         val viewportHeight = constraints.maxHeight
-        val minTextHeight = (maxHeight - 24.dp).coerceAtLeast(0.dp)
+        val minTextHeight = (maxHeight - 32.dp).coerceAtLeast(0.dp)
         LaunchedEffect(value.selection, layout, viewportHeight, focused) {
             val result = layout
             if (focused && result != null && result.layoutInput.text.text == value.text) {
@@ -556,7 +554,7 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
                 requester.bringIntoView(caret.copy(top = caret.top - margin, bottom = caret.bottom + margin))
             }
         }
-        Box(Modifier.fillMaxSize().imeNestedScroll().verticalScroll(scroll).padding(12.dp)) {
+        Box(Modifier.fillMaxSize().imeNestedScroll().verticalScroll(scroll).padding(16.dp)) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
