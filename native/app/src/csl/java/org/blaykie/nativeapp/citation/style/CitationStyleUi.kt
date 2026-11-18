@@ -16,6 +16,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import org.blaykie.nativeapp.OptionalSettingsBindings
 import org.blaykie.nativeapp.DocumentTonalBanner
+import org.blaykie.nativeapp.SettingsListRow
+import org.blaykie.nativeapp.SettingsSectionTitle
 import org.blaykie.nativeapp.Settings
 import org.blaykie.nativeapp.SettingsStore
 import androidx.lifecycle.ViewModel
@@ -431,7 +433,7 @@ internal fun SettingsExtraSection(settings: Settings, store: SettingsStore) {
         onDispose { vm.setEnabled(false) }
     }
     LaunchedEffect(vm) { vm.refreshInventory() }
-    Text("Citations", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+    SettingsSectionTitle("Citations")
     CitationStylePicker(vm, bindings.styleId, bindings.languageTag ?: "en-US", bindings.languageTag != null, true,
         { value -> bindings.chooseStyle(value); true },
         { value -> bindings.chooseLanguage(value); true },
@@ -454,10 +456,9 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::importStyle) }
     val selected = state.choices.firstOrNull { it.id == styleId }?.title
         ?: if (settingsMode && styleId != null) "Unavailable style" else "APA 7 (built-in)"
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Text("Citation style", style = MaterialTheme.typography.labelLarge)
-        Box {
-            TextButton(onClick = { expanded = true }) { Text(if (settingsMode) selected else "$selected · ${styleLanguageSummary(styleId, language)}") }
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth()) {
+            SettingsListRow("Citation style", if (settingsMode) selected else "$selected · ${styleLanguageSummary(styleId, language)}") { expanded = true }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 state.choices.forEach { choice ->
                     DropdownMenuItem(text = {
@@ -489,11 +490,8 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
         resolveStyleLanguage(currentChoice, language, explicit, state.locales).note?.let {
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        Text("Citation language", style = MaterialTheme.typography.labelLarge)
-        Box {
-            TextButton(onClick = { languageExpanded = true }) {
-                Text(if (settingsMode && !explicit) "Automatic" else if (language.equals("en-US", true)) "English (US), bundled" else language)
-            }
+        Box(Modifier.fillMaxWidth()) {
+            SettingsListRow("Citation language", if (settingsMode && !explicit) "Automatic" else if (language.equals("en-US", true)) "English (US), bundled" else language) { languageExpanded = true }
             DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
                 DropdownMenuItem(text = { Text("Use style language (automatic)") }, enabled = !state.importing, onClick = { languageExpanded = false; onUseStyleLanguage() })
                 DropdownMenuItem(text = { Text("English (US), bundled") }, enabled = !state.importing, onClick = { languageExpanded = false; onLanguageChange("en-US") })

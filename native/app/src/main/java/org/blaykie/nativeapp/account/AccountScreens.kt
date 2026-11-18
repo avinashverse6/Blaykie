@@ -27,6 +27,7 @@ import org.blaykie.nativeapp.AppErrorState
 import org.blaykie.nativeapp.BrandLogo
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
+import org.blaykie.nativeapp.SettingsListRow
 
 internal fun canConnectKey(key: String, checking: Boolean, warning: Boolean): Boolean =
     key.isNotBlank() && !checking && !warning
@@ -155,8 +156,8 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
             }
             Text(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}", modifier = Modifier.padding(vertical = 12.dp))
         }
-        TextButton(enabled = !state.checking, onClick = onChange, modifier = Modifier.fillMaxWidth()) { Text(if (account == null) "Add key" else "Change key") }
-        if (account != null) TextButton(enabled = !state.checking, onClick = onRemove, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Remove key from this phone") }
+        SettingsListRow(if (account == null) "Add key" else "Change key", enabled = !state.checking, onClick = onChange)
+        if (account != null) SettingsListRow("Remove key from this phone", enabled = !state.checking, destructive = true, onClick = onRemove)
         Text("To revoke the key itself, use zotero.org.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (state.checking) CircularProgressIndicator()
         if (state.message.isNotEmpty()) Text(state.message, color = MaterialTheme.colorScheme.onSurface)

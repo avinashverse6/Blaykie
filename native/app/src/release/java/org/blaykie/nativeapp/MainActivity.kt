@@ -466,19 +466,19 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
     val scope = rememberCoroutineScope()
     var dialog by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") } })
+        SettingsTopBar("Settings", onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Account", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            SettingsSectionTitle("Account")
             AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Text("Appearance", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            SettingsRow("Theme", settings.theme.name) { dialog = "theme" }
-            SettingsRow("Text size", settings.textSize.name) { dialog = "size" }
+            SettingsSectionTitle("Appearance")
+            SettingsListRow("Theme", settings.theme.name) { dialog = "theme" }
+            SettingsListRow("Text size", settings.textSize.name) { dialog = "size" }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SettingsExtraSection(settings, store)
-            Text("About", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
-            SettingsRow("About Blaykie", "") { onAbout() }
-            SettingsRow("Last crash", "") { onCrash() }
+            SettingsSectionTitle("About")
+            SettingsListRow("About Blaykie") { onAbout() }
+            SettingsListRow("Last crash") { onCrash() }
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text("App version", style = MaterialTheme.typography.bodyLarge)
                 val context = androidx.compose.ui.platform.LocalContext.current
@@ -501,12 +501,4 @@ private fun SettingsScreen(settings: Settings, store: SettingsStore, account: Ac
             }
         }
     }, confirmButton = { TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
-}
-
-@Composable
-private fun SettingsRow(title: String, value: String, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().heightIn(min = 56.dp).selectable(selected = false, role = Role.Button, onClick = onClick).padding(vertical = 8.dp), verticalArrangement = Arrangement.Center) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        if (value.isNotEmpty()) Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
 }

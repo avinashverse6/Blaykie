@@ -34,6 +34,8 @@ class PaletteContrastTest {
                 "banner error" to (p.error to p.surfaceVariant), "banner action" to (p.primary to p.surfaceVariant),
                 "editor text" to (p.onSurface to p.surface), "editor tonal action" to (p.onSecondaryContainer to p.secondaryContainer),
                 "editor focused outline" to (p.primary to p.surface),
+                "settings section title" to (p.primary to p.background), "settings destructive row" to (p.error to p.background),
+                "settings row value and icon" to (p.onSurfaceVariant to p.background),
                 "inverse surface" to (other.surface to other.onSurface),
             )
             val iconPairs = listOf("outline on surface" to (p.outline to p.surface), "outline on background" to (p.outline to p.background), "outline on variant" to (p.outline to p.surfaceVariant))
