@@ -17,8 +17,8 @@ android {
         applicationId = "io.github.avinashverse6.blaykie"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.1.0"
         manifestPlaceholders["appLabel"] = "Blaykie"
     }
     signingConfigs {
