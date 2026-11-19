@@ -270,6 +270,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
+            Screen.BIBLIOGRAPHY -> navigate(Screen.DOCUMENT)
             Screen.DOCUMENT -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
@@ -297,7 +298,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 catch (_: Exception) { navigate(Screen.HOME); message = "Could not load the session settings." }
             }
             SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
+            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT || screen == Screen.BIBLIOGRAPHY) navigate(Screen.HOME)
         }
         loading = false
     }
@@ -381,7 +382,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         finally { selectionSync = false }
     }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
     LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
         val turnedOff = previousCustomStyles && !settings.customCitationStyles
         if (!settings.customCitationStyles) exportController.disableOptionalExport()
@@ -424,6 +425,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 extraSubtitle = { CitationStyleSubtitle(context, session, settings.customCitationStyles) },
             )
             CitationStyleBanner(context, session, settings.customCitationStyles, settings.styleId, useBuiltInForCurrentSession)
+            TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text("Bibliography")
+            }
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 DocumentTonalBanner {
@@ -513,6 +517,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 val currentBlock = session?.draft?.block
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
+        }
+        Screen.BIBLIOGRAPHY -> project?.let { p ->
+            BibliographyPreviewScreen(p, session to settings.customCitationStyles, onClose = { back() }) {
+                org.blaykie.nativeapp.export.previewBibliography(context, p, session, settings.customCitationStyles)
+            }
         }
         Screen.EXPORT -> project?.let { p ->
             ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })

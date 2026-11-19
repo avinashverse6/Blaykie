@@ -284,9 +284,7 @@ class DocxProject(private val source: File) {
     }
     /** Resolve active session operations in document order, rather than insertion order. */
     internal fun citationExportInput(allowMissing: Boolean = false): CitationExportInput {
-        val present = presentKeys()
-        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
-        val items = present.sorted().mapNotNull { known[it] }
+        val items = bibliographyItems(allowMissing)
         require(items.map { it.key }.distinct().size == items.size) { "Ambiguous reference identifiers." }
         val operations = citationOperations.associateBy { it.number.toString() }
         val order = linkedMapOf<String, MutableList<String>>()
@@ -397,6 +395,14 @@ class DocxProject(private val source: File) {
         "double" -> 480
         else -> throw IllegalArgumentException("Invalid line spacing")
     }
+    internal fun bibliographyPreview() = apaBibliographyEntries(bibliographyItems(false))
+
+    private fun bibliographyItems(allowMissing: Boolean): List<CitationItem> {
+        val present = presentKeys()
+        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
+        return present.sorted().mapNotNull { known[it] }
+    }
+
     private fun bibliography(items: List<CitationItem>, bookmark: Int, line: String, result: org.blaykie.nativeapp.citation.processor.BibliographyResult? = null): String {
         val spacing = "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
         val base = bodyRuns().firstOrNull()?.second?.rpr.orEmpty()
@@ -404,7 +410,6 @@ class DocxProject(private val source: File) {
         val size = Regex("<w:sz\\b[^>]*/>").find(base)?.value.orEmpty() + Regex("<w:szCs\\b[^>]*/>").find(base)?.value.orEmpty()
         fun run(text: String, italic: Boolean = false, bold: Boolean = false) = makeRun("<w:rPr>$fonts${if (bold) "<w:b/>" else ""}${if (italic) "<w:i/>" else ""}$size</w:rPr>", text)
         val heading = "<w:p><w:pPr><w:pageBreakBefore/>$spacing<w:jc w:val=\"center\"/></w:pPr>${run("References", bold = true)}</w:p>"
-        val suffixes = CitationFormatting.suffixes(items)
         val entries = if (result != null) result.entries.joinToString("") { entry ->
             val runs = entry.runs.joinToString("") { part ->
                 val properties = "<w:rPr>$fonts${if (part.bold) "<w:b/>" else ""}${if (part.italic) "<w:i/>" else ""}${if (part.underline) "<w:u w:val=\"single\"/>" else ""}${if (part.smallCaps) "<w:smallCaps/>" else ""}$size</w:rPr>"
@@ -419,13 +424,7 @@ class DocxProject(private val source: File) {
             val afterLines = entrySpacing?.takeIf { it > 0.0 }?.let { " w:afterLines=\"${(it * lineSpacing(line) * 100 / 240).toInt()}\"" }.orEmpty()
             val entryProperties = "<w:spacing w:before=\"0\" w:after=\"$after\"$afterLines w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
             "<w:p><w:pPr>$entryProperties$indent</w:pPr>$runs</w:p>"
-        } else CitationFormatting.ordered(items).joinToString("") { item ->
-            val merged = mutableListOf<Pair<String, Boolean>>()
-            CitationFormatting.reference(item, suffixes[item.key].orEmpty()).filter { it.first.isNotEmpty() }.forEach { part ->
-                if (merged.isNotEmpty() && merged.last().second == part.second) {
-                    val prev = merged.removeAt(merged.lastIndex); merged.add((prev.first + part.first) to part.second)
-                } else merged.add(part)
-            }
+        } else apaBibliographyEntries(items).joinToString("") { merged ->
             val runs = merged.joinToString("") { (text, italic) -> run(text, italic) }
             "<w:p><w:pPr>$spacing<w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr>$runs</w:p>"
         }
@@ -440,9 +439,7 @@ class DocxProject(private val source: File) {
             val ids = result.entries.flatMap { it.itemIds }
             require(ids.size == input.items.size && ids.toSet() == input.items.map { it.key }.toSet()) { "Bibliography results do not match the document." }
         }
-        val present = presentKeys()
-        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
-        val items = present.sorted().mapNotNull { known[it] }
+        val items = bibliographyItems(allowMissing)
         var joined = prefix + blocks.joinToString("") { it.gap + it.xml } + tail + suffix
         for (citation in citationOperations) {
             val first = citation.items.firstOrNull() ?: continue

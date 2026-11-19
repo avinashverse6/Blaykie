@@ -370,6 +370,14 @@ class DocxProject(private val source: File) {
         "double" -> 480
         else -> throw IllegalArgumentException("Invalid line spacing")
     }
+    internal fun bibliographyPreview() = apaBibliographyEntries(bibliographyItems(false))
+
+    private fun bibliographyItems(allowMissing: Boolean): List<CitationItem> {
+        val present = presentKeys()
+        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
+        return present.sorted().mapNotNull { known[it] }
+    }
+
     private fun bibliography(items: List<CitationItem>, bookmark: Int, line: String): String {
         val spacing = "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
         val base = bodyRuns().firstOrNull()?.second?.rpr.orEmpty()
@@ -377,23 +385,14 @@ class DocxProject(private val source: File) {
         val size = Regex("<w:sz\\b[^>]*/>").find(base)?.value.orEmpty() + Regex("<w:szCs\\b[^>]*/>").find(base)?.value.orEmpty()
         fun run(text: String, italic: Boolean = false, bold: Boolean = false) = makeRun("<w:rPr>$fonts${if (bold) "<w:b/>" else ""}${if (italic) "<w:i/>" else ""}$size</w:rPr>", text)
         val heading = "<w:p><w:pPr><w:pageBreakBefore/>$spacing<w:jc w:val=\"center\"/></w:pPr>${run("References", bold = true)}</w:p>"
-        val suffixes = CitationFormatting.suffixes(items)
-        val entries = CitationFormatting.ordered(items).joinToString("") { item ->
-            val merged = mutableListOf<Pair<String, Boolean>>()
-            CitationFormatting.reference(item, suffixes[item.key].orEmpty()).filter { it.first.isNotEmpty() }.forEach { part ->
-                if (merged.isNotEmpty() && merged.last().second == part.second) {
-                    val prev = merged.removeAt(merged.lastIndex); merged.add((prev.first + part.first) to part.second)
-                } else merged.add(part)
-            }
+        val entries = apaBibliographyEntries(items).joinToString("") { merged ->
             val runs = merged.joinToString("") { (text, italic) -> run(text, italic) }
             "<w:p><w:pPr>$spacing<w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr>$runs</w:p>"
         }
         return "<w:bookmarkStart w:id=\"$bookmark\" w:name=\"BLK_BIBLIOGRAPHY\"/>$heading$entries<w:bookmarkEnd w:id=\"$bookmark\"/>"
     }
     fun buildXml(line: String = "match", allowMissing: Boolean = false): String {
-        val present = presentKeys()
-        require(allowMissing || present.all { it in known }) { "References for existing citations are needed." }
-        val items = present.sorted().mapNotNull { known[it] }
+        val items = bibliographyItems(allowMissing)
         var joined = prefix + blocks.joinToString("") { it.gap + it.xml } + tail + suffix
         for (citation in citationOperations) {
             val first = citation.items.firstOrNull() ?: continue

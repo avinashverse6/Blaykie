@@ -237,6 +237,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
+            Screen.BIBLIOGRAPHY -> navigate(Screen.DOCUMENT)
             Screen.DOCUMENT -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
@@ -261,7 +262,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
             }
             SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
+            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT || screen == Screen.BIBLIOGRAPHY) navigate(Screen.HOME)
         }
         loading = false
     }
@@ -340,6 +341,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 onClose = { navigate(Screen.HOME) }, onUndo = { undoSession() },
                 onExport = { exportController.reset(); navigate(Screen.EXPORT) },
             )
+            TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text("Bibliography")
+            }
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 DocumentTonalBanner {
@@ -405,6 +409,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 val currentBlock = session?.draft?.block
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
+        }
+        Screen.BIBLIOGRAPHY -> project?.let { p ->
+            BibliographyPreviewScreen(p, Unit, onClose = { back() }) {
+                builtInBibliographyPreview(p)
+            }
         }
         Screen.EXPORT -> project?.let { p ->
             ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })

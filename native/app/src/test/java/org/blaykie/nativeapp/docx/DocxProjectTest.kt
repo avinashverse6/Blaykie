@@ -48,6 +48,33 @@ class DocxProjectTest {
     }
     private fun resource(name: String): ByteArray = javaClass.classLoader!!.getResourceAsStream(name)!!.use { it.readBytes() }
 
+    @Test fun bibliographyPreviewMatchesExportForThreeCitations() {
+        val project = DocxProject(makeDocx())
+        listOf("Zulu", "Baker", "Adams").forEachIndexed { index, author ->
+            val end = project.blockText(0).length
+            project.insertCitation(0, end, end, listOf(item.copy(
+                key = "REF0000$index", authors = listOf(CitationAuthor("Ada", author)),
+            )))
+        }
+        val preview = org.blaykie.nativeapp.builtInBibliographyPreview(project)
+        project.export(output())
+        val xml = zipContent(output()).getValue("word/document.xml").toString(Charsets.UTF_8)
+        val bibliography = xml.substringAfter("w:name=\"BLK_BIBLIOGRAPHY\"/>").substringBefore("<w:bookmarkEnd")
+        val entries = Regex("<w:p>.*?</w:p>").findAll(bibliography).drop(1).map { it.value }.toList()
+        assertEquals(3, entries.size)
+        assertTrue(preview.hangingIndent)
+        assertTrue(entries.all { it.contains("w:hanging=\"720\"") })
+        val exportedRuns = entries.map { paragraph ->
+            Regex("<w:r><w:rPr>(.*?)</w:rPr><w:t xml:space=\"preserve\">(.*?)</w:t></w:r>")
+                .findAll(paragraph).map { match ->
+                    org.blaykie.nativeapp.PreviewRun(match.groupValues[2], match.groupValues[1].contains("<w:i/>"))
+                }.toList()
+        }
+        assertEquals(exportedRuns, preview.entries)
+        assertEquals(listOf("Adams", "Baker", "Zulu"), preview.entries.map { it.first().text.substringBefore(',') })
+        assertTrue(preview.entries.all { entry -> entry.any { it.italic } })
+    }
+
     @Test fun pythonGoldenDeletingMultiCitationRemovesAllReferencesAndMatchesExport() {
         val fixture = Json.parseToJsonElement(resource("nested-delete-golden.json").toString(Charsets.UTF_8)) as JsonObject
         fun value(name: String) = (fixture[name] as JsonPrimitive).content
