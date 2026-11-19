@@ -435,6 +435,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 catch (_: Exception) { message = "Could not open the file picker." }
             },
             onOpen = ::openDocument, onRename = ::renameDocument, onSettings = { navigate(Screen.SETTINGS) },
+            textSize = settings.textSize,
+            extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
         )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
             DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
