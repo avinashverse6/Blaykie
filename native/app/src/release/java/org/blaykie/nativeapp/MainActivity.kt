@@ -71,6 +71,13 @@ import org.blaykie.nativeapp.export.DOCX_MIME
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.ExportScreen
+import org.blaykie.nativeapp.document.DocumentRepository
+import org.blaykie.nativeapp.document.DocumentsScreen
+import org.blaykie.nativeapp.document.OpenDocument
+import org.blaykie.nativeapp.document.StoredDocument
+import org.blaykie.nativeapp.document.importDocument
+import org.blaykie.nativeapp.document.openDocument
+import org.blaykie.nativeapp.document.recordSession
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.previewDocumentEnd
 import org.blaykie.nativeapp.docx.NotEditable
@@ -144,7 +151,7 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
                             val loadedSettings = settings
                             if (loadedSettings != null) {
-                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, sessions, account, citationSearch, exportController) }
+                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController) }
                             }
                         }
                     }
@@ -156,7 +163,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
     val accountState by account.state.collectAsState()
     val searchState by citationSearch.state.collectAsState()
     val exportState by exportController.state.collectAsState()
@@ -164,6 +171,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
     fun navigate(target: Screen) { screen = target; screenName = target.name }
+    val documents = remember(context) { DocumentRepository(context) }
+    var documentRows by remember { mutableStateOf<List<StoredDocument>>(emptyList()) }
+    var activeId by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeStore by remember { mutableStateOf<SessionStore?>(null) }
     var session by remember { mutableStateOf<Session?>(null) }
     var project by remember { mutableStateOf<DocxProject?>(null) }
     var blockCards by remember { mutableStateOf<List<CardData>>(emptyList()) }
@@ -176,8 +187,6 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var loading by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
-    var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
-    var discardCount by rememberSaveable { mutableIntStateOf(0) }
 
     fun accept(loaded: Loaded) {
         session = loaded.session; project = loaded.project; blockCards = loaded.cards
@@ -190,8 +199,16 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             selectionBlock = draft.block; selectionStart = start; selectionEnd = end
         }
     }
+    fun recordDocumentState(value: Session) {
+        val id = activeId ?: return
+        try {
+            documents.recordSession(id, value, "apa", "en-US")
+        } catch (_: Exception) {
+            // The session journal has already been committed; do not roll back the edit.
+        }
+    }
     fun persist(value: Session): Boolean = try {
-        sessions.save(value); session = value; true
+        checkNotNull(activeStore).save(value); session = value; recordDocumentState(value); true
     } catch (_: Exception) { message = "Could not save the session."; false }
     fun reloadCards() {
         val p = project ?: return
@@ -222,9 +239,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun finishEditor(): Boolean = syncEditor(false)
     fun undoSession(draftBlock: Int? = null) {
         val current = session ?: return
-        when (val result = sessions.undo(current, draftBlock)) {
+        when (val result = checkNotNull(activeStore).undo(current, draftBlock)) {
             is UndoResult.Success -> {
-                project = result.project; session = result.session
+                project = result.project; session = result.session; recordDocumentState(result.session)
                 if (draftBlock != null) {
                     field = TextFieldValue(result.session.draft!!.text)
                     selectionBlock = draftBlock; selectionStart = 0; selectionEnd = 0
@@ -250,54 +267,70 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     LaunchedEffect(accountState.account, searchState.open) {
         if (searchState.open) citationSearch.refreshAccount()
     }
+    suspend fun activate(opened: OpenDocument, restoring: Boolean) {
+        val loaded = withContext(Dispatchers.IO) { Loaded(opened.ready.session, opened.ready.project, cards(opened.ready.project)) }
+        activeStore = opened.store
+        activeId = opened.id
+        accept(loaded)
+        if (!restoring) navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT)
+        else if (screen == Screen.EDITOR && session?.draft == null) navigate(Screen.DOCUMENT)
+    }
     LaunchedEffect(Unit) {
-        val restored = withContext(Dispatchers.IO) {
-            when (val r = sessions.read()) {
-                is SessionRead.Ready -> Loaded(r.session, r.project, cards(r.project))
-                else -> r
+        try {
+            val id = activeId
+            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY)) {
+                val opened = withContext(Dispatchers.IO) { id?.let(documents::openDocument) }
+                if (opened == null) navigate(Screen.HOME) else activate(opened, restoring = true)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { navigate(Screen.HOME); message = "Could not restore the document." }
+        finally { loading = false }
+    }
+    LaunchedEffect(screen) {
+        if (screen == Screen.HOME) documentRows = withContext(Dispatchers.IO) { documents.list() }
+    }
+    fun openDocument(id: String) {
+        if (loading) return
+        loading = true; message = ""
+        scope.launch {
+            try {
+                val opened = withContext(Dispatchers.IO) { documents.openDocument(id) }
+                if (opened != null) activate(opened, restoring = false) else message = "Could not open this document."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not open this document." }
+            finally { loading = false }
         }
-        when (restored) {
-            is Loaded -> {
-                accept(restored)
-                if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
-            }
-            SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT || screen == Screen.BIBLIOGRAPHY) navigate(Screen.HOME)
+    }
+    fun renameDocument(id: String, name: String) {
+        scope.launch {
+            try {
+                documentRows = withContext(Dispatchers.IO) {
+                    val current = checkNotNull(documents.load(id))
+                    checkNotNull(documents.saveState(id, current.state.copy(displayName = name)))
+                    documents.list()
+                }
+                message = ""
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not rename this document." }
         }
-        loading = false
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             loading = true; message = ""
-            val opened = withContext(Dispatchers.IO) {
-                try {
-                    try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }
+            try {
+                val opened = withContext(Dispatchers.IO) {
                     val name = readName(context, uri)
-                    if (!name.endsWith(".docx", ignoreCase = true)) return@withContext null to "Please choose a .docx file."
-                    val result = sessions.open(uri.toString(), name) { file ->
-                        val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
-                        input.use { source -> file.outputStream().use { output -> source.copyTo(output) } }
-                    }
-                    Loaded(result.session, result.project, cards(result.project)) to ""
-                } catch (_: Exception) { null to "This file could not be read as a Word document." }
-            }
-            if (opened.first == null) message = opened.second
-            else { accept(opened.first!!); navigate(Screen.DOCUMENT) }
-            loading = false
+                    require(name.endsWith(".docx", ignoreCase = true))
+                    val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
+                    input.use { documents.importDocument(uri.toString(), name, it) }
+                }
+                activate(opened, restoring = false)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                message = "This file could not be opened as a Word document."
+                documentRows = withContext(Dispatchers.IO) { documents.list() }
+            } finally { loading = false }
         }
-    }
-    fun performDiscardAction(action: String) {
-        when (action) {
-            "open" -> try { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) } catch (_: Exception) { message = "Could not open the file picker." }
-            "end" -> { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }
-        }
-    }
-    fun requestDiscardAction(action: String) {
-        val current = session; val p = project
-        val count = if (current != null && p != null) sessions.unexportedEdits(current, p) else 0
-        if (count > 0) { discardCount = count; discardAction = action }
-        else performDiscardAction(action)
     }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
     LaunchedEffect(exportState.phase) {
@@ -320,22 +353,13 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-    if (discardAction != null) AlertDialog(
-        onDismissRequest = { discardAction = null },
-        title = { Text("Discard $discardCount unexported edits?") },
-        confirmButton = { TextButton(onClick = { val action = discardAction; discardAction = null; if (action != null) performDiscardAction(action) }) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
-    )
     when (screen) {
-        Screen.HOME -> HomeLayout(
-            textSize = settings.textSize,
-            filename = if (session != null && project != null) session?.fileName else null,
-            editCount = session?.edits?.size ?: 0,
-            message = message,
-            onOpen = { requestDiscardAction("open") },
-            onContinue = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) },
-            onEnd = { requestDiscardAction("end") },
-            onSettings = { navigate(Screen.SETTINGS) },
+        Screen.HOME -> DocumentsScreen(documentRows, message,
+            onAdd = {
+                try { picker.launch(arrayOf(DOCX_MIME)) }
+                catch (_: Exception) { message = "Could not open the file picker." }
+            },
+            onOpen = ::openDocument, onRename = ::renameDocument, onSettings = { navigate(Screen.SETTINGS) },
         )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
             DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
@@ -422,7 +446,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }
         }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { exportController.begin(it, store = checkNotNull(activeStore)) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }

@@ -14,6 +14,7 @@ import org.blaykie.nativeapp.citation.processor.BibliographyResult
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.session.Session
+import org.blaykie.nativeapp.session.SessionStore
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.exportCslStyle
 import org.blaykie.nativeapp.citation.style.whenCustomStylesEnabled
@@ -61,9 +62,9 @@ internal fun optionalExportSelection(enabled: Boolean, session: Session, style: 
 private fun bibliographySelection(context: Context, session: Session, enabled: Boolean): ProcessorSelection? =
     optionalExportSelection(enabled, session) { exportCslStyle(context, session) }
 
-internal fun beginExport(context: Context, controller: ExportController, session: Session, enabled: Boolean) {
+internal fun beginExport(context: Context, controller: ExportController, session: Session, enabled: Boolean, store: SessionStore) {
     val selection = bibliographySelection(context, session, enabled)
-    controller.begin(session, selection, showOptionalSummary = enabled)
+    controller.begin(session, selection, showOptionalSummary = enabled, store = store)
 }
 
 /** Explicit transitions keep a failed preparation from implicitly choosing a fallback. */

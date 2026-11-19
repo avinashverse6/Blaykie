@@ -50,12 +50,17 @@ internal fun unexportedCount(current: List<String>, exported: List<String>): Int
 }
 
 /** All paths and content are confined to the application's private files directory. */
-class SessionStore(private val root: File) {
+class SessionStore(private val root: File, private val workingDocx: File? = null) {
+    internal val usesPrivateCopy: Boolean get() = workingDocx != null
     private val sources = File(root, "session-sources")
     private val metadata = File(root, "session.json")
     private val exportRevision = File(root, "export-revision.json")
     private val json = Json { ignoreUnknownKeys = true }
     private fun source(name: String): File {
+        if (workingDocx != null) {
+            require(name == root.name + ".docx")
+            return workingDocx
+        }
         require(Regex("[a-f0-9-]+\\.docx").matches(name))
         return File(sources, name)
     }
@@ -118,6 +123,15 @@ class SessionStore(private val root: File) {
         } catch (_: Exception) { return maxOf(1, session.edits.size) }
         val draftChanged = session.draft?.let { it.text != project.blockText(it.block) } == true
         return unexportedCount(fingerprints(session), exported) + if (draftChanged) 1 else 0
+    }
+    /** Attach the repository's already-copied source without copying it again. */
+    @Synchronized internal fun attach(uri: String, name: String): SessionRead.Ready {
+        val file = requireNotNull(workingDocx)
+        check(!metadata.exists())
+        val project = DocxProject(file)
+        val session = Session(uri, name, root.name + ".docx", version = 2)
+        save(session)
+        return SessionRead.Ready(session, project)
     }
     /** Copies first and commits metadata only after the new document parses. */
     @Synchronized fun open(uri: String, name: String, copy: (File) -> Unit): SessionRead.Ready {

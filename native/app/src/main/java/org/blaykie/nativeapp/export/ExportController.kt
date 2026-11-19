@@ -34,7 +34,7 @@ internal data class ExportState(
     val message: String = "", val needsKey: Boolean = false, val omitted: Int = 0,
     val shareFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0, val languageSummary: String = "",
 ) { override fun toString() = "ExportState(redacted)" }
-private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val details: ExportDetails? = null)
+private data class Prepared(val store: SessionStore, val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val details: ExportDetails? = null)
 internal class ExportController(private val context: Context, private val sessions: SessionStore, private val accounts: AccountStore) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutable = MutableStateFlow(ExportState())
@@ -46,7 +46,7 @@ internal class ExportController(private val context: Context, private val sessio
     private var preparationGeneration = 0
     private var optionalSelection = false
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
-    fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true) {
+    fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true, store: SessionStore = sessions) {
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val token = ++preparationGeneration
@@ -59,8 +59,10 @@ internal class ExportController(private val context: Context, private val sessio
                 try {
                     cleanExportCache(context.cacheDir)
                     stage = FailureStage.SOURCE
-                    context.contentResolver.openInputStream(Uri.parse(session.uri))?.use { } ?: throw FileNotFoundException()
-                    val read = sessions.read() as? SessionRead.Ready ?: throw FileNotFoundException()
+                    if (!store.usesPrivateCopy) {
+                        context.contentResolver.openInputStream(Uri.parse(session.uri))?.use { } ?: throw FileNotFoundException()
+                    }
+                    val read = store.read() as? SessionRead.Ready ?: throw FileNotFoundException()
                     if (read.session.sourceName != session.sourceName) throw FileNotFoundException()
                     val project = read.project
                     if (cancelled) return@withContext Pair(null, "Lookup cancelled.")
@@ -78,7 +80,7 @@ internal class ExportController(private val context: Context, private val sessio
                         client = null
                     }
                     if (cancelled) return@withContext Pair(null, "Lookup cancelled.")
-                    Pair(Prepared(project, read.session, session.uri, exportName(session.fileName), omitted), "")
+                    Pair(Prepared(store, project, read.session, session.uri, exportName(session.fileName), omitted), "")
                 } catch (e: Exception) { Pair(null, exportError(e, stage)) }
             }
             if (token != preparationGeneration) return@launch
@@ -163,7 +165,7 @@ internal class ExportController(private val context: Context, private val sessio
                         beforeCopy = { stage = FailureStage.DESTINATION }, destination = {
                             (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }
                         }, options = work.session.bibliography)
-                    val tracked = sessions.recordExport(work.session)
+                    val tracked = work.store.recordExport(work.session)
                     val saved = if (savedName.isNullOrBlank()) "Saved." else "Saved as $savedName."
                     val warning = if (tracked) "" else " Export tracking could not be saved; edits may still be treated as unexported."
                     val omissionNote = if (work.omitted == 0) "" else {
