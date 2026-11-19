@@ -73,15 +73,16 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, opti
             }
             result == null -> CircularProgressIndicator(Modifier.padding(16.dp))
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!options.enabled || result.bibliography.isEmpty()) {
-                    item { Text(if (options.enabled) "No citations yet." else "No bibliography will be added.") }
-                } else bibliography(result.bibliography)
                 item {
-                    Text("End of document preview", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("Preview (end of document)", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleMedium)
                 }
                 if (result.paragraphs.isEmpty()) item { Text("No document paragraphs.") }
                 items(result.paragraphs) { PreviewParagraph(it) }
-                if (options.enabled) bibliography(result.bibliography)
+                when {
+                    !options.enabled -> item { Text("Bibliography will not be added") }
+                    result.bibliography.isEmpty() -> item { Text("No citations yet.") }
+                    else -> bibliography(result.bibliography)
+                }
             }
         }
     }
