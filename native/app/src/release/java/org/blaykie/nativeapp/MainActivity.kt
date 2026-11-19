@@ -72,6 +72,7 @@ import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.ExportScreen
 import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.docx.previewDocumentEnd
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
 import java.io.File
@@ -417,7 +418,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 p, Unit, current.bibliography,
                 onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
             ) {
-                p.bibliographyPreview()
+                withContext(Dispatchers.Default) { p.previewDocumentEnd(current.bibliography) }
             }
         }
         Screen.EXPORT -> project?.let { p ->

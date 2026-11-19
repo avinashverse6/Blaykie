@@ -428,7 +428,7 @@ class DocxProject(private val source: File) {
         return "<w:bookmarkStart w:id=\"$bookmark\" w:name=\"BLK_BIBLIOGRAPHY\"/>$heading$entries<w:bookmarkEnd w:id=\"$bookmark\"/>"
     }
     fun buildXml(line: String = "match", allowMissing: Boolean = false, options: BibliographyOptions = BibliographyOptions()): String = buildXmlInternal(line, allowMissing, null, options)
-    internal fun buildXmlWithProcessor(line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult): String = buildXmlInternal(line, allowMissing, result, BibliographyOptions())
+    internal fun buildXmlWithProcessor(line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult, options: BibliographyOptions = BibliographyOptions()): String = buildXmlInternal(line, allowMissing, result, options)
     private fun buildXmlInternal(line: String, allowMissing: Boolean, result: org.blaykie.nativeapp.citation.processor.BibliographyResult?, options: BibliographyOptions): String {
         val input = if (result != null) citationExportInput(allowMissing || !options.enabled) else null
         if (input != null) {

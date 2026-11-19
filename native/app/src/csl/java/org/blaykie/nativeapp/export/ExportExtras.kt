@@ -3,8 +3,11 @@ package org.blaykie.nativeapp.export
 import android.content.Context
 import java.io.File
 import org.blaykie.nativeapp.docx.BibliographyOptions
-import org.blaykie.nativeapp.docx.ReferenceList
-import org.blaykie.nativeapp.docx.referenceList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.blaykie.nativeapp.docx.DocumentEndPreview
+import org.blaykie.nativeapp.docx.previewDocumentEnd
+import org.blaykie.nativeapp.docx.readDocumentEnd
 import org.blaykie.nativeapp.docx.CitationExportInput
 import org.blaykie.nativeapp.citation.processor.BibliographyLayout
 import org.blaykie.nativeapp.citation.processor.BibliographyResult
@@ -21,10 +24,17 @@ internal suspend fun buildCslBibliography(input: CitationExportInput, processor:
     if (input.items.isEmpty()) BibliographyResult(emptyList(), BibliographyLayout(), emptyList())
     else processor.bibliography(input.items, input.clusters)
 
-internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session, enabled: Boolean): ReferenceList {
-    if (project.presentKeys().isEmpty()) return ReferenceList(emptyList(), false)
-    val selection = bibliographySelection(context, session, enabled) ?: return project.bibliographyPreview()
-    return buildCslBibliography(project.citationExportInput(), requireNotNull(selection.processor)).referenceList()
+internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session, enabled: Boolean): DocumentEndPreview {
+    val options = session.bibliography
+    val selection = bibliographySelection(context, session, enabled)
+    if (selection == null || project.presentKeys().isEmpty()) {
+        return withContext(Dispatchers.Default) { project.previewDocumentEnd(options) }
+    }
+    val input = project.citationExportInput(allowMissing = !options.enabled)
+    val result = buildCslBibliography(input, requireNotNull(selection.processor))
+    return withContext(Dispatchers.Default) {
+        readDocumentEnd(project.buildXmlWithProcessor("match", !options.enabled, result, options))
+    }
 }
 
 /** Prepare and reopen privately; caller must not offer a destination unless this succeeds. */

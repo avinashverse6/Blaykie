@@ -75,6 +75,29 @@ class DocxProjectTest {
         assertTrue(preview.entries.all { entry -> entry.any { it.italic } })
     }
 
+    @Test fun endPreviewMatchesExportedParagraphsAndBibliography() {
+        val source = makeDocx(listOf("Earlier paragraph", first, second, "Final paragraph &amp; notes")
+            .joinToString("") { "<w:p><w:r><w:t>$it</w:t></w:r></w:p>" })
+        val project = DocxProject(source)
+        project.insertCitation(1, first.length, first.length, listOf(item))
+        val options = BibliographyOptions(heading = "Sources & notes")
+        val preview = project.previewDocumentEnd(options)
+        project.export(output(), options = options)
+        val xml = zipContent(output()).getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertEquals(readDocumentEnd(xml), preview)
+        assertEquals(listOf("$first (Lovelace, 2020)", second, "Final paragraph & notes"),
+            preview.paragraphs.map { paragraph -> paragraph.runs.joinToString("") { it.text } })
+        assertEquals(2, preview.bibliography.size)
+        assertEquals(ReferenceRun("Sources & notes", italic = false, bold = true), preview.bibliography.first().runs.single())
+        val reference = preview.bibliography.last()
+        assertEquals(720, reference.hangingTwips)
+        assertTrue(reference.runs.any { it.italic && it.text.contains("Journal of Testing") })
+        val hidden = project.previewDocumentEnd(options.copy(enabled = false))
+        assertEquals(preview.paragraphs, hidden.paragraphs)
+        assertTrue(hidden.bibliography.isEmpty())
+        assertEquals(2, DocxProject(makeDocx()).previewDocumentEnd(options).paragraphs.size)
+    }
+
     @Test fun bibliographyEnabledAppendsCustomHeadingAndListOnce() {
         val source = makeDocx()
         val before = source.readBytes()
