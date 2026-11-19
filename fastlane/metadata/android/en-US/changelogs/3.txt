@@ -1,0 +1,1 @@
+A redesigned interface with the Lora font makes it easier to connect Zotero, open documents and edit paragraphs. APA 7 remains the default. An optional, experimental setting lets you import an author-date citation style and language file for new citations and export.
