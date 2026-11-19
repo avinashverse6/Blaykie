@@ -2,6 +2,6 @@ Blaykie helps you add citations and a reference list to a Word document on your 
 
 To search Zotero and recover references, you need a Zotero API key. Blaykie sends its own network requests only to api.zotero.org. Links you choose to open use your browser.
 
-The document is shown as paragraph cards rather than a page view. Tables can be read but not edited. Citation formatting is APA 7 only; complex documents and existing citation fields may have limitations.
+The redesigned interface shows documents as paragraph cards rather than a page view. Tables can be read but not edited. Built-in APA 7 is the default. You can optionally turn on experimental custom citation styles in Settings and import an independent author-date style and a language file. Complex documents and existing citation fields may have limitations.
 
 Blaykie is free software licensed under AGPL-3.0-or-later.
