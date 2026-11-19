@@ -404,7 +404,9 @@ class DocxProject(private val source: File) {
             }
         }
         val section = if (options.enabled) (apaReferenceList(items)).section(options) else null
-        if (section == null && !joined.contains("BLK_BIBLIOGRAPHY")) return joined
+        // With no resolved references, enabled export preserves an earlier bibliography.
+        // Only an explicit opt-out removes it without a replacement.
+        if (section == null && (options.enabled || !joined.contains("BLK_BIBLIOGRAPHY"))) return joined
         val bodyOpen = Regex("<w:body\\b[^>]*>").find(joined) ?: throw IllegalArgumentException("Missing body")
         val lo = bodyOpen.range.last + 1; val hi = joined.lastIndexOf("</w:body>")
         val rebuilt = mutableListOf<Block>(); var cursor = lo

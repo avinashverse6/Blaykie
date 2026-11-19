@@ -166,7 +166,11 @@ internal class ExportController(private val context: Context, private val sessio
                     val tracked = sessions.recordExport(work.session)
                     val saved = if (savedName.isNullOrBlank()) "Saved." else "Saved as $savedName."
                     val warning = if (tracked) "" else " Export tracking could not be saved; edits may still be treated as unexported."
-                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + PlatformExportHook.completionSuffix(work.details) + (if (work.omitted > 0) " ${work.omitted} reference(s) not found and omitted from the bibliography." else "") + warning)
+                    val omissionNote = if (work.omitted == 0) "" else {
+                        val retained = work.omitted == work.project.presentKeys().size && work.project.hasBlaykieBibliography()
+                        " ${work.omitted} reference(s) not found." + if (retained) " The existing bibliography remains unchanged." else " They were omitted from the new list."
+                    }
+                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + PlatformExportHook.completionSuffix(work.details) + omissionNote + warning)
                 } catch (_: SourceDestinationConflict) { Pair(null, "Choose a different file. The original is never changed.") }
                 catch (e: Exception) {
                     val message = if (stage == FailureStage.DESTINATION && outputOpened) failedCopyMessage(e, destinationName) {
