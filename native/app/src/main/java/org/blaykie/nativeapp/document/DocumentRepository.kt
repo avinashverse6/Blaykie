@@ -36,7 +36,7 @@ internal data class DocumentState(
     val citationLanguage: String = "en-US",
     val position: DocumentPosition = DocumentPosition(),
     val schemaVersion: Int = DOCUMENT_SCHEMA_VERSION,
-    val citationLanguageExplicit: Boolean = false,
+    val citationLanguageExplicit: Boolean = !citationLanguage.equals("en-US", ignoreCase = true),
 )
 
 internal data class StoredDocument(val id: String, val workingDocx: File, val state: DocumentState)
