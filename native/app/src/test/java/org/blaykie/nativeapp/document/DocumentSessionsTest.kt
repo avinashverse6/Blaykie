@@ -2,6 +2,11 @@ package org.blaykie.nativeapp.document
 
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
+import org.blaykie.nativeapp.docx.BibliographyOptions
+import org.blaykie.nativeapp.docx.CitationAuthor
+import org.blaykie.nativeapp.docx.CitationItem
+import org.blaykie.nativeapp.session.UndoResult
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import org.blaykie.nativeapp.session.EditOperation
@@ -33,11 +38,65 @@ class DocumentSessionsTest {
         assertNotEquals(reopenedOne.session.sourceName, reopenedTwo.session.sourceName)
     }
 
-    private fun docx(text: String): ByteArrayInputStream {
+    @Test fun reopensBibliographyPositionCitationChoiceAndUndoHistory() {
+        val filesDir = temp.newFolder()
+        val repository = DocumentRepository(filesDir)
+        val a = docx("First text", "Second text").use { repository.importDocument("content://docs/a", "A.docx", it) }
+        val b = docx("Another text").use { repository.importDocument("content://docs/b", "B.docx", it) }
+        val options = BibliographyOptions(enabled = false, heading = "Bibliography")
+        val operations = listOf("ABCD1234", "EFGH5678").mapIndexed { index, key ->
+            EditOperation(block = index, type = "citation", position = 0, items = listOf(CitationItem(
+                key = key, title = "Sample $index", authors = listOf(CitationAuthor("Ada", "Lovelace")), date = "2020",
+            )))
+        }
+        val edited = a.ready.session.copy(edits = operations, bibliography = options)
+        a.store.save(edited)
+        repository.recordSession(a.id, edited, "chicago-author-date", "fr-FR", DocumentPosition(1, 12), languageExplicit = true)
+
+        val restarted = DocumentRepository(filesDir)
+        val reopened = checkNotNull(restarted.openDocument(a.id))
+        assertEquals(options, reopened.ready.session.bibliography)
+        assertEquals(options, reopened.state.bibliography)
+        assertEquals(DocumentPosition(1, 12), reopened.state.position)
+        assertEquals("chicago-author-date", reopened.state.citationStyle)
+        assertEquals("fr-FR", reopened.state.citationLanguage)
+        assertTrue(reopened.state.citationLanguageExplicit)
+        assertEquals(listOf(InsertedCitation(0, 0, listOf("ABCD1234")), InsertedCitation(1, 0, listOf("EFGH5678"))), reopened.state.citations)
+        assertEquals(2, reopened.ready.project.citations().size)
+        val undone = reopened.store.undo(reopened.ready.session) as UndoResult.Success
+        restarted.recordSession(a.id, undone.session, "chicago-author-date", "fr-FR", DocumentPosition(1, 12), languageExplicit = true)
+        val afterUndo = checkNotNull(restarted.openDocument(a.id))
+        assertEquals(1, afterUndo.ready.project.citations().size)
+        assertEquals(1, afterUndo.state.citations.size)
+        val other = checkNotNull(restarted.openDocument(b.id))
+        assertEquals(b.state, other.state)
+        assertEquals(BibliographyOptions(), other.ready.session.bibliography)
+        assertTrue(other.ready.project.citations().isEmpty())
+    }
+
+    @Test fun olderStateWithoutResumeFieldsUsesDefaults() {
+        val repository = DocumentRepository(temp.newFolder())
+        val document = docx("First text").use { repository.importDocument("content://docs/old", "Old.docx", it) }
+        val stored = checkNotNull(repository.load(document.id))
+        File(stored.workingDocx.parentFile, "state.json").writeText(
+            """{"displayName":"Old.docx","createdAtMillis":1,"lastEditedAtMillis":1}""",
+        )
+        val restored = checkNotNull(repository.openDocument(document.id))
+        assertEquals(BibliographyOptions(), restored.ready.session.bibliography)
+        assertEquals(DocumentPosition(), restored.state.position)
+        assertEquals("apa", restored.state.citationStyle)
+        assertEquals("en-US", restored.state.citationLanguage)
+        assertFalse(restored.state.citationLanguageExplicit)
+        assertTrue(restored.state.citations.isEmpty())
+        assertEquals(1, restored.state.schemaVersion)
+    }
+
+    private fun docx(vararg text: String): ByteArrayInputStream {
         val bytes = ByteArrayOutputStream()
         ZipOutputStream(bytes).use { zip ->
             zip.putNextEntry(ZipEntry("word/document.xml"))
-            zip.write("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>$text</w:t></w:r></w:p></w:body></w:document>""".toByteArray())
+            val paragraphs = text.joinToString("") { "<w:p><w:r><w:t>$it</w:t></w:r></w:p>" }
+            zip.write("""<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>$paragraphs</w:body></w:document>""".toByteArray())
             zip.closeEntry()
         }
         return ByteArrayInputStream(bytes.toByteArray())

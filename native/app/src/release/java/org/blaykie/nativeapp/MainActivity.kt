@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -71,6 +72,9 @@ import org.blaykie.nativeapp.export.DOCX_MIME
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.ExportScreen
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import org.blaykie.nativeapp.document.DocumentPosition
 import org.blaykie.nativeapp.document.DocumentRepository
 import org.blaykie.nativeapp.document.DocumentsScreen
 import org.blaykie.nativeapp.document.OpenDocument
@@ -170,7 +174,6 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
-    fun navigate(target: Screen) { screen = target; screenName = target.name }
     val documents = remember(context) { DocumentRepository(context) }
     var documentRows by remember { mutableStateOf<List<StoredDocument>>(emptyList()) }
     var activeId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -178,6 +181,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var session by remember { mutableStateOf<Session?>(null) }
     var project by remember { mutableStateOf<DocxProject?>(null) }
     var blockCards by remember { mutableStateOf<List<CardData>>(emptyList()) }
+    var documentScroll by remember { mutableStateOf(LazyListState()) }
     var field by remember { mutableStateOf(TextFieldValue()) }
     // The draft text is already persisted in the session; save only its selection in
     // instance state, avoiding a second copy of a potentially very long paragraph.
@@ -199,13 +203,30 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             selectionBlock = draft.block; selectionStart = start; selectionEnd = end
         }
     }
+    fun documentPosition(): DocumentPosition = DocumentPosition(
+        blockCards.getOrNull(documentScroll.firstVisibleItemIndex)?.index ?: 0,
+        documentScroll.firstVisibleItemScrollOffset,
+    )
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, "apa", "en-US")
+            documents.recordSession(id, value, null, null, documentPosition())
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
+    }
+    fun navigate(target: Screen) {
+        if (screen == Screen.DOCUMENT && target != screen) session?.let(::recordDocumentState)
+        screen = target; screenName = target.name
+    }
+    val saveOnBackground by rememberUpdatedState({ session?.let(::recordDocumentState); Unit })
+    val lifecycle = (context as ComponentActivity).lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) saveOnBackground()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
     fun persist(value: Session): Boolean = try {
         checkNotNull(activeStore).save(value); session = value; recordDocumentState(value); true
@@ -272,6 +293,11 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         activeStore = opened.store
         activeId = opened.id
         accept(loaded)
+        val position = opened.state.position
+        val index = loaded.cards.indexOfFirst { it.index >= position.paragraphIndex }
+            .takeIf { it >= 0 } ?: loaded.cards.lastIndex.coerceAtLeast(0)
+        documentScroll = LazyListState(index, if (loaded.cards.getOrNull(index)?.index == position.paragraphIndex) position.scrollOffset else 0)
+        session?.let(::recordDocumentState)
         if (!restoring) navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT)
         else if (screen == Screen.EDITOR && session?.draft == null) navigate(Screen.DOCUMENT)
     }
@@ -379,7 +405,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
             val edits = session?.edits.orEmpty()
             val markers = remember(edits) { documentMarkers(edits) }
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+            LazyColumn(state = documentScroll, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
                 if (blockCards.isEmpty()) item { AppEmptyState("This document has no readable paragraphs.") }
                 items(blockCards, key = { it.index }) { card ->
                     DocumentBlock(card.kind, card.text, markers[card.index], onClick = {

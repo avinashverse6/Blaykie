@@ -12,6 +12,8 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.blaykie.nativeapp.docx.BibliographyOptions
 
+private const val DOCUMENT_SCHEMA_VERSION = 1
+
 @Serializable
 internal data class InsertedCitation(
     val paragraphIndex: Int,
@@ -33,7 +35,8 @@ internal data class DocumentState(
     val citationStyle: String = "apa",
     val citationLanguage: String = "en-US",
     val position: DocumentPosition = DocumentPosition(),
-    val schemaVersion: Int,
+    val schemaVersion: Int = DOCUMENT_SCHEMA_VERSION,
+    val citationLanguageExplicit: Boolean = false,
 )
 
 internal data class StoredDocument(val id: String, val workingDocx: File, val state: DocumentState)
@@ -48,7 +51,7 @@ internal class DocumentRepository(filesDir: File, private val now: () -> Long = 
     /** Copies the picked file; the caller owns and closes [source]. */
     @Synchronized fun create(displayName: String, source: InputStream): StoredDocument {
         val timestamp = now()
-        val state = DocumentState(displayName, timestamp, timestamp, schemaVersion = VERSION)
+        val state = DocumentState(displayName, timestamp, timestamp)
         require(valid(state)) { "Invalid document metadata" }
         if (!root.mkdirs() && !root.isDirectory) throw IOException("Could not create document storage")
         val id = UUID.randomUUID().toString()
@@ -125,7 +128,7 @@ internal class DocumentRepository(filesDir: File, private val now: () -> Long = 
         }
     }
 
-    private fun valid(state: DocumentState): Boolean = state.schemaVersion == VERSION &&
+    private fun valid(state: DocumentState): Boolean = state.schemaVersion == DOCUMENT_SCHEMA_VERSION &&
         state.displayName.isNotBlank() && state.createdAtMillis >= 0 && state.lastEditedAtMillis >= state.createdAtMillis &&
         state.position.paragraphIndex >= 0 && state.position.scrollOffset >= 0 &&
         state.citationStyle.isNotBlank() && state.citationLanguage.isNotBlank() &&
@@ -133,7 +136,6 @@ internal class DocumentRepository(filesDir: File, private val now: () -> Long = 
             it.zoteroItemIds.isNotEmpty() && it.zoteroItemIds.all(zoteroItemId::matches) }
 
     private companion object {
-        const val VERSION = 1
         const val DOCX = "working.docx"
         const val STATE = "state.json"
         val documentId = Regex("[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
