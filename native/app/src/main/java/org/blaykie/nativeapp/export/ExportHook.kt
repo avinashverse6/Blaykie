@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import java.io.File
 import org.blaykie.nativeapp.citation.processor.CitationProcessor
 import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.docx.BibliographyOptions
 
 /** Optional processor choice; a missing processor represents an unavailable selection. */
 internal data class ProcessorSelection(val processor: CitationProcessor?, val title: String = "", val language: String = "")
@@ -12,7 +13,7 @@ internal data class ExportDetails(val file: File, val title: String, val legacyC
 /** Variant-specific preparation and presentation; the standard export path does not use this hook. */
 internal interface ExportHook {
     fun initialLanguageSummary(hasSelection: Boolean): String
-    suspend fun prepare(project: DocxProject, file: File, line: String, allowMissing: Boolean, selection: ProcessorSelection): ExportDetails?
+    suspend fun prepare(project: DocxProject, file: File, line: String, allowMissing: Boolean, selection: ProcessorSelection, options: BibliographyOptions = BibliographyOptions()): ExportDetails?
     fun preparationFailed(state: ExportState): ExportState
     fun chooseBuiltIn(state: ExportState, omitted: Int): ExportState
     fun cancelPreparation(state: ExportState): ExportState

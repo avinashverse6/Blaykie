@@ -56,7 +56,7 @@ class DocxProjectTest {
                 key = "REF0000$index", authors = listOf(CitationAuthor("Ada", author)),
             )))
         }
-        val preview = org.blaykie.nativeapp.builtInBibliographyPreview(project)
+        val preview = project.bibliographyPreview()
         project.export(output())
         val xml = zipContent(output()).getValue("word/document.xml").toString(Charsets.UTF_8)
         val bibliography = xml.substringAfter("w:name=\"BLK_BIBLIOGRAPHY\"/>").substringBefore("<w:bookmarkEnd")
@@ -67,12 +67,65 @@ class DocxProjectTest {
         val exportedRuns = entries.map { paragraph ->
             Regex("<w:r><w:rPr>(.*?)</w:rPr><w:t xml:space=\"preserve\">(.*?)</w:t></w:r>")
                 .findAll(paragraph).map { match ->
-                    org.blaykie.nativeapp.PreviewRun(match.groupValues[2], match.groupValues[1].contains("<w:i/>"))
+                    ReferenceRun(match.groupValues[2], match.groupValues[1].contains("<w:i/>"))
                 }.toList()
         }
         assertEquals(exportedRuns, preview.entries)
         assertEquals(listOf("Adams", "Baker", "Zulu"), preview.entries.map { it.first().text.substringBefore(',') })
         assertTrue(preview.entries.all { entry -> entry.any { it.italic } })
+    }
+
+    @Test fun bibliographyEnabledAppendsCustomHeadingAndListOnce() {
+        val source = makeDocx()
+        val before = source.readBytes()
+        val project = DocxProject(source)
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val options = BibliographyOptions(heading = " Sources & notes ")
+        project.export(output(), options = options)
+        val xml = zipContent(output()).getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertEquals("Sources & notes", project.bibliographyPreview().section(options)?.heading)
+        assertEquals(1, Regex("BLK_BIBLIOGRAPHY").findAll(xml).count())
+        assertTrue(xml.indexOf("Sources &amp; notes") > xml.indexOf(second))
+        assertTrue(xml.indexOf("Sources &amp; notes") < xml.indexOf("<w:sectPr"))
+        assertTrue(xml.contains("Journal of Testing"))
+        assertArrayEquals(before, source.readBytes())
+    }
+
+    @Test fun bibliographyDisabledOmitsListAndRemovesEarlierAppList() {
+        val project = DocxProject(makeDocx())
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        val options = BibliographyOptions(enabled = false)
+        assertNull(project.bibliographyPreview().section(options))
+        val noList = File(temp.root, "no-list.docx")
+        project.export(noList, options = options)
+        project.export(output())
+        val removed = File(temp.root, "removed.docx")
+        DocxProject(output()).export(removed, options = options)
+        for (file in listOf(noList, removed)) {
+            val xml = zipContent(file).getValue("word/document.xml").toString(Charsets.UTF_8)
+            assertFalse(xml.contains("BLK_BIBLIOGRAPHY"))
+            assertFalse(xml.contains("Journal of Testing"))
+            assertTrue(xml.contains("(Lovelace, 2020)"))
+        }
+    }
+
+    @Test fun exportingAnEarlierExportReplacesBibliographyWithoutDuplicatingOrTouchingZotero() {
+        val zotero = "<w:p><w:fldSimple w:instr=\" ADDIN ZOTERO_BIBL \"><w:r><w:t>Plugin bibliography</w:t></w:r></w:fldSimple></w:p>"
+        val project = DocxProject(makeDocx("<w:p><w:r><w:t>$first</w:t></w:r></w:p>$zotero"))
+        project.insertCitation(0, first.length, first.length, listOf(item))
+        project.export(output())
+        val before = output().readBytes()
+        // An imported export has citation bookmarks, but its items must be registered again.
+        val reopened = DocxProject(output()).apply { registerItems(listOf(item)) }
+        val again = File(temp.root, "again.docx")
+        reopened.export(again, options = BibliographyOptions(heading = "New heading"))
+        val xml = zipContent(again).getValue("word/document.xml").toString(Charsets.UTF_8)
+        assertEquals(1, Regex("BLK_BIBLIOGRAPHY").findAll(xml).count())
+        assertEquals(1, Regex("Journal of Testing").findAll(xml).count())
+        assertTrue(xml.contains("New heading"))
+        assertFalse(xml.contains(">References<"))
+        assertTrue(xml.contains(zotero))
+        assertArrayEquals(before, output().readBytes())
     }
 
     @Test fun pythonGoldenDeletingMultiCitationRemovesAllReferencesAndMatchesExport() {

@@ -8,6 +8,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -20,20 +23,19 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import org.blaykie.nativeapp.docx.DocxProject
 
-internal data class PreviewRun(val text: String, val italic: Boolean, val bold: Boolean = false,
-    val underline: Boolean = false, val smallCaps: Boolean = false)
-internal data class BibliographyPreview(val entries: List<List<PreviewRun>>, val hangingIndent: Boolean)
-
-internal fun builtInBibliographyPreview(project: DocxProject): BibliographyPreview =
-    BibliographyPreview(project.bibliographyPreview().map { entry -> entry.map { (text, italic) -> PreviewRun(text, italic) } }, true)
+import org.blaykie.nativeapp.docx.BibliographyOptions
+import org.blaykie.nativeapp.docx.ReferenceList
 
 @Composable
-internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, onClose: () -> Unit,
-                                        load: suspend () -> BibliographyPreview) {
+internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, options: BibliographyOptions,
+                                        onOptionsChange: (BibliographyOptions) -> Boolean, onClose: () -> Unit,
+                                        load: suspend () -> ReferenceList) {
+    var saveFailed by remember(project) { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
-    var preview by remember(project, styleKey, attempt) { mutableStateOf<BibliographyPreview?>(null) }
-    var error by remember(project, styleKey, attempt) { mutableStateOf<String?>(null) }
-    LaunchedEffect(project, styleKey, attempt) {
+    var preview by remember(project, styleKey, options.enabled, attempt) { mutableStateOf<ReferenceList?>(null) }
+    var error by remember(project, styleKey, options.enabled, attempt) { mutableStateOf<String?>(null) }
+    LaunchedEffect(project, styleKey, options.enabled, attempt) {
+        if (!options.enabled) return@LaunchedEffect
         try {
             preview = load()
         } catch (cancelled: CancellationException) {
@@ -50,16 +52,35 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, onCl
             }
             Text("Bibliography preview", style = MaterialTheme.typography.titleLarge)
         }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Add to end of document", Modifier.weight(1f))
+            Switch(checked = options.enabled, onCheckedChange = {
+                saveFailed = !onOptionsChange(options.copy(enabled = it))
+            }, modifier = Modifier.semantics { contentDescription = "Add to end of document" })
+        }
+        OutlinedTextField(
+            value = options.heading,
+            onValueChange = { saveFailed = !onOptionsChange(options.copy(heading = it)) },
+            label = { Text("Heading") }, singleLine = true, enabled = options.enabled,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        )
+        if (saveFailed) Text("Could not save bibliography options.", Modifier.padding(16.dp))
         val result = preview
+        val section = result?.section(options)
         when {
+            !options.enabled -> Text("No bibliography will be added.", Modifier.padding(16.dp))
             error != null -> Column(Modifier.padding(16.dp)) {
                 Text(error.orEmpty())
                 TextButton(onClick = { attempt++ }) { Text("Retry") }
             }
             result == null -> CircularProgressIndicator(Modifier.padding(16.dp))
-            result.entries.isEmpty() -> Text("No citations yet.", Modifier.padding(16.dp))
+            section == null -> Text("No citations yet.", Modifier.padding(16.dp))
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(result.entries) { entry ->
+                item {
+                    Text(section.heading, Modifier.fillMaxWidth(), style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                }
+                items(section.references.entries) { entry ->
                     val text = buildAnnotatedString {
                         entry.forEach { run ->
                             withStyle(SpanStyle(
@@ -71,7 +92,7 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, onCl
                         }
                     }
                     Text(text, style = MaterialTheme.typography.bodyLarge.copy(
-                        textIndent = if (result.hangingIndent) TextIndent(restLine = 36.sp) else TextIndent.None,
+                        textIndent = if (section.references.hangingIndent) TextIndent(restLine = 36.sp) else TextIndent.None,
                     ))
                 }
             }

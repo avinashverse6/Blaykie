@@ -518,9 +518,14 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
         }
-        Screen.BIBLIOGRAPHY -> project?.let { p ->
-            BibliographyPreviewScreen(p, session to settings.customCitationStyles, onClose = { back() }) {
-                org.blaykie.nativeapp.export.previewBibliography(context, p, session, settings.customCitationStyles)
+        Screen.BIBLIOGRAPHY -> {
+            val p = project
+            val current = session
+            if (p != null && current != null) BibliographyPreviewScreen(
+                p, Triple(current.debugCitationStyleId, current.debugCitationLanguage, settings.customCitationStyles), current.bibliography,
+                onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
+            ) {
+                org.blaykie.nativeapp.export.previewBibliography(context, p, current, settings.customCitationStyles)
             }
         }
         Screen.EXPORT -> project?.let { p ->

@@ -2,9 +2,9 @@ package org.blaykie.nativeapp.export
 
 import android.content.Context
 import java.io.File
-import org.blaykie.nativeapp.BibliographyPreview
-import org.blaykie.nativeapp.PreviewRun
-import org.blaykie.nativeapp.builtInBibliographyPreview
+import org.blaykie.nativeapp.docx.BibliographyOptions
+import org.blaykie.nativeapp.docx.ReferenceList
+import org.blaykie.nativeapp.docx.referenceList
 import org.blaykie.nativeapp.docx.CitationExportInput
 import org.blaykie.nativeapp.citation.processor.BibliographyLayout
 import org.blaykie.nativeapp.citation.processor.BibliographyResult
@@ -21,22 +21,19 @@ internal suspend fun buildCslBibliography(input: CitationExportInput, processor:
     if (input.items.isEmpty()) BibliographyResult(emptyList(), BibliographyLayout(), emptyList())
     else processor.bibliography(input.items, input.clusters)
 
-internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session?, enabled: Boolean): BibliographyPreview {
-    if (session == null || project.presentKeys().isEmpty()) return BibliographyPreview(emptyList(), false)
-    val selection = bibliographySelection(context, session, enabled) ?: return builtInBibliographyPreview(project)
-    val result = buildCslBibliography(project.citationExportInput(), requireNotNull(selection.processor))
-    return BibliographyPreview(result.entries.map { entry ->
-        entry.runs.map { PreviewRun(it.text, it.italic, it.bold, it.underline, it.smallCaps) }
-    }, result.layout.hangingIndent == true)
+internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session, enabled: Boolean): ReferenceList {
+    if (project.presentKeys().isEmpty()) return ReferenceList(emptyList(), false)
+    val selection = bibliographySelection(context, session, enabled) ?: return project.bibliographyPreview()
+    return buildCslBibliography(project.citationExportInput(), requireNotNull(selection.processor)).referenceList()
 }
 
 /** Prepare and reopen privately; caller must not offer a destination unless this succeeds. */
-internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?): Int {
+internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?, options: BibliographyOptions = BibliographyOptions()): Int {
     try {
         val selected = requireNotNull(style) { "Citation style is not ready" }
         val input = project.citationExportInput(allowMissing)
         val result = buildCslBibliography(input, selected.processor)
-        project.exportWithProcessor(file, line, allowMissing, result)
+        project.exportWithProcessor(file, line, allowMissing, result, options)
         DocxProject(file)
         return input.legacyCount
     } catch (e: Exception) {

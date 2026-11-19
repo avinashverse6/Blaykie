@@ -7,12 +7,13 @@ import androidx.compose.runtime.Composable
 import java.io.File
 import org.blaykie.nativeapp.csl.styleLanguageSummary
 import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.docx.BibliographyOptions
 
 internal object PlatformExportHook : ExportHook {
     override fun initialLanguageSummary(hasSelection: Boolean) = if (hasSelection) "" else styleLanguageSummary(null, "en-US")
-    override suspend fun prepare(project: DocxProject, file: File, line: String, allowMissing: Boolean, selection: ProcessorSelection): ExportDetails {
+    override suspend fun prepare(project: DocxProject, file: File, line: String, allowMissing: Boolean, selection: ProcessorSelection, options: BibliographyOptions): ExportDetails {
         val style = selection.processor?.let { ExportCslStyle(selection.title, it, selection.language) }
-        val count = prepareCslExport(project, file, line, allowMissing, style)
+        val count = prepareCslExport(project, file, line, allowMissing, style, options)
         return ExportDetails(file, selection.title, count, styleLanguageSummary("selected", selection.language))
     }
     override fun preparationFailed(state: ExportState) = org.blaykie.nativeapp.export.preparationFailed(state)

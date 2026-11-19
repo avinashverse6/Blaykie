@@ -4,6 +4,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.Serializable
+import org.blaykie.nativeapp.docx.BibliographyOptions
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.blaykie.nativeapp.docx.DocxProject
@@ -15,7 +16,7 @@ import org.blaykie.nativeapp.docx.CitationItem
     val page: String = "", val prefix: String = "",
 )
 @Serializable data class Draft(val block: Int, val text: String)
-@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1)
+@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val bibliography: BibliographyOptions = BibliographyOptions())
 sealed class SessionRead {
     data class Ready(val session: Session, val project: DocxProject) : SessionRead()
     object Missing : SessionRead()

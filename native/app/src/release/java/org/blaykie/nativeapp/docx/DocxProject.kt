@@ -370,7 +370,7 @@ class DocxProject(private val source: File) {
         "double" -> 480
         else -> throw IllegalArgumentException("Invalid line spacing")
     }
-    internal fun bibliographyPreview() = apaBibliographyEntries(bibliographyItems(false))
+    internal fun bibliographyPreview() = apaReferenceList(bibliographyItems(false))
 
     private fun bibliographyItems(allowMissing: Boolean): List<CitationItem> {
         val present = presentKeys()
@@ -378,21 +378,21 @@ class DocxProject(private val source: File) {
         return present.sorted().mapNotNull { known[it] }
     }
 
-    private fun bibliography(items: List<CitationItem>, bookmark: Int, line: String): String {
+    private fun bibliography(section: BibliographySection, bookmark: Int, line: String): String {
         val spacing = "<w:spacing w:before=\"0\" w:after=\"0\" w:line=\"${lineSpacing(line)}\" w:lineRule=\"auto\"/>"
         val base = bodyRuns().firstOrNull()?.second?.rpr.orEmpty()
         val fonts = Regex("<w:rFonts\\b[^>]*/>").find(base)?.value.orEmpty()
         val size = Regex("<w:sz\\b[^>]*/>").find(base)?.value.orEmpty() + Regex("<w:szCs\\b[^>]*/>").find(base)?.value.orEmpty()
         fun run(text: String, italic: Boolean = false, bold: Boolean = false) = makeRun("<w:rPr>$fonts${if (bold) "<w:b/>" else ""}${if (italic) "<w:i/>" else ""}$size</w:rPr>", text)
-        val heading = "<w:p><w:pPr><w:pageBreakBefore/>$spacing<w:jc w:val=\"center\"/></w:pPr>${run("References", bold = true)}</w:p>"
-        val entries = apaBibliographyEntries(items).joinToString("") { merged ->
+        val heading = "<w:p><w:pPr><w:pageBreakBefore/>$spacing<w:jc w:val=\"center\"/></w:pPr>${run(section.heading, bold = true)}</w:p>"
+        val entries = section.references.entries.joinToString("") { merged ->
             val runs = merged.joinToString("") { (text, italic) -> run(text, italic) }
             "<w:p><w:pPr>$spacing<w:ind w:left=\"720\" w:hanging=\"720\"/></w:pPr>$runs</w:p>"
         }
         return "<w:bookmarkStart w:id=\"$bookmark\" w:name=\"BLK_BIBLIOGRAPHY\"/>$heading$entries<w:bookmarkEnd w:id=\"$bookmark\"/>"
     }
-    fun buildXml(line: String = "match", allowMissing: Boolean = false): String {
-        val items = bibliographyItems(allowMissing)
+    fun buildXml(line: String = "match", allowMissing: Boolean = false, options: BibliographyOptions = BibliographyOptions()): String {
+        val items = bibliographyItems(allowMissing || !options.enabled)
         var joined = prefix + blocks.joinToString("") { it.gap + it.xml } + tail + suffix
         for (citation in citationOperations) {
             val first = citation.items.firstOrNull() ?: continue
@@ -403,26 +403,22 @@ class DocxProject(private val source: File) {
                 joined = joined.replaceRange(match.range, match.groupValues[1] + fresh + match.groupValues[3])
             }
         }
-        if (items.isEmpty()) return joined
+        val section = if (options.enabled) (apaReferenceList(items)).section(options) else null
+        if (section == null && !joined.contains("BLK_BIBLIOGRAPHY")) return joined
         val bodyOpen = Regex("<w:body\\b[^>]*>").find(joined) ?: throw IllegalArgumentException("Missing body")
         val lo = bodyOpen.range.last + 1; val hi = joined.lastIndexOf("</w:body>")
-        val elements = children(joined, lo, hi)
         val rebuilt = mutableListOf<Block>(); var cursor = lo
-        for (element in elements) { rebuilt += Block(element.tag, joined.substring(cursor, element.start), joined.substring(element.start, element.end)); cursor = element.end }
+        for (element in children(joined, lo, hi)) {
+            rebuilt += Block(element.tag, joined.substring(cursor, element.start), joined.substring(element.start, element.end))
+            cursor = element.end
+        }
         val tailGap = joined.substring(cursor, hi)
         val maxId = Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(joined).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0
-        val bibliography = bibliography(items, maxId + 1, line)
-        val start = rebuilt.indexOfFirst { it.tag == "w:bookmarkStart" && it.xml.contains("BLK_BIBLIOGRAPHY") }
-        val end = if (start < 0) -1 else (start + 1 until rebuilt.size).firstOrNull { rebuilt[it].tag == "w:bookmarkEnd" } ?: -1
-        val body = if (start >= 0 && end >= 0) {
-            rebuilt.take(start).joinToString("") { it.gap + it.xml } + bibliography + rebuilt.drop(end + 1).joinToString("") { it.gap + it.xml }
-        } else {
-            val at = if (rebuilt.lastOrNull()?.tag == "w:sectPr") rebuilt.lastIndex else rebuilt.size
-            rebuilt.take(at).joinToString("") { it.gap + it.xml } + bibliography + rebuilt.drop(at).joinToString("") { it.gap + it.xml }
-        }
+        val bibliography = section?.let { bibliography(it, maxId + 1, line) }.orEmpty()
+        val body = replaceBibliography(rebuilt.map { BibliographyBlock(it.tag, it.gap, it.xml) }, bibliography)
         return joined.substring(0, lo) + body + tailGap + joined.substring(hi)
     }
-    fun export(target: File, line: String = "match", allowMissing: Boolean = false) {
+    fun export(target: File, line: String = "match", allowMissing: Boolean = false, options: BibliographyOptions = BibliographyOptions()) {
         require(source.canonicalFile != target.canonicalFile) { "Choose a different file name. The original is never changed." }
         if (target.exists()) {
             // Reflection keeps java.nio.file (API 26) optional on Android 24/25.
@@ -434,7 +430,7 @@ class DocxProject(private val source: File) {
             } catch (_: Exception) { true } // Fail closed when identity cannot be verified.
             require(!sameFile) { "Choose a different file name. The original is never changed." }
         }
-        val text = buildXml(line, allowMissing)
+        val text = buildXml(line, allowMissing, options)
         val bytes = ((if (bom) "\uFEFF" else "") + text).toByteArray(Charsets.UTF_8)
         ZipFile(source).use { input ->
             ZipOutputStream(target.outputStream().buffered()).use { output ->

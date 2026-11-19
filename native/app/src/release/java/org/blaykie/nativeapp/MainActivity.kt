@@ -410,9 +410,14 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
         }
-        Screen.BIBLIOGRAPHY -> project?.let { p ->
-            BibliographyPreviewScreen(p, Unit, onClose = { back() }) {
-                builtInBibliographyPreview(p)
+        Screen.BIBLIOGRAPHY -> {
+            val p = project
+            val current = session
+            if (p != null && current != null) BibliographyPreviewScreen(
+                p, Unit, current.bibliography,
+                onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
+            ) {
+                p.bibliographyPreview()
             }
         }
         Screen.EXPORT -> project?.let { p ->
