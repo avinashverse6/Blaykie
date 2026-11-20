@@ -126,10 +126,8 @@ class DocumentRenderReaderTest {
         assertEquals(listOf(RenderHorizontalRule(0xB89B72, 2f)), blocks)
     }
 
-    @Test fun thinInlinePngKeepsItsExtentAndDecodesWithoutPlaceholder() {
-        val png = java.awt.image.BufferedImage(1200, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB)
-        for (y in 0 until png.height) for (x in 0 until png.width) png.setRGB(x, y, 0xffb89b72.toInt())
-        val bytes = java.io.ByteArrayOutputStream().also { assertTrue(javax.imageio.ImageIO.write(png, "png", it)) }.toByteArray()
+    @Test fun thinInlinePngKeepsItsExtentAndCanBeSampledWithoutPlaceholder() {
+        val bytes = checkNotNull(javaClass.getResourceAsStream("/thin-inline.png")).use { it.readBytes() }
         val xml = document("""<w:p><w:r><w:drawing>
             <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
                 <wp:extent cx="5943600" cy="38100"/><wp:docPr id="2" descr="horizontal line"/>
@@ -149,12 +147,15 @@ class DocumentRenderReaderTest {
         assertEquals(1f, extent.displayHeightDp(100f), .001f)
         readRenderPackage(source) { zip ->
             zip.getInputStream(zip.getEntry(image.entryName)).use { input ->
-                val decoded = javax.imageio.ImageIO.read(input)
-                assertEquals(1200, decoded.width)
-                assertEquals(8, decoded.height)
-                val sample = checkNotNull(imageSampleSize(decoded.width, decoded.height, 24))
+                // PNG IHDR dimensions are big-endian; Android's decoder reads these same bounds.
+                val header = java.nio.ByteBuffer.wrap(input.readBytes())
+                val width = header.getInt(16)
+                val height = header.getInt(20)
+                assertEquals(1200, width)
+                assertEquals(8, height)
+                val sample = checkNotNull(imageSampleSize(width, height, 24))
                 assertEquals(8, sample)
-                assertTrue(decoded.width / sample >= 1 && decoded.height / sample >= 1)
+                assertTrue(width / sample >= 1 && height / sample >= 1)
             }
         }
         assertNull(imagePlaceholderText(ImageDisplay.Drawn))
