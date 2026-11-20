@@ -101,7 +101,8 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
     private fun renderBlock(element: Element): List<RenderBlock> = when {
         element.word("p") -> paragraph(element)
         element.word("tbl") -> listOf(table(element, ::blocks))
-        element.word("sdt") || element.word("sdtContent") || element.word("customXml") -> blocks(element)
+        element.word("sdt") -> blocks(element).groupImageFailures()
+        element.word("sdtContent") || element.word("customXml") -> blocks(element)
         else -> emptyList()
     }
 
@@ -139,7 +140,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         if (number != null && id != null) activeCitations[id] = number
                     }
                     child.word("bookmarkEnd") -> child.attr("id")?.let(activeCitations::remove)
-                    child.isAlternateDrawing() -> pieces.add(alternateDrawingImage(child, images))
+                    child.isAlternateDrawing() -> pieces.add(horizontalRule(child) ?: alternateDrawingImage(child, images))
                     child.word("r") -> {
                         val props = child.get("rPr")
                         val format = chain(props.value("rStyle")).fold(baseRun) { acc, style ->
@@ -158,11 +159,12 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                                 it.word("noBreakHyphen") -> text.append('\u2011')
                                 it.isAlternateDrawing() -> {
                                     flush()
-                                    pieces.add(alternateDrawingImage(it, images))
+                                    pieces.add(horizontalRule(it) ?: alternateDrawingImage(it, images))
                                 }
                                 it.word("drawing") || it.word("pict") || it.word("object") -> {
                                     flush()
-                                    pieces.addAll(drawingImages(it, images))
+                                    val rule = horizontalRule(it)
+                                    if (rule != null) pieces.add(rule) else pieces.addAll(drawingImages(it, images))
                                 }
                             }
                         }
@@ -197,7 +199,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
             RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")))
-        if (pieces.none { it is RenderImage }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
+        if (pieces.none { it is RenderBlock }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {
             val pending = mutableListOf<RenderRun>()
@@ -210,10 +212,10 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             }
             for (piece in pieces) when (piece) {
                 is RenderRun -> pending.add(piece)
-                is RenderImage -> { emitText(); add(piece) }
+                is RenderBlock -> { emitText(); add(piece) }
             }
             emitText()
-        }
+        }.groupImageFailures()
 
     }
 

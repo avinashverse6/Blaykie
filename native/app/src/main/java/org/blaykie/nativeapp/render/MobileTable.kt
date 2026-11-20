@@ -85,6 +85,7 @@ private fun MobileCellBlock(source: File, block: RenderBlock, fonts: MutableMap<
     when (block) {
         is RenderParagraph -> MobileParagraph(block, fonts)
         is RenderImage -> MobileImage(source, block)
+        is RenderHorizontalRule -> MobileHorizontalRule(block)
         is RenderTable -> {
             val scroll = rememberScrollState()
             val bands = remember(block) { block.bands() }

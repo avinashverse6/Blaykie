@@ -73,6 +73,7 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
                             previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
                                 ?.content as? RenderParagraph)?.afterTwips ?: 0)
                         is RenderImage -> MobileImage(content.source, block)
+                        is RenderHorizontalRule -> MobileHorizontalRule(block)
                         is RenderTable -> Unit // Table bands are emitted separately in pageItems().
                     }
                     is MobilePageItem.TableRows -> MobileTableBand(content.source, item.widths, item.band,

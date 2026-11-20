@@ -24,7 +24,20 @@ internal data class RenderParagraph(
     val borders: RenderBorders = RenderBorders(),
 ) : RenderBlock
 
-internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList()) : RenderBlock
+internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList(),
+                                val siblingEntries: List<String> = emptyList()) : RenderBlock {
+    fun entries(): List<String> = listOfNotNull(entryName) + fallbackEntries
+}
+internal data class RenderHorizontalRule(val rgb: Int?, val thicknessPoints: Float) : RenderBlock
+
+/** Preserve each picture's position; its siblings are only used to decide whether to show a failure label. */
+internal fun List<RenderBlock>.groupImageFailures(): List<RenderBlock> {
+    val pictures = filterIsInstance<RenderImage>()
+    if (pictures.size < 2) return this
+    val entries = pictures.flatMap { it.entries() }.distinct()
+    if (entries.isEmpty()) return this
+    return map { if (it is RenderImage) it.copy(siblingEntries = entries) else it }
+}
 internal data class RenderTable(val columnWidthsTwips: List<Int>, val rowCount: Int, val cells: List<RenderCell>) : RenderBlock
 internal data class RenderCell(
     val row: Int, val column: Int, val rowSpan: Int, val columnSpan: Int, val blocks: List<RenderBlock>,

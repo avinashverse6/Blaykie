@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -27,40 +28,54 @@ private val imageDecoders = Semaphore(2)
 
 @Composable
 internal fun MobileImage(source: File, image: RenderImage) {
-    val entry = image.entryName
-    if (entry == null) {
+    val ownEntries = remember(image) { image.entries() }
+    if (ownEntries.isEmpty() && image.siblingEntries.isEmpty()) {
         imagePlaceholderText(ImageDisplay.Failed)?.let { ImagePlaceholder(it) }
         return
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
         val target = with(LocalDensity.current) { maxWidth.roundToPx() }.coerceIn(1, 2048)
         key(source, image, target) {
             val result by produceState<ImageDecode>(ImageDecode.Loading) {
-                val bitmap = withContext(Dispatchers.IO) {
+                value = withContext(Dispatchers.IO) {
                     imageDecoders.withPermit {
-                        (listOf(entry) + image.fallbackEntries).firstNotNullOfOrNull { decodeImage(source, it, target) }
+                        val bitmap = ownEntries.firstNotNullOfOrNull { decodeImage(source, it, target) }
+                        if (bitmap != null) ImageDecode.Ready(bitmap)
+                        else {
+                            val failure = failedImageDisplay(image) { entry ->
+                                val sibling = decodeImage(source, entry, target) ?: return@failedImageDisplay false
+                                sibling.recycle()
+                                true
+                            }
+                            if (failure == ImageDisplay.Suppressed) ImageDecode.Suppressed else ImageDecode.Failed
+                        }
                     }
                 }
-                value = if (bitmap == null) ImageDecode.Failed else ImageDecode.Ready(bitmap)
             }
             val decoded = result
             if (decoded is ImageDecode.Ready) {
                 val bitmap = decoded.bitmap
                 Image(bitmap.asImageBitmap(), image.description ?: "Document image",
-                    Modifier.fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
+                    Modifier.padding(vertical = 4.dp).fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
             }
             imagePlaceholderText(decoded.display)?.let { ImagePlaceholder(it) }
         }
     }
 }
 
+internal fun failedImageDisplay(image: RenderImage, canDecode: (String) -> Boolean): ImageDisplay {
+    val own = image.entries().toSet()
+    return if (image.siblingEntries.any { it !in own && canDecode(it) }) ImageDisplay.Suppressed else ImageDisplay.Failed
+}
+
 private sealed class ImageDecode(val display: ImageDisplay) {
     data object Loading : ImageDecode(ImageDisplay.Loading)
+    data object Suppressed : ImageDecode(ImageDisplay.Suppressed)
     data object Failed : ImageDecode(ImageDisplay.Failed)
     data class Ready(val bitmap: Bitmap) : ImageDecode(ImageDisplay.Drawn)
 }
 
-internal enum class ImageDisplay { Loading, Failed, Drawn }
+internal enum class ImageDisplay { Loading, Failed, Drawn, Suppressed }
 internal fun imagePlaceholderText(display: ImageDisplay): String? = if (display == ImageDisplay.Failed) "[image]" else null
 
 @Composable

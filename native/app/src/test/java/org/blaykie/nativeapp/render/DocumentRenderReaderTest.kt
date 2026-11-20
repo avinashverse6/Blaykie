@@ -89,6 +89,43 @@ class DocumentRenderReaderTest {
         assertEquals(listOf(RenderImage("word/media/image.png", null)), readDocumentRenderModel(source, xml).blocks)
     }
 
+    @Test fun reportLikeGoldRuleAndPictureFallbackStaySeparate() {
+        val rule = """<w:p><w:r><w:pict><v:rect xmlns:v="urn:schemas-microsoft-com:vml"
+            xmlns:o="urn:schemas-microsoft-com:office:office" o:hr="t" fillcolor="#B89B72" style="height:2.25pt"/>
+            </w:pict></w:r></w:p>"""
+        val fallback = """<w:r><w:pict><v:imagedata xmlns:v="urn:schemas-microsoft-com:vml"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rMissing"/></w:pict></w:r>"""
+        val picture = """<w:r><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+            <a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rPicture"/>
+            </wp:anchor></w:drawing></w:r>"""
+        val rels = """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rPicture" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/report.png"/>
+            </Relationships>"""
+        val extra = mapOf("word/_rels/document.xml.rels" to rels, "word/media/report.png" to "fixture media")
+        val sdt = "<w:sdt><w:sdtPr><w:picture/></w:sdtPr><w:sdtContent>"
+        val title = "<w:p><w:r><w:t>REPORT TITLE</w:t></w:r></w:p>"
+        for (body in listOf("<w:p>$fallback$picture</w:p>", "$sdt<w:p>$fallback</w:p><w:p>$picture</w:p></w:sdtContent></w:sdt>")) {
+            val xml = document(title + rule + body + "<w:p>$fallback</w:p>")
+            val blocks = readDocumentRenderModel(docx(xml, extra = extra), xml).blocks
+            assertEquals(RenderHorizontalRule(0xB89B72, 2.25f), blocks[1])
+            val (failedSibling, drawnPicture, unrelatedFailure) = blocks.filterIsInstance<RenderImage>()
+            assertEquals("word/media/report.png", drawnPicture.entryName)
+            fun canDecode(entry: String) = entry == drawnPicture.entryName
+            assertNull(imagePlaceholderText(failedImageDisplay(failedSibling, ::canDecode)))
+            assertEquals("[image]", imagePlaceholderText(failedImageDisplay(failedSibling) { false }))
+            assertEquals("[image]", imagePlaceholderText(failedImageDisplay(unrelatedFailure, ::canDecode)))
+        }
+    }
+
+    @Test fun parsesHorizontalDrawingMlLineWithExplicitStroke() {
+        val blocks = render("""<w:p><w:r><w:drawing xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <a:spPr><a:xfrm><a:ext cx="1270000" cy="0"/></a:xfrm><a:prstGeom prst="line"/>
+            <a:ln w="25400"><a:solidFill><a:srgbClr val="B89B72"/></a:solidFill></a:ln></a:spPr>
+            </w:drawing></w:r></w:p>""").blocks
+        assertEquals(listOf(RenderHorizontalRule(0xB89B72, 2f)), blocks)
+    }
+
     @Test fun readsBulletAndNumberedItemsAndSkipsUnsupportedElements() {
         val numbering = """<w:numbering $ns>
             <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>
