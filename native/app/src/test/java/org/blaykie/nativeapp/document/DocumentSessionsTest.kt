@@ -91,6 +91,25 @@ class DocumentSessionsTest {
         assertEquals(1, restored.state.schemaVersion)
     }
 
+    @Test fun deleteRemovesWorkingFolderAndResumeStateWithoutTouchingOriginal() {
+        val filesDir = temp.newFolder()
+        val source = temp.newFile("original.docx")
+        source.writeBytes(docx("Original text").readBytes())
+        val original = source.readBytes()
+        val repository = DocumentRepository(filesDir)
+        val document = source.inputStream().use { repository.importDocument("content://docs/original", source.name, it) }
+        val stored = checkNotNull(repository.load(document.id))
+        val folder = checkNotNull(stored.workingDocx.parentFile)
+        assertTrue(File(folder, "state.json").isFile)
+        assertTrue(File(folder, "session.json").isFile)
+        assertTrue(repository.delete(document.id))
+        assertFalse(folder.exists())
+        val restarted = DocumentRepository(filesDir)
+        assertTrue(restarted.list().isEmpty())
+        assertFalse(restarted.delete(document.id))
+        assertArrayEquals(original, source.readBytes())
+    }
+
     private fun docx(vararg text: String): ByteArrayInputStream {
         val bytes = ByteArrayOutputStream()
         ZipOutputStream(bytes).use { zip ->

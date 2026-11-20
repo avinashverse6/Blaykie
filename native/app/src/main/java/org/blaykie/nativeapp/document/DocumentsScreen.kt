@@ -29,9 +29,10 @@ import java.util.Date
 
 @Composable
 internal fun DocumentsScreen(documents: List<StoredDocument>, message: String, onAdd: () -> Unit,
-                             onOpen: (String) -> Unit, onRename: (String, String) -> Unit, onSettings: () -> Unit,
+                             onOpen: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit, onSettings: () -> Unit,
                              textSize: TextSize, extraStep: HomeExtraStep? = null) {
     var menu by remember { mutableStateOf<String?>(null) }
+    var deleting by rememberSaveable { mutableStateOf<String?>(null) }
     var renaming by rememberSaveable { mutableStateOf<String?>(null) }
     var name by rememberSaveable { mutableStateOf("") }
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
@@ -79,6 +80,15 @@ internal fun DocumentsScreen(documents: List<StoredDocument>, message: String, o
                 }
             }
         }
+    }
+    documents.firstOrNull { it.id == deleting }?.let { document ->
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete ${document.state.displayName}?") },
+            text = { Text("This removes Blaykie's working copy and saved citations. Your original file is not touched.") },
+            confirmButton = { TextButton(onClick = { deleting = null; onDelete(document.id) }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+        )
     }
     renaming?.let { id ->
         AlertDialog(onDismissRequest = { renaming = null }, title = { Text("Rename document") }, text = {

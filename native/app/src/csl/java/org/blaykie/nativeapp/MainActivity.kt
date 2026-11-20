@@ -377,6 +377,30 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             catch (_: Exception) { message = "Could not rename this document." }
         }
     }
+    fun deleteDocument(id: String) {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                val refreshed = withContext(Dispatchers.IO) {
+                    if (documents.delete(id)) documents.list() else null
+                }
+                if (refreshed == null) {
+                    message = "Could not delete this document."
+                } else {
+                    if (activeId == id) {
+                        activeId = null; activeStore = null; session = null; project = null
+                        blockCards = emptyList()
+                        navigate(Screen.HOME)
+                    }
+                    documentRows = refreshed
+                    message = ""
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not delete this document." }
+            finally { loading = false }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             loading = true; message = ""
@@ -467,7 +491,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 try { picker.launch(arrayOf(DOCX_MIME)) }
                 catch (_: Exception) { message = "Could not open the file picker." }
             },
-            onOpen = ::openDocument, onRename = ::renameDocument, onSettings = { navigate(Screen.SETTINGS) },
+            onOpen = ::openDocument, onRename = ::renameDocument, onDelete = ::deleteDocument, onSettings = { navigate(Screen.SETTINGS) },
             textSize = settings.textSize,
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
         )
