@@ -37,7 +37,11 @@ import org.blaykie.nativeapp.docx.DocxProject
 internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentState, footer: BibliographyViewState?,
                                   onParagraph: (Int) -> Unit, onCitation: (Int, Int) -> Unit) {
     var failed by remember(project, state.revision) { mutableStateOf(false) }
-    val hideBibliography = footer?.content?.end?.bibliography?.isNotEmpty() == true
+    val hideBibliography = remember(project) { project.hasBlaykieBibliography() } && when {
+        footer == null || footer.error != null -> false
+        footer.content == null -> state.hiddenBibliography
+        else -> footer.content.end.bibliography.isNotEmpty()
+    }
     LaunchedEffect(project, state.revision, hideBibliography) {
         try {
             state.update(project, hideBibliography)

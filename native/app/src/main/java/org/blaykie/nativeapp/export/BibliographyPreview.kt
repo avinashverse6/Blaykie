@@ -41,6 +41,17 @@ internal suspend fun preparePreviewReferences(
         check(copy.session.sourceName == sourceName)
         copy.project
     }
+    return preparePreviewReferences(project, enabled, readAccount, onFetching, clientFactory)
+}
+
+/** Recover details on an independent project; Mobile supplies a snapshot without replaying the document. */
+internal suspend fun preparePreviewReferences(
+    project: DocxProject,
+    enabled: Boolean,
+    readAccount: () -> AccountRead,
+    onFetching: (Int) -> Unit = {},
+    clientFactory: () -> ZoteroClient = ::ZoteroClient,
+): PreviewReferences {
     val missing = withContext(Dispatchers.Default) { if (enabled) project.missingKeys() else emptySet() }
     if (missing.isEmpty()) return PreviewReferences.Ready(project, emptySet(), lookupAttempted = false)
     val account = (withContext(Dispatchers.IO) { readAccount() } as? AccountRead.Present)?.account

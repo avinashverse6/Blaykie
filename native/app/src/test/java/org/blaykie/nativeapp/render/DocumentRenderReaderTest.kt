@@ -146,6 +146,29 @@ class DocumentRenderReaderTest {
         assertEquals(insertedFooter, footer())
     }
 
+    @Test fun removalReplaysAndUndoRestoresCitationWithoutChangingDocx() {
+        val source = docx(document("<w:p><w:r><w:t>Original text</w:t></w:r></w:p>"))
+        val bytes = source.readBytes()
+        val store = org.blaykie.nativeapp.session.SessionStore(temp.newFolder(), source)
+        val opened = store.attach("content://test", "Test.docx")
+        val key = listOf(CitationItem("ABCD1234", "Sample", listOf(CitationAuthor("Ada", "Lovelace")), "2020"))
+        val insert = org.blaykie.nativeapp.session.EditOperation(0, type = "citation", position = 8, items = key)
+        val number = opened.project.insertCitation(0, 8, 8, key)
+        val remove = org.blaykie.nativeapp.session.EditOperation(0, type = "removeCitation", position = number)
+        val session = opened.session.copy(edits = listOf(insert, remove))
+        store.save(session)
+        val restored = (store.read() as org.blaykie.nativeapp.session.SessionRead.Ready).project
+        assertEquals("Original text", restored.blockText(0))
+        val undone = store.undo(session) as org.blaykie.nativeapp.session.UndoResult.Success
+        assertTrue(undone.project.blockText(0).contains("Lovelace"))
+        val copy = undone.project.copyForBibliographyPreview()
+        assertEquals(undone.project.buildXml(), copy.buildXml())
+        copy.removeCitation(0, number)
+        assertEquals("Original text", copy.blockText(0))
+        assertTrue(undone.project.blockText(0).contains("Lovelace"))
+        assertArrayEquals(bytes, source.readBytes())
+    }
+
     @Test fun rejectsDtdAndExcessiveDepthInPackageParts() {
         assertThrows(IllegalArgumentException::class.java) {
             render("", styles = "<!DOCTYPE w:styles [<!ENTITY x SYSTEM 'file:///ignored'>]><w:styles $ns/>")

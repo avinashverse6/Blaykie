@@ -41,7 +41,8 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
             if (index < items.size) scroll.firstVisibleItemScrollOffset else 0)
     }
 
-    private var hiddenBibliography = false
+    var hiddenBibliography = false
+        private set
 
     suspend fun update(project: DocxProject, hideBibliography: Boolean) {
         if (hideBibliography != hiddenBibliography) reload = true

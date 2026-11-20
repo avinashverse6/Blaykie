@@ -75,7 +75,6 @@ import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.ExportScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import org.blaykie.nativeapp.document.DocumentPosition
 import org.blaykie.nativeapp.document.DocumentRepository
 import org.blaykie.nativeapp.document.DocumentsScreen
 import org.blaykie.nativeapp.document.OpenDocument
@@ -447,7 +446,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 val bibliography = if (!current.bibliography.enabled) null else rememberBibliographyView(
                     p, Unit, current.bibliography, revision = mobile.revision, bibliographyOnly = true,
                     prepare = { progress ->
-                        preparePreviewReferences(store, current.sourceName, true, accountStore::read, progress)
+                        preparePreviewReferences(p.copyForBibliographyPreview(), true, accountStore::read, progress)
                     },
                 ) { copy, allowMissing -> withContext(Dispatchers.Default) { copy.buildXml(allowMissing = allowMissing, options = current.bibliography) } }
                 MobileDocumentScreen(p, mobile, bibliography, onParagraph = ::editParagraph,

@@ -236,7 +236,10 @@ private data class Snapshot(
     val nextBookmark: Int, val citations: List<Citation>, val removed: Int, val added: Int,
 )
 
-class DocxProject(private val source: File) {
+class DocxProject private constructor(private val source: File, preview: DocxProject?) {
+    constructor(source: File) : this(source, null)
+
+    internal fun copyForBibliographyPreview(): DocxProject = DocxProject(source, this)
     private val prefix: String
     private val suffix: String
     private val tail: String
@@ -251,20 +254,29 @@ class DocxProject(private val source: File) {
     private var nextCitation: Int
     private var nextBookmark: Int
     init {
-        val bytes = ZipFile(source).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml") ?: throw IllegalArgumentException("Missing document.xml")).use { it.readBytes() } }
-        bom = bytes.size >= 3 && bytes[0] == 0xef.toByte() && bytes[1] == 0xbb.toByte() && bytes[2] == 0xbf.toByte()
-        val xml = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
-        originalXml = xml
-        val body = Regex("<w:body\\b[^>]*>").find(xml) ?: throw IllegalArgumentException("This file has no document body.")
-        val lo = body.range.last + 1; val hi = xml.lastIndexOf("</w:body>")
-        require(hi >= lo) { "This file has no document body." }
-        prefix = xml.substring(0, lo); suffix = xml.substring(hi)
-        blocks = mutableListOf()
-        var cursor = lo
-        for (e in children(xml, lo, hi)) { blocks += Block(e.tag, xml.substring(cursor, e.start), xml.substring(e.start, e.end)); cursor = e.end }
-        tail = xml.substring(cursor, hi)
-        nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
-        nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
+        if (preview != null) {
+            prefix = preview.prefix; suffix = preview.suffix; tail = preview.tail
+            bom = preview.bom; originalXml = preview.originalXml
+            blocks = preview.blocks.mapTo(mutableListOf()) { it.copy() }
+            known = LinkedHashMap(preview.known)
+            citationOperations = preview.citationOperations.toMutableList()
+            nextCitation = preview.nextCitation; nextBookmark = preview.nextBookmark
+        } else {
+            val bytes = ZipFile(source).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml") ?: throw IllegalArgumentException("Missing document.xml")).use { it.readBytes() } }
+            bom = bytes.size >= 3 && bytes[0] == 0xef.toByte() && bytes[1] == 0xbb.toByte() && bytes[2] == 0xbf.toByte()
+            val xml = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
+            originalXml = xml
+            val body = Regex("<w:body\\b[^>]*>").find(xml) ?: throw IllegalArgumentException("This file has no document body.")
+            val lo = body.range.last + 1; val hi = xml.lastIndexOf("</w:body>")
+            require(hi >= lo) { "This file has no document body." }
+            prefix = xml.substring(0, lo); suffix = xml.substring(hi)
+            blocks = mutableListOf()
+            var cursor = lo
+            for (e in children(xml, lo, hi)) { blocks += Block(e.tag, xml.substring(cursor, e.start), xml.substring(e.start, e.end)); cursor = e.end }
+            tail = xml.substring(cursor, hi)
+            nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
+            nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
+        }
     }
     internal fun renderInput(onlyBlock: Int? = null) = org.blaykie.nativeapp.render.DocumentRenderInput(source, buildList {
         add(prefix)
