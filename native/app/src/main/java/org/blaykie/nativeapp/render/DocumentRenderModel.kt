@@ -25,9 +25,13 @@ internal data class RenderParagraph(
 ) : RenderBlock
 
 internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList(),
-                                val siblingEntries: List<String> = emptyList()) : RenderBlock {
+                                val siblingEntries: List<String> = emptyList(), val inlineExtent: InlineImageExtent? = null) : RenderBlock {
     fun entries(): List<String> = listOfNotNull(entryName) + fallbackEntries
 }
+internal data class InlineImageExtent(val widthEmu: Long, val heightEmu: Long) {
+    fun displayHeightDp(widthDp: Float): Float = (widthDp * (heightEmu.toDouble() / widthEmu)).toFloat().coerceAtLeast(1f)
+}
+
 internal data class RenderHorizontalRule(val rgb: Int?, val thicknessPoints: Float) : RenderBlock
 
 /** Preserve each picture's position; its siblings are only used to decide whether to show a failure label. */

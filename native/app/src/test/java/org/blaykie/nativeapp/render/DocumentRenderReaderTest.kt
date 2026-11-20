@@ -126,6 +126,40 @@ class DocumentRenderReaderTest {
         assertEquals(listOf(RenderHorizontalRule(0xB89B72, 2f)), blocks)
     }
 
+    @Test fun thinInlinePngKeepsItsExtentAndDecodesWithoutPlaceholder() {
+        val png = java.awt.image.BufferedImage(1200, 8, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+        for (y in 0 until png.height) for (x in 0 until png.width) png.setRGB(x, y, 0xffb89b72.toInt())
+        val bytes = java.io.ByteArrayOutputStream().also { assertTrue(javax.imageio.ImageIO.write(png, "png", it)) }.toByteArray()
+        val xml = document("""<w:p><w:r><w:drawing>
+            <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+                <wp:extent cx="5943600" cy="38100"/><wp:docPr id="2" descr="horizontal line"/>
+                <a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId2"/>
+            </wp:inline></w:drawing></w:r></w:p>""")
+        val rels = """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.png"/>
+            </Relationships>"""
+        val source = docx(xml, extra = mapOf("word/_rels/document.xml.rels" to rels), binary = mapOf("word/media/image2.png" to bytes))
+        val image = readDocumentRenderModel(source, xml).blocks.single() as RenderImage
+        assertEquals("horizontal line", image.description)
+        assertEquals("word/media/image2.png", image.entryName)
+        val extent = checkNotNull(image.inlineExtent)
+        assertEquals(InlineImageExtent(5943600, 38100), extent)
+        assertEquals(2f, extent.displayHeightDp(312f), .001f)
+        assertEquals(1f, extent.displayHeightDp(100f), .001f)
+        readRenderPackage(source) { zip ->
+            zip.getInputStream(zip.getEntry(image.entryName)).use { input ->
+                val decoded = javax.imageio.ImageIO.read(input)
+                assertEquals(1200, decoded.width)
+                assertEquals(8, decoded.height)
+                val sample = checkNotNull(imageSampleSize(decoded.width, decoded.height, 24))
+                assertEquals(8, sample)
+                assertTrue(decoded.width / sample >= 1 && decoded.height / sample >= 1)
+            }
+        }
+        assertNull(imagePlaceholderText(ImageDisplay.Drawn))
+    }
+
     @Test fun readsBulletAndNumberedItemsAndSkipsUnsupportedElements() {
         val numbering = """<w:numbering $ns>
             <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>
@@ -273,12 +307,18 @@ class DocumentRenderReaderTest {
         val xml = document(body)
         return readDocumentRenderModel(docx(xml, styles, numbering), xml)
     }
-    private fun docx(xml: String, styles: String? = null, numbering: String? = null, extra: Map<String, String> = emptyMap()): File = temp.newFile().apply {
+    private fun docx(xml: String, styles: String? = null, numbering: String? = null, extra: Map<String, String> = emptyMap(),
+                     binary: Map<String, ByteArray> = emptyMap()): File = temp.newFile().apply {
         ZipOutputStream(outputStream()).use { zip ->
             for ((name, part) in (listOf("word/document.xml" to xml, "word/styles.xml" to styles, "word/numbering.xml" to numbering) + extra.toList())) {
                 if (part == null) continue
                 zip.putNextEntry(ZipEntry(name))
                 zip.write(part.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+            for ((name, bytes) in binary) {
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
                 zip.closeEntry()
             }
         }

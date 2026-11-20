@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -55,8 +57,12 @@ internal fun MobileImage(source: File, image: RenderImage) {
             val decoded = result
             if (decoded is ImageDecode.Ready) {
                 val bitmap = decoded.bitmap
+                val extent = image.inlineExtent
+                val layout = if (extent != null) Modifier.height(extent.displayHeightDp(maxWidth.value).dp)
+                    else Modifier.aspectRatio(bitmap.width.toFloat() / bitmap.height)
                 Image(bitmap.asImageBitmap(), image.description ?: "Document image",
-                    Modifier.padding(vertical = 4.dp).fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
+                    Modifier.padding(vertical = 4.dp).fillMaxWidth().then(layout),
+                    contentScale = if (extent != null) ContentScale.FillBounds else ContentScale.Fit)
             }
             imagePlaceholderText(decoded.display)?.let { ImagePlaceholder(it) }
         }
@@ -101,12 +107,7 @@ private fun decodeImage(source: File, name: String, targetWidth: Int): Bitmap? =
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
         val width = options.outWidth
         val height = options.outHeight
-        if (width !in 1..32768 || height !in 1..32768 || width.toLong() * height > 100_000_000L ||
-            maxOf(width, height).toLong() > minOf(width, height) * 64L) return@readRenderPackage null
-        var sample = 1
-        while (width / sample > targetWidth * 2 || height / sample > 2048 ||
-            ((width + sample - 1) / sample).toLong() * ((height + sample - 1) / sample) > 1_500_000L) sample *= 2
-        options.inSampleSize = sample
+        options.inSampleSize = imageSampleSize(width, height, targetWidth) ?: return@readRenderPackage null
         options.inJustDecodeBounds = false
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
@@ -114,4 +115,16 @@ private fun decodeImage(source: File, name: String, targetWidth: Int): Bitmap? =
     null
 } catch (_: OutOfMemoryError) {
     null
+}
+
+/** Keep the package safety limits without rejecting skinny images or sampling away their short side. */
+internal fun imageSampleSize(width: Int, height: Int, targetWidth: Int): Int? {
+    if (width !in 1..32768 || height !in 1..32768 || width.toLong() * height > 100_000_000L) return null
+    var sample = 1
+    val limit = minOf(width, height)
+    while (sample * 2 <= limit && (width / sample > targetWidth.coerceIn(1, 2048) * 2 || height / sample > 2048 ||
+            ((width + sample - 1) / sample).toLong() * ((height + sample - 1) / sample) > 1_500_000L)) {
+        sample *= 2
+    }
+    return sample
 }

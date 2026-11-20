@@ -10,6 +10,8 @@ internal const val MAX_IMAGE_BYTES = 16L * 1024 * 1024
 private const val REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 private const val STRICT_REL = "http://purl.oclc.org/ooxml/officeDocument/relationships"
 private const val PACKAGE_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
+private const val WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+private const val STRICT_WP = "http://purl.oclc.org/ooxml/drawingml/wordprocessingDrawing"
 private const val DRAWING = "http://schemas.openxmlformats.org/drawingml/2006/main"
 private const val STRICT_DRAWING = "http://purl.oclc.org/ooxml/drawingml/main"
 
@@ -44,7 +46,13 @@ internal fun drawingImages(drawing: Element, relationships: Map<String, String>)
     }
     fun image(element: Element, attribute: String): RenderImage {
         val id = element.getAttributeNS(REL, attribute).ifEmpty { element.getAttributeNS(STRICT_REL, attribute) }
-        return RenderImage(relationships[id], description)
+        val inline = generateSequence(element.parentNode as? Element) { it.parentNode as? Element }
+            .firstOrNull { it.localName == "inline" && (it.namespaceURI == WP || it.namespaceURI == STRICT_WP) }
+        val extent = inline?.children()?.firstOrNull { it.localName == "extent" && it.namespaceURI == inline.namespaceURI }
+        val cx = extent?.getAttribute("cx")?.toLongOrNull()?.takeIf { it > 0 }
+        val cy = extent?.getAttribute("cy")?.toLongOrNull()?.takeIf { it > 0 }
+        return RenderImage(relationships[id], description,
+            inlineExtent = if (cx != null && cy != null) InlineImageExtent(cx, cy) else null)
     }
     return buildList {
         fun collect(parent: Element) {
