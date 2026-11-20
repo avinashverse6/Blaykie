@@ -219,11 +219,14 @@ internal object CitationFormatting {
         }
     }
 
-    fun citationText(items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = "", context: List<CitationItem> = items): String {
+    fun citationText(items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = "", context: List<CitationItem> = items, options: CitationOptions = CitationOptions()): String {
         val chosen = items.distinctBy { it.key }
         if (chosen.isEmpty()) return ""
         val pages = page.trim().replace(Regex("\\s*[-‐‑‒–—]+\\s*"), "–")
-        val pageText = if (pages.isEmpty()) "" else (if ('–' in pages || ',' in pages) "pp. " else "p. ") + pages
+        val extra = options.normalized(style, pages)
+        val labelText = if (extra.label == LocatorLabel.Page && ('–' in pages || ',' in pages)) "pp." else extra.label.abbreviation
+        val pageText = if (pages.isEmpty()) "" else "$labelText $pages"
+        val suffixText = extra.suffix.takeIf { it.isNotEmpty() }?.let { ", $it" }.orEmpty()
         if (style == "narrative") {
             val pool = context.ifEmpty { chosen }
             val suffixes = suffixes(pool)
@@ -232,13 +235,16 @@ internal object CitationFormatting {
                 val suffix = suffixes[item.key].orEmpty()
                 val yr = dateText(item, suffix = suffix)
                 val locator = if (chosen.size == 1 && pageText.isNotEmpty()) ", $pageText" else ""
-                "${label(item, "and", flagged)} ($yr$locator)"
+                "${label(item, "and", flagged)} ($yr$locator$suffixText)"
             }
         }
-        var inner = inText(chosen, context).removePrefix("(").removeSuffix(")")
+        var inner = if (extra.omitAuthor) {
+            val years = suffixes(context.ifEmpty { chosen })
+            ordered(chosen).joinToString("; ") { dateText(it, suffix = years[it.key].orEmpty()) }
+        } else inText(chosen, context).removePrefix("(").removeSuffix(")")
         if (chosen.size == 1 && pageText.isNotEmpty()) inner += ", $pageText"
         if (prefix.isNotEmpty()) inner = prefix.trim() + " " + inner
-        return "($inner)"
+        return "($inner$suffixText)"
     }
 
     fun referenceList(items: List<CitationItem>): String {

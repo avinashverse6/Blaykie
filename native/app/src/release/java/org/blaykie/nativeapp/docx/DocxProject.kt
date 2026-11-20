@@ -220,6 +220,7 @@ data class Citation(val number: Int, val keys: List<String>, val text: String) {
     internal var style = "parenthetical"
     internal var page = ""
     internal var prefix = ""
+    internal var options = CitationOptions()
     internal var block = -1
     internal var position = 0
     internal var leadingSpace = false
@@ -314,7 +315,7 @@ class DocxProject private constructor(private val source: File, preview: DocxPro
     fun editSummary(): Pair<Int, Int> = removed to added
     private fun snapshot() = Snapshot(blocks.map { it.xml }, known.toMap(), nextCitation, nextBookmark, citationOperations.toList(), removed, added)
     private fun change(index: Int, xml: String, previous: Snapshot) { blocks[index].xml = xml; history += previous }
-    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = ""): Int {
+    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = "", options: CitationOptions = CitationOptions()): Int {
         val chosen = items.distinctBy { it.key }
         require(chosen.isNotEmpty()) { "Choose at least one reference." }
         val para = paragraph(block)
@@ -325,17 +326,43 @@ class DocxProject private constructor(private val source: File, preview: DocxPro
         val ids = chosen.indices.map { nextBookmark + it }
         val rpr = para.format(start, end)
         val marks = chosen.zip(ids).joinToString("") { (item, id) -> "<w:bookmarkStart w:id=\"$id\" w:name=\"BLK_${itemKey(item)}_$nextCitation\"/>" }
-        val citationText = CitationFormatting.citationText(chosen, style, page, prefix)
+        val locator = citationField(page, 64).trim()
+        val leadIn = citationField(prefix, 160).trim()
+        val extra = options.normalized(style, locator)
+        val citationText = CitationFormatting.citationText(chosen, style, locator, leadIn, options = extra)
         val replacement = makeRun(rpr, lead) + marks + makeRun(rpr, citationText) + ids.reversed().joinToString("") { "<w:bookmarkEnd w:id=\"$it\"/>" } + makeRun(rpr, trail)
         val newXml = para.replace(start, end, replacement)
         val old = snapshot(); chosen.forEach { known[itemKey(it)] = it }; val number = nextCitation++
         citationOperations.add(Citation(number, chosen.map { it.key }, citationText).apply {
-            this.items = chosen; this.style = style; this.page = page; this.prefix = prefix
+            this.items = chosen; this.style = style; this.page = locator; this.prefix = leadIn; this.options = extra
             this.block = block; position = start; leadingSpace = lead.isNotEmpty(); trailingSpace = trail.isNotEmpty()
         })
         nextBookmark += chosen.size; change(block, newXml, old)
         return number
     }
+    internal fun citationPosition(block: Int, number: Int): Int? = paragraph(block).citationRange(number)?.first
+
+    internal fun editCitation(block: Int, number: Int, style: String, page: String, prefix: String,
+                              options: CitationOptions): String {
+        val index = citationOperations.indexOfFirst { it.block == block && it.number == number }
+        if (index < 0) throw NotEditable("The original citation options are unavailable.")
+        val prior = citationOperations[index]
+        val para = paragraph(block)
+        val (start, end) = para.citationRange(number) ?: throw NotEditable("This citation cannot be edited safely.")
+        val locator = citationField(page, 64).trim()
+        val lead = citationField(prefix, 160).trim()
+        val extra = options.normalized(style, locator)
+        val text = CitationFormatting.citationText(prior.items, style, locator, lead, options = extra)
+        val newXml = para.replace(start, end, makeRun(para.format(start, end), text))
+        val previous = snapshot()
+        citationOperations[index] = Citation(number, prior.keys, text).apply {
+            items = prior.items; this.style = style; this.page = locator; this.prefix = lead; this.options = extra
+            this.block = block; position = start; leadingSpace = prior.leadingSpace; trailingSpace = prior.trailingSpace
+        }
+        change(block, newXml, previous)
+        return text
+    }
+
     /** Remove the complete tagged citation, never a guessed substring of paragraph text. */
     internal fun removeCitation(block: Int, number: Int) {
         val para = paragraph(block)
@@ -444,7 +471,7 @@ class DocxProject private constructor(private val source: File, preview: DocxPro
             val first = citation.items.firstOrNull() ?: continue
             val name = "BLK_${itemKey(first)}_${citation.number}"
             val pattern = Regex("(<w:bookmarkStart w:id=\"\\d+\" w:name=\"${Regex.escape(name)}\"/>(?:<w:bookmarkStart [^>]*/>)*<w:r>(?:<w:rPr>.*?</w:rPr>)?<w:t xml:space=\"preserve\">)(.*?)(</w:t></w:r>)", RegexOption.DOT_MATCHES_ALL)
-            val fresh = escape(CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items))
+            val fresh = escape(CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items, citation.options))
             pattern.find(joined)?.let { match ->
                 joined = joined.replaceRange(match.range, match.groupValues[1] + fresh + match.groupValues[3])
             }

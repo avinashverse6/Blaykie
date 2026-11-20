@@ -277,6 +277,13 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             navigate(Screen.EDITOR)
         }
     }
+    fun openCitationEditor(block: Int, number: Int) {
+        val p = project ?: return
+        val citation = p.citations().firstOrNull { it.block == block && it.number == number } ?: return
+        val at = p.citationPosition(block, number) ?: return
+        editParagraph(block)
+        if (screen == Screen.EDITOR) citationSearch.openEdit(block, at, citation)
+    }
     fun removeCitation(block: Int, number: Int) {
         val p = project ?: return
         val current = session ?: return
@@ -452,9 +459,14 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
                     onCitation = { block, number -> selectedCitation = block to number })
                 selectedCitation?.let { (block, number) ->
+                    val editable = p.citations().any { it.block == block && it.number == number }
                     AlertDialog(onDismissRequest = { selectedCitation = null }, title = { Text("Citation") },
-                        confirmButton = { TextButton(onClick = { selectedCitation = null; removeCitation(block, number) }) { Text("Remove") } },
+                        confirmButton = {
+                            if (editable) TextButton(onClick = { selectedCitation = null; openCitationEditor(block, number) }) { Text("Edit") }
+                            else TextButton(onClick = { selectedCitation = null; removeCitation(block, number) }) { Text("Remove") }
+                        },
                         dismissButton = {
+                            if (editable) TextButton(onClick = { selectedCitation = null; removeCitation(block, number) }) { Text("Remove") }
                             if (current.edits.isNotEmpty()) TextButton(onClick = { selectedCitation = null; undoSession() }) { Text("Undo") }
                             TextButton(onClick = { selectedCitation = null }) { Text("Cancel") }
                         },
@@ -468,13 +480,21 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
                 else if (p != null && s != null) {
                     try {
-                        p.insertCitation(searchState.block, searchState.position, searchState.position, chosen, searchState.style, searchState.page.trim(), searchState.prefix.trim())
-                        val operation = EditOperation(block = searchState.block, type = "citation", position = searchState.position, items = chosen, style = searchState.style, page = searchState.page.trim(), prefix = searchState.prefix.trim())
+                        val edit = searchState.editNumber
+                        val page = searchState.page.trim(); val prefix = searchState.prefix.trim()
+                        val options = searchState.savedOptions()
+                        val citation = if (edit != null) p.editCitation(searchState.block, edit, searchState.style, page, prefix, options)
+                            else {
+                                p.insertCitation(searchState.block, searchState.position, searchState.position, chosen, searchState.style, page, prefix, options = options)
+                                p.citations().last().text
+                            }
+                        val operation = EditOperation(block = searchState.block, type = if (edit == null) "citation" else "editCitation",
+                            position = edit ?: searchState.position, items = if (edit == null) chosen else emptyList(),
+                            style = searchState.style, page = page, prefix = prefix, citationOptions = options)
                         if (!persist(s.copy(edits = s.edits + operation, draft = null))) p.undo()
                         else {
-                            val citation = p.citations().last().text
                             citationSearch.close(); mobile.changed(searchState.block); mobile.focusParagraph(searchState.block); navigate(Screen.DOCUMENT)
-                            message = "Citation added: " + citation.take(50)
+                            message = (if (edit == null) "Citation added: " else "Citation updated: ") + citation.take(50)
                         }
                     } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
                 }

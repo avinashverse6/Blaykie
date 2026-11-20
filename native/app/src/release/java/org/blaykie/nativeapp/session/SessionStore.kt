@@ -9,11 +9,13 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.CitationItem
+import org.blaykie.nativeapp.docx.CitationOptions
 
 @Serializable data class EditOperation(
     val block: Int, val text: String = "", val type: String = "edit", val position: Int = 0,
     val items: List<CitationItem> = emptyList(), val style: String = "parenthetical",
     val page: String = "", val prefix: String = "",
+    val citationOptions: CitationOptions = CitationOptions(),
 )
 @Serializable data class Draft(val block: Int, val text: String)
 @Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val bibliography: BibliographyOptions = BibliographyOptions())
@@ -77,8 +79,9 @@ class SessionStore(private val root: File, private val workingDocx: File? = null
                     "edit" -> require(project.applyTextEdit(edit.block, edit.text))
                     "citation" -> {
                         require(session.version >= 2)
-                        project.insertCitation(edit.block, edit.position, edit.position, edit.items, edit.style, edit.page, edit.prefix)
+                        project.insertCitation(edit.block, edit.position, edit.position, edit.items, edit.style, edit.page, edit.prefix, edit.citationOptions)
                     }
+                    "editCitation" -> project.editCitation(edit.block, edit.position, edit.style, edit.page, edit.prefix, edit.citationOptions)
                     "removeCitation" -> project.removeCitation(edit.block, edit.position)
                     else -> error("Unknown operation")
                 }
