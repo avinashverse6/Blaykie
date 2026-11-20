@@ -1,6 +1,8 @@
 package org.blaykie.nativeapp.render
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -12,12 +14,17 @@ import org.blaykie.nativeapp.document.DocumentPosition
 import org.blaykie.nativeapp.document.DocumentView
 import org.blaykie.nativeapp.docx.DocxProject
 
-internal data class MobilePage(val source: File, val items: List<MobilePageItem>, val setup: PageSetup)
+internal data class MobilePage(val source: File, val items: List<MobilePageItem>, val setup: PageSetup,
+                               val bibliographyBlocks: Set<Int> = emptySet())
 
 /** The page survives trips into the editor. Only changed paragraphs are parsed on return. */
 internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile) {
     val scroll = LazyListState()
     val printScroll = LazyListState()
+    val printPan = ScrollState(0)
+    var printZoom by mutableFloatStateOf(1f)
+    val printMeasurements = PrintMeasurements()
+    private var rawPage: MobilePage? = null
     var view by mutableStateOf(initialView)
         private set
     private var printPages: List<PrintPage> = emptyList()
@@ -39,13 +46,15 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
             .takeIf { it >= 0 } ?: pages.lastIndex
         val row = pages[index].rows.firstOrNull { it.blockIndex >= target.paragraphIndex }
         val offset = if (row == null || row == pages[index].rows.firstOrNull()) 0 else
-            ((topMarginPoints + row.top) * printPixelsPerPoint).toInt()
+            row.printOffsetPx(topMarginPoints, printPixelsPerPoint)
         printScroll.scrollToItem(index, offset)
         focus = null
     }
     var page by mutableStateOf<MobilePage?>(null)
         private set
     var revision by mutableIntStateOf(0)
+        private set
+    var renderedRevision by mutableIntStateOf(-1)
         private set
     private var focus by mutableStateOf<DocumentPosition?>(position)
     private val dirty = linkedSetOf<Int>()
@@ -64,8 +73,8 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
         focus?.let { return it }
         if (view == DocumentView.Print) {
             val rows = printPages.getOrNull(printScroll.firstVisibleItemIndex)?.rows.orEmpty()
-            val y = printScroll.firstVisibleItemScrollOffset / printPixelsPerPoint - (page?.setup?.topTwips ?: 0) / 20f
-            return DocumentPosition((rows.lastOrNull { it.top <= y } ?: rows.firstOrNull())?.blockIndex ?: 0)
+            return DocumentPosition(printRowAtOffset(rows, printScroll.firstVisibleItemScrollOffset,
+                (page?.setup?.topTwips ?: 0) / 20f, printPixelsPerPoint)?.blockIndex ?: 0)
         }
         val items = page?.items.orEmpty()
         val index = scroll.firstVisibleItemIndex
@@ -77,18 +86,16 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
         private set
 
     suspend fun update(project: DocxProject, hideBibliography: Boolean) {
-        if (hideBibliography != hiddenBibliography) reload = true
-        val previous = page
+        val previous = rawPage
         val startRevision = revision
-        val inputs = if (reload || previous == null) emptyMap() else dirty.associateWith { project.renderInput(it) }
-        if (!reload && previous != null && inputs.isEmpty()) {
-            return
-        }
-        val full = if (inputs.isEmpty()) project.renderInput() else null
+        val full = if (reload || previous == null) project.renderInput() else null
+        val inputs = if (full == null) dirty.associateWith { project.renderInput(it) } else emptyMap()
+        if (full == null && inputs.isEmpty() && hideBibliography == hiddenBibliography) return
         val next = withContext(Dispatchers.Default) {
-            if (full != null) full.read(hideBibliography = hideBibliography).let { MobilePage(it.source, it.pageItems(), it.pageSetup) }
+            if (full != null) full.read().let { MobilePage(it.source, it.pageItems(), it.pageSetup, it.bibliographyBlocks) }
             else {
                 checkNotNull(previous)
+                if (inputs.isEmpty()) return@withContext previous
                 val groups = inputs.mapValues { (block, input) ->
                     val parsed = input.read()
                     val old = previous.items.filterIsInstance<MobilePageItem.Block>()
@@ -96,7 +103,7 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
                     parsed.blocks.map { item ->
                         // Editing cannot change numbering definitions or numbering membership.
                         val updated = if (item is RenderParagraph && item.list != null && old?.list != null) item.copy(list = old.list) else item
-                        MobilePageItem.Block(block, updated)
+                        MobilePageItem.Block(block, updated, updated is RenderParagraph && 0 in parsed.editableBlocks)
                     }
                 }
                 val replaced = mutableSetOf<Int>()
@@ -105,12 +112,15 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
                     if (updated == null) listOf(item)
                     else if (replaced.add(item.blockIndex)) updated else emptyList()
                 }
-                MobilePage(previous.source, items, previous.setup)
+                previous.copy(items = items)
             }
         }
         if (revision != startRevision) return
         hiddenBibliography = hideBibliography
-        page = next
+        renderedRevision = startRevision
+        rawPage = next
+        page = if (!hideBibliography || next.bibliographyBlocks.isEmpty()) next else
+            next.copy(items = next.items.filterNot { it.blockIndex in next.bibliographyBlocks })
         reload = false
         dirty.clear()
     }

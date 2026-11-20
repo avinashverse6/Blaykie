@@ -3,6 +3,9 @@ package org.blaykie.nativeapp.render
 import android.graphics.Typeface
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.LinkAnnotation
@@ -62,39 +70,82 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
     val fonts = remember { mutableMapOf<String, FontFamily?>() }
     val tableScroll = remember(state) { mutableMapOf<Int, ScrollState>() }
     val content = state.page
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-        DocumentView.entries.forEachIndexed { index, view ->
-            SegmentedButton(selected = state.view == view, onClick = {
-                if (state.view != view) { state.switchView(view); onViewChanged() }
-            }, shape = SegmentedButtonDefaults.itemShape(index, DocumentView.entries.size)) {
-                Text(if (view == DocumentView.Mobile) "Mobile view" else "Print layout")
+    val list = if (state.view == DocumentView.Print) state.printScroll else state.scroll
+    var showToggle by remember(state, state.view) { mutableStateOf(true) }
+    val threshold = with(LocalDensity.current) { 12.dp.toPx() }
+    val scrollObserver = remember(list, threshold) {
+        object : NestedScrollConnection {
+            private var travel = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                val y = consumed.y
+                if (y == 0f) return Offset.Zero
+                if ((travel > 0) != (y > 0)) travel = 0f
+                travel += y
+                if (travel <= -threshold) { showToggle = false; travel = 0f }
+                if (travel >= threshold || !list.canScrollBackward) { showToggle = true; travel = 0f }
+                return Offset.Zero
             }
         }
+    }
+    LaunchedEffect(list) {
+        snapshotFlow { list.canScrollBackward }.collect { if (!it) showToggle = true }
     }
     LaunchedEffect(content, state.view) {
         if (content != null && state.view == DocumentView.Mobile) state.restoreMobileFocus(content)
     }
-    when {
-        failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
-        content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        state.view == DocumentView.Print -> PrintDocument(content, state, footer, fonts, tableScroll)
-        else -> LazyColumn(state = state.scroll, contentPadding = PaddingValues(16.dp)) {
-            if (content.items.isEmpty()) item { Text("No readable document content.", Modifier.padding(16.dp)) }
-            itemsIndexed(content.items) { index, item ->
-                DocumentBlock(content.source, item, fonts, tableScroll,
-                    previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
-                        ?.content as? RenderParagraph)?.afterTwips ?: 0,
-                    onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) })
+    Column(Modifier.fillMaxSize()) {
+        if (showToggle) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp),
+            contentAlignment = Alignment.CenterEnd) {
+            CompactDocumentViewToggle(state.view) { view ->
+                if (state.view != view) { state.switchView(view); onViewChanged() }
             }
-            if (footer != null) {
-                val result = footer.content
-                if (result == null) item { BibliographyStatus(footer, Modifier.padding(vertical = 12.dp)) }
-                else {
-                    if (result.end.bibliography.isEmpty() && result.missingCitations.isEmpty()) item { Text("No citations yet.") }
-                    bibliography(result.end.bibliography)
-                    if (footer.lookupAttempted) item { androidx.compose.material3.TextButton(onClick = footer.retry) { Text("Retry") } }
-                    result.missingNote?.let { note -> item { Text(note, style = MaterialTheme.typography.titleSmall) } }
-                    items(result.missingCitations) { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth().nestedScroll(scrollObserver)) {
+            when {
+                failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
+                content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                state.view == DocumentView.Print -> PrintDocument(content, state, footer, fonts, tableScroll, onParagraph, onCitation)
+                else -> LazyColumn(state = state.scroll, contentPadding = PaddingValues(16.dp)) {
+                    if (content.items.isEmpty()) item { Text("No readable document content.", Modifier.padding(16.dp)) }
+                    itemsIndexed(content.items) { index, item ->
+                        DocumentBlock(content.source, item, fonts, tableScroll,
+                            previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
+                                ?.content as? RenderParagraph)?.afterTwips ?: 0,
+                            onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) })
+                    }
+                    if (footer != null) {
+                        val result = footer.content
+                        if (result == null) item { BibliographyStatus(footer, Modifier.padding(vertical = 12.dp)) }
+                        else {
+                            if (result.end.bibliography.isEmpty() && result.missingCitations.isEmpty()) item { Text("No citations yet.") }
+                            bibliography(result.end.bibliography)
+                            if (footer.lookupAttempted) item { androidx.compose.material3.TextButton(onClick = footer.retry) { Text("Retry") } }
+                            result.missingNote?.let { note -> item { Text(note, style = MaterialTheme.typography.titleSmall) } }
+                            items(result.missingCitations) { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+@Composable
+private fun CompactDocumentViewToggle(view: DocumentView, onChange: (DocumentView) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(20.dp), color = colors.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outlineVariant)) {
+        Row(Modifier.height(36.dp).selectableGroup().padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            DocumentView.entries.forEach { option ->
+                val selected = option == view
+                Surface(shape = RoundedCornerShape(18.dp),
+                    color = if (selected) colors.primaryContainer else Color.Transparent) {
+                    Box(Modifier.fillMaxHeight().selectable(selected, role = Role.RadioButton, onClick = { onChange(option) })
+                        .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+                        Text(if (option == DocumentView.Mobile) "Mobile" else "Print", style = MaterialTheme.typography.labelLarge,
+                            color = if (selected) colors.onPrimaryContainer else colors.onSurfaceVariant)
+                    }
                 }
             }
         }

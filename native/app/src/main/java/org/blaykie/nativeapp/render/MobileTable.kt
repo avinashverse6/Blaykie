@@ -22,14 +22,14 @@ import java.io.File
 
 internal sealed interface MobilePageItem {
     val blockIndex: Int
-    data class Block(override val blockIndex: Int, val content: RenderBlock) : MobilePageItem
+    data class Block(override val blockIndex: Int, val content: RenderBlock, val editable: Boolean = false) : MobilePageItem
     data class TableRows(override val blockIndex: Int, val widths: List<Int>, val band: TableBand) : MobilePageItem
 }
 
 internal fun DocumentRenderModel.pageItems(): List<MobilePageItem> = blocks.flatMapIndexed { index, block ->
     val blockIndex = blockIndices[index]
     if (block is RenderTable) block.bands().map { MobilePageItem.TableRows(blockIndex, block.columnWidthsTwips, it) }
-    else listOf(MobilePageItem.Block(blockIndex, block))
+    else listOf(MobilePageItem.Block(blockIndex, block, block is RenderParagraph && blockIndex in editableBlocks))
 }
 
 @Composable

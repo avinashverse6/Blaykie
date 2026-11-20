@@ -79,7 +79,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         val body = requireNotNull(document.get("body")) { "Missing document body" }
         val elements = body.children().toList()
         val bibliography = mutableSetOf<Int>()
-        if (hideBibliography) elements.forEachIndexed { index, element ->
+        elements.forEachIndexed { index, element ->
             if (element.word("bookmarkStart") && element.attr("name") == "BLK_BIBLIOGRAPHY") {
                 val id = element.attr("id")
                 val end = (index + 1 until elements.size).firstOrNull {
@@ -91,9 +91,10 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         val result = mutableListOf<RenderBlock>()
         val indices = mutableListOf<Int>()
         elements.forEachIndexed { index, element ->
-            if (index !in bibliography) renderBlock(element).forEach { block -> result.add(block); indices.add(index) }
+            if (!hideBibliography || index !in bibliography) renderBlock(element).forEach { block -> result.add(block); indices.add(index) }
         }
-        return DocumentRenderModel(result, source, indices, readPageSetup(body.get("sectPr")))
+        return DocumentRenderModel(result, source, indices, readPageSetup(body.get("sectPr")),
+            elements.indices.filterTo(mutableSetOf()) { elements[it].word("p") }, bibliography)
     }
 
     private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap { renderBlock(it).asSequence() }.toList()

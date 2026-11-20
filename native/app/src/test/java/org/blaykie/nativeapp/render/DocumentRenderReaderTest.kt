@@ -294,6 +294,53 @@ class DocumentRenderReaderTest {
         assertEquals(insertedFooter, footer())
     }
 
+    @Test fun printRowsUseTheSourceParagraphAtFitWidthAndDoubleZoom() {
+        val model = render("""<w:p><w:r><w:t>First</w:t></w:r></w:p>
+            <w:tbl><w:tr/></w:tbl><w:p><w:r><w:t>Target</w:t></w:r></w:p>
+            <w:sdt><w:sdtContent><w:p><w:r><w:t>Read only</w:t></w:r></w:p></w:sdtContent></w:sdt>""")
+        val rows = model.pageItems().filterIsInstance<MobilePageItem.Block>().mapIndexed { index, item ->
+            PrintRow(item.blockIndex, index * 24f, item)
+        }
+        assertEquals(listOf(0, 2, null), rows.map { it.editorBlock })
+        for (zoom in listOf(1f, 2f)) {
+            val pixel = ((72f + 24f + 8f) * zoom).toInt()
+            assertEquals(2, printRowAtOffset(rows, pixel, 72f, zoom)?.editorBlock)
+        }
+    }
+
+    @Test fun printCitationAndLiveBibliographyFollowInsertRemoveAndUndo() = kotlinx.coroutines.runBlocking {
+        val source = docx(document("<w:p><w:r><w:t>First</w:t></w:r></w:p>" +
+            "<w:p><w:r><w:t>Second</w:t></w:r></w:p>"))
+        val project = DocxProject(source)
+        val options = org.blaykie.nativeapp.docx.BibliographyOptions(enabled = true, heading = "Sources")
+        suspend fun footer(): List<PrintRow> {
+            val ready = org.blaykie.nativeapp.export.PreviewReferences.Ready(project, emptySet(), false)
+            val preview = org.blaykie.nativeapp.export.renderBibliographyPreview(ready, bibliographyOnly = true) { copy, allowMissing ->
+                copy.buildXml(allowMissing = allowMissing, options = options)
+            }
+            return printBibliographyRows(1, preview.end.bibliography)
+        }
+        fun printRows() = project.renderInput().read().pageItems().filterIsInstance<MobilePageItem.Block>()
+            .flatMap(::printParagraphItems).map { PrintRow(it.blockIndex, 0f, it) }
+        fun cites(row: PrintRow) = ((row.item as MobilePageItem.Block).content as RenderParagraph).runs.mapNotNull { it.citationNumber }
+        assertTrue(footer().isEmpty())
+        val number = project.insertCitation(1, 6, 6, listOf(CitationItem("ABCD1234", "Sample",
+            listOf(CitationAuthor("Ada", "Lovelace")), "2020")))
+        val rows = printRows()
+        assertTrue(cites(rows.first()).isEmpty())
+        assertEquals(1, rows.last().editorBlock)
+        assertEquals(listOf(number), cites(rows.last()))
+        val withCitation = footer()
+        assertEquals(2, withCitation.size)
+        assertTrue(withCitation.first().title)
+        project.removeCitation(1, number)
+        assertTrue(cites(printRows().last()).isEmpty())
+        assertTrue(footer().isEmpty())
+        assertTrue(project.undo())
+        assertEquals(listOf(number), cites(printRows().last()))
+        assertEquals(withCitation, footer())
+    }
+
     @Test fun removalReplaysAndUndoRestoresCitationWithoutChangingDocx() {
         val source = docx(document("<w:p><w:r><w:t>Original text</w:t></w:r></w:p>"))
         val bytes = source.readBytes()
