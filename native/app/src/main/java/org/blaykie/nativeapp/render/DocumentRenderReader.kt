@@ -1,7 +1,6 @@
 package org.blaykie.nativeapp.render
 
 import java.io.File
-import java.util.zip.ZipFile
 import org.blaykie.nativeapp.docx.SafeDocumentXml
 import org.w3c.dom.Element
 
@@ -18,24 +17,29 @@ internal class DocumentRenderInput(private val source: File, private val parts: 
 }
 
 /** Read the in-memory working body and the original package's unchanged styles/numbering. */
-internal fun readDocumentRenderModel(source: File, workingXml: String): DocumentRenderModel = ZipFile(source).use { zip ->
-    fun part(name: String): Element? = zip.getEntry("word/$name.xml")?.let { entry ->
+internal fun readDocumentRenderModel(source: File, workingXml: String): DocumentRenderModel = readRenderPackage(source) { zip ->
+    fun part(name: String): Element? = zip.getEntry("word/$name")?.let { entry ->
         zip.getInputStream(entry).use { SafeDocumentXml.parse(it, MAX_SUPPORT_XML, name).second.documentElement }
     }
     val document = SafeDocumentXml.parseSnapshot(workingXml, MAX_RENDER_XML).documentElement
-    Renderer(part("styles"), part("numbering")).read(document)
+    val relationships = try {
+        imageRelationships(part("_rels/document.xml.rels"), zip)
+    } catch (_: Exception) {
+        emptyMap() // Unreadable image relationships do not hide the document body.
+    }
+    DocumentRenderModel(Renderer(part("styles.xml"), part("numbering.xml"), relationships).read(document), source)
 }
 
-private fun Element.word(name: String) = localName == name && (namespaceURI == WORD || namespaceURI == STRICT_WORD)
-private fun Element.children(): Sequence<Element> = sequence {
+internal fun Element.word(name: String) = localName == name && (namespaceURI == WORD || namespaceURI == STRICT_WORD)
+internal fun Element.children(): Sequence<Element> = sequence {
     var child = firstChild
     while (child != null) {
         if (child is Element) yield(child)
         child = child.nextSibling
     }
 }
-private fun Element?.get(name: String) = this?.children()?.firstOrNull { it.word(name) }
-private fun Element?.attr(name: String): String? = this?.let {
+internal fun Element?.get(name: String) = this?.children()?.firstOrNull { it.word(name) }
+internal fun Element?.attr(name: String): String? = this?.let {
     (it.getAttributeNS(WORD, name).ifEmpty { it.getAttributeNS(STRICT_WORD, name) }).ifEmpty { null }
 }
 private fun Element?.value(name: String) = get(name).attr("val")
@@ -51,7 +55,7 @@ private fun runFormat(properties: Element?): RunFormat {
         properties.value("color")?.takeIf { it.length == 6 }?.toIntOrNull(16))
 }
 
-private class Renderer(stylePart: Element?, numberingPart: Element?) {
+private class Renderer(stylePart: Element?, numberingPart: Element?, private val images: Map<String, String>) {
     private val defaults = stylePart.get("docDefaults")
     private val styles = stylePart?.children().orEmpty().filter { it.word("style") }
         .mapNotNull { style -> style.attr("styleId")?.let { it to style } }.toMap()
@@ -71,18 +75,18 @@ private class Renderer(stylePart: Element?, numberingPart: Element?) {
         levels.asReversed()
     }
 
-    fun read(document: Element): DocumentRenderModel {
-        val body = requireNotNull(document.get("body")) { "Missing document body" }
-        return DocumentRenderModel(body.children().mapNotNull {
-            when {
-                it.word("p") -> paragraph(it)
-                it.word("tbl") -> RenderPlaceholder.Table
-                else -> null
-            }
-        }.toList())
-    }
+    fun read(document: Element): List<RenderBlock> = blocks(requireNotNull(document.get("body")) { "Missing document body" })
 
-    private fun paragraph(element: Element): RenderParagraph {
+    private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap {
+        when {
+            it.word("p") -> paragraph(it).asSequence()
+            it.word("tbl") -> sequenceOf(table(it, ::blocks))
+            it.word("sdt") || it.word("sdtContent") || it.word("customXml") -> blocks(it).asSequence()
+            else -> emptySequence()
+        }
+    }.toList()
+
+    private fun paragraph(element: Element): List<RenderBlock> {
         val direct = element.get("pPr")
         val styleId = direct.value("pStyle") ?: defaultParagraph.attr("styleId")
         val inherited = chain(styleId)
@@ -105,7 +109,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?) {
         val baseRun = inherited.fold(runFormat(defaults.get("rPrDefault").get("rPr"))) { acc, style ->
             acc.overlay(runFormat(style.get("rPr")))
         }
-        val runs = mutableListOf<RenderRun>()
+        val pieces = mutableListOf<Any>()
         fun collect(parent: Element) {
             parent.children().forEach { child ->
                 when {
@@ -114,17 +118,24 @@ private class Renderer(stylePart: Element?, numberingPart: Element?) {
                         val format = chain(props.value("rStyle")).fold(baseRun) { acc, style ->
                             acc.overlay(runFormat(style.get("rPr")))
                         }.overlay(runFormat(props))
-                        val text = child.children().joinToString("") {
+                        val text = StringBuilder()
+                        fun flush() {
+                            if (text.isNotEmpty()) pieces.add(RenderRun(text.toString(), format))
+                            text.setLength(0)
+                        }
+                        child.children().forEach {
                             when {
-                                it.word("t") -> it.textContent
-                                it.word("tab") -> "\t"
-                                it.word("br") || it.word("cr") -> "\n"
-                                it.word("noBreakHyphen") -> "\u2011"
-                                it.word("drawing") || it.word("pict") || it.word("object") -> "[image]"
-                                else -> ""
+                                it.word("t") -> text.append(it.textContent)
+                                it.word("tab") -> text.append('\t')
+                                it.word("br") || it.word("cr") -> text.append('\n')
+                                it.word("noBreakHyphen") -> text.append('\u2011')
+                                it.word("drawing") || it.word("pict") || it.word("object") -> {
+                                    flush()
+                                    pieces.addAll(drawingImages(it, images))
+                                }
                             }
                         }
-                        if (text.isNotEmpty()) runs.add(RenderRun(text, format))
+                        flush()
                     }
                     child.word("hyperlink") || child.word("ins") || child.word("fldSimple") ||
                         child.word("sdtContent") || child.word("sdt") || child.word("smartTag") -> collect(child)
@@ -136,13 +147,31 @@ private class Renderer(stylePart: Element?, numberingPart: Element?) {
         val indentSource = spacingLayers.asReversed().firstOrNull { it.get("ind").let { ind ->
             ind.attr("hanging") != null || ind.attr("firstLine") != null
         } }
-        return RenderParagraph(runs, when (property("jc")) {
+        val paragraph = RenderParagraph(emptyList(), when (property("jc")) {
             "center" -> RenderAlignment.Center; "right" -> RenderAlignment.Right; "left" -> RenderAlignment.Left
             "end" -> RenderAlignment.End; "both", "distribute" -> RenderAlignment.Justify; else -> RenderAlignment.Start
         }, twips("spacing", "before"), twips("spacing", "after"),
             field("spacing", "line", source = spacingLayers)?.toIntOrNull(), field("spacing", "lineRule", source = spacingLayers),
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first)
+        if (pieces.none { it is RenderImage }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
+        // Promote drawings to blocks at their run position, preserving text on both sides.
+        return buildList {
+            val pending = mutableListOf<RenderRun>()
+            var hadText = false
+            fun emitText() {
+                if (pending.isEmpty()) return
+                add(paragraph.copy(runs = pending.toList(), list = if (hadText) null else paragraph.list))
+                pending.clear()
+                hadText = true
+            }
+            for (piece in pieces) when (piece) {
+                is RenderRun -> pending.add(piece)
+                is RenderImage -> { emitText(); add(piece) }
+            }
+            emitText()
+        }
+
     }
 
     private companion object { val HEADING = Regex("heading\\s*([1-9])", RegexOption.IGNORE_CASE) }

@@ -51,15 +51,62 @@ class DocumentRenderReaderTest {
         val model = render(item(1, hindi) + "<w:unknown><w:p/></w:unknown>" + item(2, gujarati) +
             "<w:tbl><w:tr/></w:tbl>" + item(2, "Next") + "<w:p><w:r><w:drawing/></w:r><w:unknown/></w:p>", numbering = numbering)
         assertEquals(5, model.blocks.size)
-        val (bullet, first, next, image) = model.blocks.filterIsInstance<RenderParagraph>()
+        val (bullet, first, next) = model.blocks.filterIsInstance<RenderParagraph>()
         assertEquals(hindi, bullet.runs.single().text)
         assertEquals(gujarati, first.runs.single().text)
         assertEquals(RenderListItem(RenderListKind.Bullet, 0, "•"), bullet.list)
         assertEquals(240, bullet.hangingTwips)
         assertEquals(RenderListItem(RenderListKind.Numbered, 0, "3)"), first.list)
         assertEquals("4)", next.list?.label)
-        assertEquals(RenderPlaceholder.Table, model.blocks[2])
-        assertEquals("[image]", image.runs.single().text)
+        assertTrue(model.blocks[2] is RenderTable)
+        assertEquals(RenderImage(null, null), model.blocks[4])
+    }
+
+    @Test fun readsSimpleTableAndKeepsNestedCellParagraphFormatting() {
+        val model = render("""<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="3200"/></w:tblGrid><w:tr>
+            <w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc>
+            <w:tc><w:sdt><w:sdtContent><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Nested</w:t></w:r></w:p>
+            </w:sdtContent></w:sdt></w:tc></w:tr></w:tbl>""")
+        val table = model.blocks.single() as RenderTable
+        assertEquals(1, table.rowCount)
+        assertEquals(listOf(2000, 3200), table.columnWidthsTwips)
+        assertEquals(listOf(0, 1), table.cells.map { it.column })
+        assertEquals("A", (table.cells.first().blocks.single() as RenderParagraph).runs.single().text)
+        val nested = (table.cells.last().blocks.single() as RenderParagraph).runs.single()
+        assertEquals("Nested", nested.text)
+        assertEquals(true, nested.format.bold)
+    }
+
+    @Test fun joinsHorizontalAndVerticalMergesAndHandlesOrphanContinuations() {
+        val model = render("""<w:tbl><w:tr>
+            <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge w:val="restart"/></w:tcPr><w:p><w:r><w:t>Merged</w:t></w:r></w:p></w:tc>
+            <w:tc><w:p/></w:tc></w:tr><w:tr>
+            <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:vMerge/></w:tcPr><w:p/></w:tc>
+            <w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p><w:r><w:t>Orphan</w:t></w:r></w:p></w:tc></w:tr></w:tbl>""")
+        val table = model.blocks.single() as RenderTable
+        assertEquals(2, table.rowCount)
+        assertEquals(3, table.columnWidthsTwips.size)
+        assertEquals(listOf(2, 1, 1), table.cells.map { it.rowSpan })
+        assertEquals(listOf(2, 1, 1), table.cells.map { it.columnSpan })
+        assertEquals(listOf(0, 2, 2), table.cells.map { it.column })
+        assertEquals(2, table.bands().single().rows)
+        assertEquals("Orphan", (table.cells.last().blocks.single() as RenderParagraph).runs.single().text)
+    }
+
+    @Test fun resolvesEmbeddedImagesAndUsesSafeFallbackForMissingOrExternalRelationships() {
+        val drawing = """<w:drawing xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+            <a:blip r:embed="rImage"/><a:blip r:embed="rMissing"/><a:blip r:embed="rExternal"/></w:drawing>"""
+        val xml = document("<w:p><w:r><w:t>Before</w:t>$drawing<w:t>After</w:t></w:r></w:p>")
+        val rels = """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image%201.png"/>
+            <Relationship Id="rExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="https://example.invalid/image.png" TargetMode="External"/>
+            </Relationships>"""
+        val source = docx(xml, extra = mapOf("word/_rels/document.xml.rels" to rels, "word/media/image 1.png" to "placeholder test bytes"))
+        val blocks = readDocumentRenderModel(source, xml).blocks
+        assertEquals("Before", (blocks.first() as RenderParagraph).runs.single().text)
+        assertEquals("After", (blocks.last() as RenderParagraph).runs.single().text)
+        assertEquals(listOf("word/media/image 1.png", null, null), blocks.filterIsInstance<RenderImage>().map { it.entryName })
     }
 
     @Test fun rendersLiveCitationsAndExistingBibliographyWithoutWritingThePackage() {
@@ -89,11 +136,11 @@ class DocumentRenderReaderTest {
         val xml = document(body)
         return readDocumentRenderModel(docx(xml, styles, numbering), xml)
     }
-    private fun docx(xml: String, styles: String? = null, numbering: String? = null): File = temp.newFile().apply {
+    private fun docx(xml: String, styles: String? = null, numbering: String? = null, extra: Map<String, String> = emptyMap()): File = temp.newFile().apply {
         ZipOutputStream(outputStream()).use { zip ->
-            for ((name, part) in listOf("document" to xml, "styles" to styles, "numbering" to numbering)) {
+            for ((name, part) in (listOf("word/document.xml" to xml, "word/styles.xml" to styles, "word/numbering.xml" to numbering) + extra.toList())) {
                 if (part == null) continue
-                zip.putNextEntry(ZipEntry("word/$name.xml"))
+                zip.putNextEntry(ZipEntry(name))
                 zip.write(part.toByteArray(Charsets.UTF_8))
                 zip.closeEntry()
             }

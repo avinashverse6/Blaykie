@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.render
 
 import android.graphics.Typeface
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,12 +33,12 @@ import org.blaykie.nativeapp.docx.DocxProject
 @Composable
 internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
     val scroll = rememberLazyListState()
-    var model by remember(project) { mutableStateOf<DocumentRenderModel?>(null) }
+    var page by remember(project) { mutableStateOf<Pair<java.io.File, List<MobilePageItem>>?>(null) }
     var failed by remember(project) { mutableStateOf(false) }
     LaunchedEffect(project) {
         try {
             val input = project.renderInput()
-            model = withContext(Dispatchers.Default) { input.read() }
+            page = withContext(Dispatchers.Default) { input.read().let { it.source to it.pageItems() } }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -45,6 +46,7 @@ internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
         }
     }
     val fonts = remember { mutableMapOf<String, FontFamily?>() }
+    val tableScroll = remember(project) { mutableMapOf<Int, ScrollState>() }
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -52,17 +54,21 @@ internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
             }
             Text("Mobile view", style = MaterialTheme.typography.titleLarge)
         }
-        val blocks = model?.blocks
+        val content = page
         when {
             failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
-            blocks == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            blocks.isEmpty() -> Text("No readable document content.", Modifier.padding(16.dp))
+            content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            content.second.isEmpty() -> Text("No readable document content.", Modifier.padding(16.dp))
             else -> LazyColumn(state = scroll, contentPadding = PaddingValues(16.dp)) {
-                items(blocks) { block ->
-                    when (block) {
-                        is RenderParagraph -> MobileParagraph(block, fonts)
-                        is RenderPlaceholder -> Text(block.label, Modifier.padding(vertical = 4.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                items(content.second) { item ->
+                    when (item) {
+                        is MobilePageItem.Block -> when (val block = item.content) {
+                            is RenderParagraph -> MobileParagraph(block, fonts)
+                            is RenderImage -> MobileImage(content.first, block)
+                            is RenderTable -> Unit // Table bands are emitted separately in pageItems().
+                        }
+                        is MobilePageItem.TableRows -> MobileTableBand(content.first, item.widths, item.band,
+                            tableScroll.getOrPut(item.tableId) { ScrollState(0) }, fonts)
                     }
                 }
             }
@@ -71,7 +77,7 @@ internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
 }
 
 @Composable
-private fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>) {
+internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>) {
     val body = MaterialTheme.typography.bodyLarge
     val background = MaterialTheme.colorScheme.background
     val foreground = MaterialTheme.colorScheme.onBackground

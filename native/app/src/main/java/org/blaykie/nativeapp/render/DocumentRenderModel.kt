@@ -1,8 +1,7 @@
 package org.blaykie.nativeapp.render
 
-internal data class DocumentRenderModel(val blocks: List<RenderBlock>)
+internal data class DocumentRenderModel(val blocks: List<RenderBlock>, val source: java.io.File)
 internal sealed interface RenderBlock
-internal enum class RenderPlaceholder(val label: String) : RenderBlock { Table("[table]") }
 internal enum class RenderAlignment { Start, End, Left, Right, Center, Justify }
 internal enum class RenderListKind { Bullet, Numbered }
 internal data class RenderListItem(val kind: RenderListKind, val level: Int, val label: String)
@@ -19,3 +18,9 @@ internal data class RenderParagraph(
     val leftTwips: Int = 0, val hangingTwips: Int = 0, val firstLineTwips: Int = 0,
     val headingLevel: Int? = null, val list: RenderListItem? = null,
 ) : RenderBlock
+
+internal data class RenderImage(val entryName: String?, val description: String?) : RenderBlock
+internal data class RenderTable(val columnWidthsTwips: List<Int>, val rowCount: Int, val cells: List<RenderCell>) : RenderBlock
+internal data class RenderCell(
+    val row: Int, val column: Int, val rowSpan: Int, val columnSpan: Int, val blocks: List<RenderBlock>,
+)
