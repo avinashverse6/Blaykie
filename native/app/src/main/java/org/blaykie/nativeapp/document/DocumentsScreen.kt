@@ -75,6 +75,9 @@ internal fun DocumentsScreen(documents: List<StoredDocument>, message: String, o
                             DropdownMenuItem(text = { Text("Rename") }, onClick = {
                                 menu = null; name = document.state.displayName; renaming = document.id
                             })
+                            DropdownMenuItem(text = { Text("Delete") }, onClick = {
+                                menu = null; deleting = document.id
+                            })
                         }
                     }
                 }
