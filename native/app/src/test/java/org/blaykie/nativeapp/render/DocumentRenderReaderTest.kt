@@ -36,6 +36,59 @@ class DocumentRenderReaderTest {
         assertEquals(360, reference.hangingTwips)
     }
 
+    @Test fun parsesBottomBorderAndInheritsHeadingRunAndSpacing() {
+        val styles = """<w:styles $ns>
+            <w:docDefaults><w:pPrDefault><w:pPr><w:spacing w:line="300" w:after="160"/></w:pPr></w:pPrDefault></w:docDefaults>
+            <w:style w:type="paragraph" w:styleId="Base"><w:pPr><w:pBdr>
+                <w:bottom w:val="single" w:sz="12" w:color="224466" w:space="3"/>
+            </w:pBdr></w:pPr><w:rPr><w:sz w:val="48"/><w:color w:val="123456"/></w:rPr></w:style>
+            <w:style w:type="paragraph" w:styleId="Heading1"><w:basedOn w:val="Base"/></w:style>
+            </w:styles>"""
+        val (heading, exact, atLeast) = render("""
+            <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Title</w:t></w:r></w:p>
+            <w:p><w:pPr><w:spacing w:line="200" w:lineRule="exact" w:before="80"/></w:pPr></w:p>
+            <w:p><w:pPr><w:spacing w:line="400" w:lineRule="atLeast"/></w:pPr></w:p>
+            """, styles).blocks.filterIsInstance<RenderParagraph>()
+        assertEquals(RenderBorder(12, 0x224466, 3), heading.borders.bottom)
+        assertEquals(1, heading.headingLevel)
+        assertEquals(24f, heading.runs.single().format.sizePoints)
+        assertEquals(0x123456, heading.runs.single().format.rgb)
+        assertEquals(300 to "auto", heading.lineSpacing to heading.lineRule)
+        assertEquals(200 to "exact", exact.lineSpacing to exact.lineRule)
+        assertEquals(400 to "atLeast", atLeast.lineSpacing to atLeast.lineRule)
+        assertEquals(80 to 160, exact.beforeTwips to exact.afterTwips)
+    }
+
+    @Test fun usesFontCategoryForMissingDocumentFonts() {
+        assertEquals(DocumentFontCategory.SansSerif, documentFontCategory("Open Sans"))
+        assertEquals(DocumentFontCategory.Serif, documentFontCategory("Times New Roman"))
+        assertEquals(DocumentFontCategory.SansSerif, documentFontCategory("Unknown Document Font"))
+    }
+
+    @Test fun onlyShowsImagePlaceholderOnFailure() {
+        assertNull(imagePlaceholderText(ImageDisplay.Drawn))
+        assertNull(imagePlaceholderText(ImageDisplay.Loading))
+        assertEquals("[image]", imagePlaceholderText(ImageDisplay.Failed))
+    }
+
+    @Test fun treatsAnchoredPictureAndItsCompatibilityFallbackAsOneImage() {
+        val xml = document("""<w:p><w:r>
+            <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                xmlns:v="urn:schemas-microsoft-com:vml">
+                <mc:Choice Requires="wp"><w:drawing><wp:anchor><a:blip r:embed="rImage"/></wp:anchor></w:drawing></mc:Choice>
+                <mc:Fallback><w:pict><v:imagedata r:id="rMissing"/></w:pict></mc:Fallback>
+            </mc:AlternateContent>
+            </w:r></w:p>""")
+        val rels = """<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image.png"/>
+            </Relationships>"""
+        val source = docx(xml, extra = mapOf("word/_rels/document.xml.rels" to rels, "word/media/image.png" to "test bytes"))
+        assertEquals(listOf(RenderImage("word/media/image.png", null)), readDocumentRenderModel(source, xml).blocks)
+    }
+
     @Test fun readsBulletAndNumberedItemsAndSkipsUnsupportedElements() {
         val numbering = """<w:numbering $ns>
             <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>

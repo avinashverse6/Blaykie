@@ -10,6 +10,10 @@ internal data class RunFormat(
     val bold: Boolean? = null, val italic: Boolean? = null, val underline: Boolean? = null,
     val font: String? = null, val sizePoints: Float? = null, val rgb: Int? = null,
 )
+internal data class RenderBorder(val widthEighthPoints: Int, val rgb: Int?, val spacePoints: Int)
+internal data class RenderBorders(val top: RenderBorder? = null, val bottom: RenderBorder? = null,
+                                  val left: RenderBorder? = null, val right: RenderBorder? = null)
+
 internal data class RenderParagraph(
     val runs: List<RenderRun>,
     val alignment: RenderAlignment = RenderAlignment.Start,
@@ -17,9 +21,10 @@ internal data class RenderParagraph(
     val lineSpacing: Int? = null, val lineRule: String? = null,
     val leftTwips: Int = 0, val hangingTwips: Int = 0, val firstLineTwips: Int = 0,
     val headingLevel: Int? = null, val list: RenderListItem? = null,
+    val borders: RenderBorders = RenderBorders(),
 ) : RenderBlock
 
-internal data class RenderImage(val entryName: String?, val description: String?) : RenderBlock
+internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList()) : RenderBlock
 internal data class RenderTable(val columnWidthsTwips: List<Int>, val rowCount: Int, val cells: List<RenderCell>) : RenderBlock
 internal data class RenderCell(
     val row: Int, val column: Int, val rowSpan: Int, val columnSpan: Int, val blocks: List<RenderBlock>,

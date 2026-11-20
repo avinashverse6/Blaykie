@@ -6,10 +6,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.LinkAnnotation
@@ -17,9 +20,11 @@ import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextIndent
@@ -30,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import org.blaykie.nativeapp.BibliographyStatus
 import org.blaykie.nativeapp.BibliographyViewState
+import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.bibliography
 import org.blaykie.nativeapp.docx.DocxProject
 
@@ -59,11 +65,13 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
         content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         else -> LazyColumn(state = state.scroll, contentPadding = PaddingValues(16.dp)) {
             if (content.items.isEmpty()) item { Text("No readable document content.", Modifier.padding(16.dp)) }
-            items(content.items) { item ->
+            itemsIndexed(content.items) { index, item ->
                 when (item) {
                     is MobilePageItem.Block -> when (val block = item.content) {
                         is RenderParagraph -> MobileParagraph(block, fonts,
-                            onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) })
+                            onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) },
+                            previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
+                                ?.content as? RenderParagraph)?.afterTwips ?: 0)
                         is RenderImage -> MobileImage(content.source, block)
                         is RenderTable -> Unit // Table bands are emitted separately in pageItems().
                     }
@@ -88,7 +96,8 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
 
 @Composable
 internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>,
-                             onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null) {
+                             onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null,
+                             previousAfterTwips: Int = 0) {
     val body = MaterialTheme.typography.bodyLarge
     val background = MaterialTheme.colorScheme.background
     val foreground = MaterialTheme.colorScheme.onBackground
@@ -108,7 +117,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
                 val format = previous ?: return
                 val family = format.font?.let { name ->
                     if (fonts.containsKey(name)) fonts[name] else availableFont(name).also { fonts[name] = it }
-                } ?: body.fontFamily
+                } ?: FontFamily.SansSerif
                 val color = format.rgb?.let { Color(it or 0xff000000.toInt()) } ?: foreground
                 val contrast = (maxOf(color.luminance(), background.luminance()) + .05f) /
                     (minOf(color.luminance(), background.luminance()) + .05f)
@@ -144,15 +153,43 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     val first = if (paragraph.list != null && hanging == 0f) (continuation - 16f).coerceAtLeast(0f)
         else (continuation - hanging + paragraph.firstLineTwips.coerceIn(0, 1440) / 20f).coerceAtLeast(0f)
     val maxSize = paragraph.runs.maxOfOrNull { it.format.sizePoints?.coerceIn(6f, 100f) ?: defaultSize } ?: defaultSize
+    val naturalLine = maxSize * 1.2f
     val line = paragraph.lineSpacing?.takeIf { it > 0 }?.let {
-        if (paragraph.lineRule == "exact" || paragraph.lineRule == "atLeast") (it / 20f).coerceIn(maxSize, 150f)
-        else (maxSize * 1.2f * it / 240f).coerceIn(maxSize, 150f)
-    } ?: (maxSize * 1.2f)
+        when (paragraph.lineRule) {
+            "exact" -> it / 20f
+            "atLeast" -> maxOf(naturalLine, it / 20f)
+            else -> naturalLine * it / 240f
+        }.coerceIn(1f, 240f)
+    } ?: naturalLine
     val interaction = if (onParagraph == null) Modifier else Modifier.clickable(onClick = onParagraph)
+    val borders = paragraph.borders
+    val edgeModifier = if (borders == RenderBorders()) Modifier else Modifier.drawBehind {
+        fun edge(border: RenderBorder?, horizontal: Boolean, far: Boolean) {
+            if (border == null) return
+            val width = (border.widthEighthPoints / 8f).dp.toPx().coerceAtLeast(1f)
+            val cross = if (horizontal) size.height else size.width
+            val coordinate = if (far) cross - width / 2f else width / 2f
+            val start = if (horizontal) Offset(0f, coordinate) else Offset(coordinate, 0f)
+            val end = if (horizontal) Offset(size.width, coordinate) else Offset(coordinate, size.height)
+            val color = border.rgb?.let { Color(it or 0xff000000.toInt()) } ?: foreground
+            drawLine(color, start, end, strokeWidth = width)
+        }
+        edge(borders.top, horizontal = true, far = false)
+        edge(borders.bottom, horizontal = true, far = true)
+        edge(borders.left, horizontal = false, far = false)
+        edge(borders.right, horizontal = false, far = true)
+    }.absolutePadding(
+        left = borderInset(borders.left).dp, right = borderInset(borders.right).dp,
+        top = borderInset(borders.top).dp, bottom = borderInset(borders.bottom).dp,
+    )
+    // Word uses the greater of adjacent paragraph gaps rather than adding both.
+    val before = (paragraph.beforeTwips.coerceIn(0, 4800) - previousAfterTwips.coerceIn(0, 4800)).coerceAtLeast(0)
     Text(text, modifier = Modifier.fillMaxWidth().then(interaction).padding(
-        top = (paragraph.beforeTwips.coerceIn(0, 1440) / 20f).dp,
-        bottom = (paragraph.afterTwips.coerceIn(0, 1440) / 20f).dp,
-    ), color = foreground, style = body.copy(fontSize = defaultSize.sp, lineHeight = line.sp,
+        top = (before / 20f).dp,
+        bottom = (paragraph.afterTwips.coerceIn(0, 4800) / 20f).dp,
+    ).then(edgeModifier), color = foreground, style = body.copy(fontFamily = FontFamily.SansSerif,
+        fontSize = defaultSize.sp, lineHeight = line.sp,
+        lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
         textIndent = TextIndent(firstLine = first.sp, restLine = continuation.sp),
         textAlign = when (paragraph.alignment) {
             RenderAlignment.Start -> TextAlign.Start; RenderAlignment.End -> TextAlign.End
@@ -161,13 +198,25 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
         }))
 }
 
-private fun availableFont(name: String): FontFamily? = when (name.lowercase()) {
-    "sans-serif" -> FontFamily.SansSerif
-    "serif" -> FontFamily.Serif
-    "monospace" -> FontFamily.Monospace
-    "cursive" -> FontFamily.Cursive
-    else -> runCatching {
-        val typeface = Typeface.create(name, Typeface.NORMAL)
-        if (typeface == Typeface.DEFAULT) null else FontFamily(typeface)
-    }.getOrNull()
+private fun borderInset(border: RenderBorder?): Float =
+    border?.let { it.spacePoints + it.widthEighthPoints / 8f } ?: 0f
+
+private val documentSerif = FontFamily(
+    Font(R.font.lora_regular, FontWeight.Normal),
+    Font(R.font.lora_bold, FontWeight.Bold),
+)
+
+private fun availableFont(name: String): FontFamily {
+    val family = name.trim()
+    val fallback = when (documentFontCategory(family)) {
+        DocumentFontCategory.SansSerif -> FontFamily.SansSerif
+        DocumentFontCategory.Serif -> documentSerif
+        DocumentFontCategory.Monospace -> FontFamily.Monospace
+        DocumentFontCategory.Cursive -> FontFamily.Cursive
+    }
+    return runCatching {
+        val typeface = Typeface.create(family, Typeface.NORMAL)
+        // Android silently substitutes its default Typeface when a name is not installed.
+        if (typeface == Typeface.DEFAULT) fallback else FontFamily(typeface)
+    }.getOrDefault(fallback)
 }

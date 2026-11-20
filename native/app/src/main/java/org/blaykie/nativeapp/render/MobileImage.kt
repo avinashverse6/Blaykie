@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -28,23 +29,42 @@ private val imageDecoders = Semaphore(2)
 internal fun MobileImage(source: File, image: RenderImage) {
     val entry = image.entryName
     if (entry == null) {
-        ImagePlaceholder()
+        imagePlaceholderText(ImageDisplay.Failed)?.let { ImagePlaceholder(it) }
         return
     }
     BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         val target = with(LocalDensity.current) { maxWidth.roundToPx() }.coerceIn(1, 2048)
-        val bitmap by produceState<Bitmap?>(null, source, entry, target) {
-            value = withContext(Dispatchers.IO) { imageDecoders.withPermit { decodeImage(source, entry, target) } }
+        key(source, image, target) {
+            val result by produceState<ImageDecode>(ImageDecode.Loading) {
+                val bitmap = withContext(Dispatchers.IO) {
+                    imageDecoders.withPermit {
+                        (listOf(entry) + image.fallbackEntries).firstNotNullOfOrNull { decodeImage(source, it, target) }
+                    }
+                }
+                value = if (bitmap == null) ImageDecode.Failed else ImageDecode.Ready(bitmap)
+            }
+            val decoded = result
+            if (decoded is ImageDecode.Ready) {
+                val bitmap = decoded.bitmap
+                Image(bitmap.asImageBitmap(), image.description ?: "Document image",
+                    Modifier.fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height))
+            }
+            imagePlaceholderText(decoded.display)?.let { ImagePlaceholder(it) }
         }
-        val decoded = bitmap
-        if (decoded == null) ImagePlaceholder()
-        else Image(decoded.asImageBitmap(), image.description ?: "Document image",
-            Modifier.fillMaxWidth().aspectRatio(decoded.width.toFloat() / decoded.height))
     }
 }
 
+private sealed class ImageDecode(val display: ImageDisplay) {
+    data object Loading : ImageDecode(ImageDisplay.Loading)
+    data object Failed : ImageDecode(ImageDisplay.Failed)
+    data class Ready(val bitmap: Bitmap) : ImageDecode(ImageDisplay.Drawn)
+}
+
+internal enum class ImageDisplay { Loading, Failed, Drawn }
+internal fun imagePlaceholderText(display: ImageDisplay): String? = if (display == ImageDisplay.Failed) "[image]" else null
+
 @Composable
-private fun ImagePlaceholder() = Text("[image]", Modifier.padding(vertical = 4.dp),
+private fun ImagePlaceholder(text: String) = Text(text, Modifier.padding(vertical = 4.dp),
     color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
 
 private fun decodeImage(source: File, name: String, targetWidth: Int): Bitmap? = try {

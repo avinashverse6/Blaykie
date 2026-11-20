@@ -139,6 +139,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         if (number != null && id != null) activeCitations[id] = number
                     }
                     child.word("bookmarkEnd") -> child.attr("id")?.let(activeCitations::remove)
+                    child.isAlternateDrawing() -> pieces.add(alternateDrawingImage(child, images))
                     child.word("r") -> {
                         val props = child.get("rPr")
                         val format = chain(props.value("rStyle")).fold(baseRun) { acc, style ->
@@ -155,6 +156,10 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                                 it.word("tab") -> text.append('\t')
                                 it.word("br") || it.word("cr") -> text.append('\n')
                                 it.word("noBreakHyphen") -> text.append('\u2011')
+                                it.isAlternateDrawing() -> {
+                                    flush()
+                                    pieces.add(alternateDrawingImage(it, images))
+                                }
                                 it.word("drawing") || it.word("pict") || it.word("object") -> {
                                     flush()
                                     pieces.addAll(drawingImages(it, images))
@@ -173,13 +178,25 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         val indentSource = spacingLayers.asReversed().firstOrNull { it.get("ind").let { ind ->
             ind.attr("hanging") != null || ind.attr("firstLine") != null
         } }
+        fun border(vararg names: String): RenderBorder? {
+            val edge = layers.asReversed().firstNotNullOfOrNull { layer ->
+                names.firstNotNullOfOrNull { layer.get("pBdr").get(it) }
+            } ?: return null
+            if (edge.attr("val") in setOf("nil", "none")) return null
+            return RenderBorder(edge.attr("sz")?.toIntOrNull()?.coerceIn(1, 96) ?: 4,
+                edge.attr("color")?.takeIf { it.length == 6 }?.toIntOrNull(16),
+                edge.attr("space")?.toIntOrNull()?.coerceIn(0, 31) ?: 0)
+        }
+        val lineSpacing = field("spacing", "line", source = spacingLayers)?.toIntOrNull()
+        val lineRule = field("spacing", "lineRule", source = spacingLayers) ?: lineSpacing?.let { "auto" }
         val paragraph = RenderParagraph(emptyList(), when (property("jc")) {
             "center" -> RenderAlignment.Center; "right" -> RenderAlignment.Right; "left" -> RenderAlignment.Left
             "end" -> RenderAlignment.End; "both", "distribute" -> RenderAlignment.Justify; else -> RenderAlignment.Start
         }, twips("spacing", "before"), twips("spacing", "after"),
-            field("spacing", "line", source = spacingLayers)?.toIntOrNull(), field("spacing", "lineRule", source = spacingLayers),
+            lineSpacing, lineRule,
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
-            indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first)
+            indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
+            RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")))
         if (pieces.none { it is RenderImage }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {

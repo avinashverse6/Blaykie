@@ -39,8 +39,6 @@ private fun mediaPath(target: String): String? {
 }
 
 internal fun drawingImages(drawing: Element, relationships: Map<String, String>): List<RenderImage> {
-    val nodes = drawing.getElementsByTagNameNS("*", "blip")
-    val vml = drawing.getElementsByTagNameNS("urn:schemas-microsoft-com:vml", "imagedata")
     val description = (drawing.getElementsByTagNameNS("*", "docPr").item(0) as? Element)?.let {
         it.getAttribute("descr").ifBlank { it.getAttribute("title") }.takeIf(String::isNotBlank)
     }
@@ -49,11 +47,28 @@ internal fun drawingImages(drawing: Element, relationships: Map<String, String>)
         return RenderImage(relationships[id], description)
     }
     return buildList {
-        for (i in 0 until nodes.length) {
-            val node = nodes.item(i) as? Element ?: continue
-            if (node.namespaceURI == DRAWING || node.namespaceURI == STRICT_DRAWING) add(image(node, "embed"))
+        fun collect(parent: Element) {
+            parent.children().forEach { child ->
+                when {
+                    child.isAlternateDrawing() -> add(alternateDrawingImage(child, relationships))
+                    child.localName == "blip" && child.namespaceURI in setOf(DRAWING, STRICT_DRAWING) -> add(image(child, "embed"))
+                    child.localName == "imagedata" && child.namespaceURI == "urn:schemas-microsoft-com:vml" -> add(image(child, "id"))
+                    else -> collect(child)
+                }
+            }
         }
-        for (i in 0 until vml.length) (vml.item(i) as? Element)?.let { add(image(it, "id")) }
+        collect(drawing)
         if (isEmpty()) add(RenderImage(null, description))
     }
+}
+
+internal fun Element.isAlternateDrawing(): Boolean = localName == "AlternateContent" &&
+    namespaceURI == "http://schemas.openxmlformats.org/markup-compatibility/2006" &&
+    listOf("drawing", "pict", "object").any { getElementsByTagNameNS("*", it).length > 0 }
+
+/** Choice and Fallback describe the same picture, not two independent pictures. */
+internal fun alternateDrawingImage(alternate: Element, relationships: Map<String, String>): RenderImage {
+    val alternatives = alternate.children().flatMap { drawingImages(it, relationships).asSequence() }.toList()
+    val entries = alternatives.flatMap { listOfNotNull(it.entryName) + it.fallbackEntries }.distinct()
+    return RenderImage(entries.firstOrNull(), alternatives.firstNotNullOfOrNull { it.description }, entries.drop(1))
 }
