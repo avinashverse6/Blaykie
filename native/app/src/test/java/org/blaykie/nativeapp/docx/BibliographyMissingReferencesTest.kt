@@ -64,8 +64,9 @@ class BibliographyMissingReferencesTest {
                 val request = chain.request()
                 chain.proceed(request.newBuilder().url(server.url(request.url.encodedPath + "?" + request.url.encodedQuery)).build())
             }.build()
-            assertEquals(ZoteroResult.Success(expectedMissing), recoverReferences(project,
-                ZoteroClient.forTesting(transport), 123, "mock-only"))
+            val result = recoverReferences(project, ZoteroClient.forTesting(transport), 123, "mock-only")
+            assertTrue(result is ZoteroResult.Success)
+            assertEquals(expectedMissing, (result as ZoteroResult.Success).value)
             assertEquals(1, server.requestCount)
         }
     }
