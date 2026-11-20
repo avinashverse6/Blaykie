@@ -2,17 +2,19 @@ package org.blaykie.nativeapp.render
 
 import android.graphics.Typeface
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -22,23 +24,23 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.blaykie.nativeapp.R
+import org.blaykie.nativeapp.BibliographyStatus
+import org.blaykie.nativeapp.BibliographyViewState
+import org.blaykie.nativeapp.bibliography
 import org.blaykie.nativeapp.docx.DocxProject
 
 @Composable
-internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
-    val scroll = rememberLazyListState()
-    var page by remember(project) { mutableStateOf<Pair<java.io.File, List<MobilePageItem>>?>(null) }
-    var failed by remember(project) { mutableStateOf(false) }
-    LaunchedEffect(project) {
+internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentState, footer: BibliographyViewState?,
+                                  onParagraph: (Int) -> Unit, onCitation: (Int, Int) -> Unit) {
+    var failed by remember(project, state.revision) { mutableStateOf(false) }
+    val hideBibliography = footer?.content?.end?.bibliography?.isNotEmpty() == true
+    LaunchedEffect(project, state.revision, hideBibliography) {
         try {
-            val input = project.renderInput()
-            page = withContext(Dispatchers.Default) { input.read().let { it.source to it.pageItems() } }
+            state.update(project, hideBibliography)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -46,30 +48,34 @@ internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
         }
     }
     val fonts = remember { mutableMapOf<String, FontFamily?>() }
-    val tableScroll = remember(project) { mutableMapOf<Int, ScrollState>() }
-    Column(Modifier.fillMaxSize()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back to document")
-            }
-            Text("Mobile view", style = MaterialTheme.typography.titleLarge)
-        }
-        val content = page
-        when {
-            failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
-            content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            content.second.isEmpty() -> Text("No readable document content.", Modifier.padding(16.dp))
-            else -> LazyColumn(state = scroll, contentPadding = PaddingValues(16.dp)) {
-                items(content.second) { item ->
-                    when (item) {
-                        is MobilePageItem.Block -> when (val block = item.content) {
-                            is RenderParagraph -> MobileParagraph(block, fonts)
-                            is RenderImage -> MobileImage(content.first, block)
-                            is RenderTable -> Unit // Table bands are emitted separately in pageItems().
-                        }
-                        is MobilePageItem.TableRows -> MobileTableBand(content.first, item.widths, item.band,
-                            tableScroll.getOrPut(item.tableId) { ScrollState(0) }, fonts)
+    val tableScroll = remember(state) { mutableMapOf<Int, ScrollState>() }
+    val content = state.page
+    when {
+        failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
+        content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        else -> LazyColumn(state = state.scroll, contentPadding = PaddingValues(16.dp)) {
+            if (content.items.isEmpty()) item { Text("No readable document content.", Modifier.padding(16.dp)) }
+            items(content.items) { item ->
+                when (item) {
+                    is MobilePageItem.Block -> when (val block = item.content) {
+                        is RenderParagraph -> MobileParagraph(block, fonts,
+                            onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) })
+                        is RenderImage -> MobileImage(content.source, block)
+                        is RenderTable -> Unit // Table bands are emitted separately in pageItems().
                     }
+                    is MobilePageItem.TableRows -> MobileTableBand(content.source, item.widths, item.band,
+                        tableScroll.getOrPut(item.blockIndex) { ScrollState(0) }, fonts)
+                }
+            }
+            if (footer != null) {
+                val result = footer.content
+                if (result == null) item { BibliographyStatus(footer, Modifier.padding(vertical = 12.dp)) }
+                else {
+                    if (result.end.bibliography.isEmpty() && result.missingCitations.isEmpty()) item { Text("No citations yet.") }
+                    bibliography(result.end.bibliography)
+                    if (footer.lookupAttempted) item { androidx.compose.material3.TextButton(onClick = footer.retry) { Text("Retry") } }
+                    result.missingNote?.let { note -> item { Text(note, style = MaterialTheme.typography.titleSmall) } }
+                    items(result.missingCitations) { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 }
             }
         }
@@ -77,17 +83,22 @@ internal fun MobileDocumentScreen(project: DocxProject, onBack: () -> Unit) {
 }
 
 @Composable
-internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>) {
+internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>,
+                             onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null) {
     val body = MaterialTheme.typography.bodyLarge
     val background = MaterialTheme.colorScheme.background
     val foreground = MaterialTheme.colorScheme.onBackground
     val heading = paragraph.headingLevel
     val defaultSize = if (heading == null) body.fontSize.value else (28f - (heading - 1) * 2).coerceAtLeast(18f)
-    val text = remember(paragraph, body, background, foreground) {
+    val citationBackground = MaterialTheme.colorScheme.primaryContainer
+    val citationForeground = MaterialTheme.colorScheme.onPrimaryContainer
+    val liveCitationHandler by rememberUpdatedState(onCitation)
+    val text = remember(paragraph, body, background, foreground, citationBackground, citationForeground, onCitation != null) {
         buildAnnotatedString {
             paragraph.list?.let { append(it.label); append("\u00a0\u00a0") }
             // Keep same-format runs together so shaping can cross Word's run boundaries.
             var previous: RunFormat? = null
+            var citation: Int? = null
             val buffer = StringBuilder()
             fun flush() {
                 val format = previous ?: return
@@ -102,12 +113,21 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
                     fontWeight = if (format.bold ?: (heading != null)) FontWeight.Bold else FontWeight.Normal,
                     fontStyle = if (format.italic == true) FontStyle.Italic else FontStyle.Normal,
                     textDecoration = if (format.underline == true) TextDecoration.Underline else TextDecoration.None,
-                    color = if (contrast >= 3f) color else foreground,
-                )) { append(buffer.toString()) }
+                    color = if (citation != null) citationForeground else if (contrast >= 3f) color else foreground,
+                    background = if (citation != null) citationBackground else Color.Unspecified,
+                )) {
+                    val number = citation
+                    if (number != null && onCitation != null) {
+                        withLink(LinkAnnotation.Clickable("citation-$number", TextLinkStyles(),
+                            LinkInteractionListener { liveCitationHandler?.invoke(number) })) { append(buffer.toString()) }
+                    } else append(buffer.toString())
+                }
                 buffer.setLength(0)
             }
             for (run in paragraph.runs) {
-                if (run.format != previous) { flush(); previous = run.format }
+                if (run.format != previous || run.citationNumber != citation) {
+                    flush(); previous = run.format; citation = run.citationNumber
+                }
                 buffer.append(run.text)
             }
             flush()
@@ -124,7 +144,8 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
         if (paragraph.lineRule == "exact" || paragraph.lineRule == "atLeast") (it / 20f).coerceIn(maxSize, 150f)
         else (maxSize * 1.2f * it / 240f).coerceIn(maxSize, 150f)
     } ?: (maxSize * 1.2f)
-    Text(text, modifier = Modifier.fillMaxWidth().padding(
+    val interaction = if (onParagraph == null) Modifier else Modifier.clickable(onClick = onParagraph)
+    Text(text, modifier = Modifier.fillMaxWidth().then(interaction).padding(
         top = (paragraph.beforeTwips.coerceIn(0, 1440) / 20f).dp,
         bottom = (paragraph.afterTwips.coerceIn(0, 1440) / 20f).dp,
     ), color = foreground, style = body.copy(fontSize = defaultSize.sp, lineHeight = line.sp,

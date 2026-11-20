@@ -21,13 +21,15 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 
 internal sealed interface MobilePageItem {
-    data class Block(val content: RenderBlock) : MobilePageItem
-    data class TableRows(val tableId: Int, val widths: List<Int>, val band: TableBand) : MobilePageItem
+    val blockIndex: Int
+    data class Block(override val blockIndex: Int, val content: RenderBlock) : MobilePageItem
+    data class TableRows(override val blockIndex: Int, val widths: List<Int>, val band: TableBand) : MobilePageItem
 }
 
 internal fun DocumentRenderModel.pageItems(): List<MobilePageItem> = blocks.flatMapIndexed { index, block ->
-    if (block is RenderTable) block.bands().map { MobilePageItem.TableRows(index, block.columnWidthsTwips, it) }
-    else listOf(MobilePageItem.Block(block))
+    val blockIndex = blockIndices[index]
+    if (block is RenderTable) block.bands().map { MobilePageItem.TableRows(blockIndex, block.columnWidthsTwips, it) }
+    else listOf(MobilePageItem.Block(blockIndex, block))
 }
 
 @Composable

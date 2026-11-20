@@ -122,6 +122,30 @@ class DocumentRenderReaderTest {
         assertArrayEquals(before, source.readBytes())
     }
 
+    @Test fun insertedCitationTargetsItsParagraphAndRemovalUpdatesBibliography() {
+        val source = docx(document("<w:p><w:r><w:t>First</w:t></w:r></w:p>" +
+            "<w:p><w:r><w:t>Second paragraph</w:t></w:r></w:p>"))
+        val project = DocxProject(source)
+        val options = org.blaykie.nativeapp.docx.BibliographyOptions(enabled = true, heading = "Sources")
+        fun footer() = org.blaykie.nativeapp.docx.readBibliographyOnly(project.buildXml(options = options)).bibliography
+        val key = listOf(CitationItem("ABCD1234", "Sample", listOf(CitationAuthor("Ada", "Lovelace")), "2020"))
+        assertTrue(footer().isEmpty())
+        val number = project.insertCitation(1, 6, 6, key)
+        val model = project.renderInput().read()
+        assertEquals(listOf(0, 1), model.blockIndices)
+        assertTrue((model.blocks[0] as RenderParagraph).runs.none { it.citationNumber != null })
+        val updated = project.renderInput(1).read().blocks.single() as RenderParagraph
+        assertEquals("(Lovelace, 2020)", updated.runs.filter { it.citationNumber == number }.joinToString("") { it.text })
+        val insertedFooter = footer()
+        assertEquals("Sources", insertedFooter.first().runs.joinToString("") { it.text })
+        assertEquals(2, insertedFooter.size)
+        project.removeCitation(1, number)
+        assertEquals("Second paragraph", project.blockText(1))
+        assertTrue(footer().isEmpty())
+        assertTrue(project.undo())
+        assertEquals(insertedFooter, footer())
+    }
+
     @Test fun rejectsDtdAndExcessiveDepthInPackageParts() {
         assertThrows(IllegalArgumentException::class.java) {
             render("", styles = "<!DOCTYPE w:styles [<!ENTITY x SYSTEM 'file:///ignored'>]><w:styles $ns/>")

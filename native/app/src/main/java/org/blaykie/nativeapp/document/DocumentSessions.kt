@@ -1,6 +1,7 @@
 package org.blaykie.nativeapp.document
 
 import java.io.InputStream
+import org.blaykie.nativeapp.docx.Citation
 import org.blaykie.nativeapp.session.Session
 import org.blaykie.nativeapp.session.SessionRead
 import org.blaykie.nativeapp.session.SessionStore
@@ -31,14 +32,18 @@ internal fun DocumentRepository.openDocument(id: String): OpenDocument? {
 private fun StoredDocument.sessionStore() = SessionStore(checkNotNull(workingDocx.parentFile), workingDocx)
 
 internal fun DocumentRepository.recordSession(id: String, session: Session, style: String?, language: String?,
-                                              position: DocumentPosition, languageExplicit: Boolean? = null) {
+                                              position: DocumentPosition, languageExplicit: Boolean? = null, activeCitations: List<Citation>? = null) {
     val current = load(id)?.state ?: return
-    val citations = session.edits.filter { it.type == "citation" }.mapNotNull { edit ->
-        val ids = edit.items.map { it.key }.filter { it.matches(Regex("[A-Z0-9]{8}")) }
-        if (ids.isEmpty()) null else InsertedCitation(edit.block, edit.position, ids)
+    fun citation(block: Int, position: Int, keys: List<String>): InsertedCitation? {
+        val ids = keys.filter { it.matches(zoteroItemId) }
+        return if (ids.isEmpty()) null else InsertedCitation(block, position, ids)
     }
+    val citations = activeCitations?.mapNotNull { citation(it.block, it.position, it.keys) }
+        ?: session.edits.filter { it.type == "citation" }.mapNotNull { citation(it.block, it.position, it.items.map { item -> item.key }) }
     val updated = current.copy(citations = citations, bibliography = session.bibliography,
         citationStyle = style ?: current.citationStyle, citationLanguage = language ?: current.citationLanguage,
         citationLanguageExplicit = languageExplicit ?: current.citationLanguageExplicit, position = position)
     if (updated != current) saveState(id, updated)
 }
+
+private val zoteroItemId = Regex("[A-Z0-9]{8}")

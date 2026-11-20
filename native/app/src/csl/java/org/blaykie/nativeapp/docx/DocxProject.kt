@@ -113,6 +113,19 @@ private class Paragraph(private val xml: String) {
         text = segments.joinToString("") { it.text }
     }
 
+    fun citationRange(number: Int): Pair<Int, Int>? {
+        val marker = Regex("w:name=\"BLK_[A-Z0-9]+_${number}\"")
+        val id = Regex("w:id=\"(\\d+)\"")
+        val starts = segments.filter { it.tag == "w:bookmarkStart" && marker.containsMatchIn(xml.substring(it.start, it.end)) }
+        val ids = starts.mapNotNull { id.find(xml.substring(it.start, it.end))?.groupValues?.get(1) }.toSet()
+        if (starts.isEmpty() || ids.size != starts.size) return null
+        val ends = segments.filter { it.tag == "w:bookmarkEnd" && id.find(xml.substring(it.start, it.end))?.groupValues?.get(1) in ids }
+        val from = starts.first().off0
+        val to = ends.firstOrNull()?.off0 ?: return null
+        return (from to to).takeIf { ends.size == starts.size && starts.all { it.off0 == from } &&
+            ends.all { it.off0 == to } && to > from }
+    }
+
     fun format(start: Int, end: Int): String = (segments.firstOrNull { it.kind == "text" && it.text.isNotEmpty() && it.off0 < start && start <= it.off1 }
         ?: segments.firstOrNull { it.kind == "text" && it.text.isNotEmpty() && it.off0 >= end }
         ?: segments.firstOrNull { it.kind == "text" })?.rpr ?: ""
@@ -207,6 +220,10 @@ data class Citation(val number: Int, val keys: List<String>, val text: String) {
     internal var style = "parenthetical"
     internal var page = ""
     internal var prefix = ""
+    internal var block = -1
+    internal var position = 0
+    internal var leadingSpace = false
+    internal var trailingSpace = false
 }
 /** Immutable inputs for a document-wide citation processor pass. */
 internal data class CitationExportInput(
@@ -249,9 +266,10 @@ class DocxProject(private val source: File) {
         nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
         nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
     }
-    internal fun renderInput() = org.blaykie.nativeapp.render.DocumentRenderInput(source, buildList {
+    internal fun renderInput(onlyBlock: Int? = null) = org.blaykie.nativeapp.render.DocumentRenderInput(source, buildList {
         add(prefix)
-        blocks.forEach { add(it.gap); add(it.xml) }
+        if (onlyBlock == null) blocks.forEach { add(it.gap); add(it.xml) }
+        else add(blocks[onlyBlock].xml)
         add(tail); add(suffix)
     })
     val blockCount get() = blocks.size
@@ -326,9 +344,20 @@ class DocxProject(private val source: File) {
         val old = snapshot(); chosen.forEach { known[itemKey(it)] = it }; val number = nextCitation++
         citationOperations.add(Citation(number, chosen.map { it.key }, citationText).apply {
             this.items = chosen; this.style = style; this.page = page; this.prefix = prefix
+            this.block = block; position = start; leadingSpace = lead.isNotEmpty(); trailingSpace = trail.isNotEmpty()
         })
         nextBookmark += chosen.size; change(block, newXml, old)
         return number
+    }
+    /** Remove the complete tagged citation, never a guessed substring of paragraph text. */
+    internal fun removeCitation(block: Int, number: Int) {
+        val para = paragraph(block)
+        val (start, end) = para.citationRange(number) ?: throw NotEditable("This citation cannot be removed safely.")
+        val inserted = citationOperations.firstOrNull { it.number == number && it.block == block }
+        val from = if (inserted?.leadingSpace == true && para.text.getOrNull(start - 1) == ' ') start - 1 else start
+        val to = if (inserted?.trailingSpace == true && para.text.getOrNull(end) == ' ') end + 1 else end
+        deleteRange(block, from, to, tidy = inserted == null)
+        citationOperations.removeAll { it.number == number && it.block == block }
     }
     fun deleteRange(block: Int, start: Int, end: Int, tidy: Boolean = true) {
         val para = paragraph(block)

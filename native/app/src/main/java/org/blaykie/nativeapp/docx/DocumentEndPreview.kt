@@ -11,6 +11,19 @@ internal data class DocumentEndPreview(val paragraphs: List<EndPreviewParagraph>
 internal fun DocxProject.previewDocumentEnd(options: BibliographyOptions): DocumentEndPreview =
     readDocumentEnd(buildXml(options = options))
 
+private val bibliographyStart = Regex("""<w:bookmarkStart\b[^>]*\bw:name="BLK_BIBLIOGRAPHY"[^>]*/>""")
+private val bibliographyId = Regex("""\bw:id="(\d+)"""")
+
+/** Avoid reparsing the whole document for the inline footer; use the same paragraph reader. */
+internal fun readBibliographyOnly(xml: String): DocumentEndPreview {
+    if (!xml.contains("BLK_BIBLIOGRAPHY")) return DocumentEndPreview(emptyList(), emptyList())
+    val start = bibliographyStart.findAll(xml).lastOrNull() ?: return readDocumentEnd(xml)
+    val id = bibliographyId.find(start.value)?.groupValues?.get(1) ?: return readDocumentEnd(xml)
+    val end = Regex("""<w:bookmarkEnd\b[^>]*\bw:id="$id"[^>]*/>""").find(xml, start.range.last + 1)
+        ?: return readDocumentEnd(xml)
+    return readDocumentEnd("<w:document><w:body>" + xml.substring(start.range.first, end.range.last + 1) + "</w:body></w:document>")
+}
+
 /** Read a display-only view of the actual document XML that the export path produces. */
 internal fun readDocumentEnd(xml: String): DocumentEndPreview {
     // DOCX parts don't need DTDs; never allow document-provided entity definitions in the preview.

@@ -79,6 +79,7 @@ class SessionStore(private val root: File, private val workingDocx: File? = null
                         require(session.version >= 2)
                         project.insertCitation(edit.block, edit.position, edit.position, edit.items, edit.style, edit.page, edit.prefix)
                     }
+                    "removeCitation" -> project.removeCitation(edit.block, edit.position)
                     else -> error("Unknown operation")
                 }
             }

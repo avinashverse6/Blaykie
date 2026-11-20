@@ -10,6 +10,7 @@ import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.DocumentEndPreview
 import org.blaykie.nativeapp.docx.SafeDocumentXml
 import org.blaykie.nativeapp.docx.readDocumentEnd
+import org.blaykie.nativeapp.docx.readBibliographyOnly
 import org.blaykie.nativeapp.session.SessionRead
 import org.blaykie.nativeapp.session.SessionStore
 import org.blaykie.nativeapp.zotero.ZoteroClient
@@ -63,11 +64,13 @@ internal data class BibliographyPreviewContent(val end: DocumentEndPreview, val 
 
 internal suspend fun renderBibliographyPreview(
     prepared: PreviewReferences.Ready,
+    bibliographyOnly: Boolean = false,
     buildXml: suspend (DocxProject, Boolean) -> String,
 ): BibliographyPreviewContent {
     val xml = buildXml(prepared.project, prepared.allowMissing)
     return withContext(Dispatchers.Default) {
-        BibliographyPreviewContent(readDocumentEnd(xml), missingCitationLabels(xml, prepared.missing))
+        BibliographyPreviewContent(if (bibliographyOnly) readBibliographyOnly(xml) else readDocumentEnd(xml),
+            missingCitationLabels(xml, prepared.missing))
     }
 }
 

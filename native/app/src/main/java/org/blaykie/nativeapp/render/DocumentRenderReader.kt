@@ -10,14 +10,14 @@ private const val MAX_RENDER_XML = 8 * 1024 * 1024
 private const val MAX_SUPPORT_XML = 2 * 1024 * 1024
 
 internal class DocumentRenderInput(private val source: File, private val parts: List<String>) {
-    fun read(): DocumentRenderModel {
+    fun read(hideBibliography: Boolean = false): DocumentRenderModel {
         require(parts.sumOf { it.length.toLong() } <= MAX_RENDER_XML) { "Document XML too large" }
-        return readDocumentRenderModel(source, parts.joinToString(""))
+        return readDocumentRenderModel(source, parts.joinToString(""), hideBibliography)
     }
 }
 
 /** Read the in-memory working body and the original package's unchanged styles/numbering. */
-internal fun readDocumentRenderModel(source: File, workingXml: String): DocumentRenderModel = readRenderPackage(source) { zip ->
+internal fun readDocumentRenderModel(source: File, workingXml: String, hideBibliography: Boolean = false): DocumentRenderModel = readRenderPackage(source) { zip ->
     fun part(name: String): Element? = zip.getEntry("word/$name")?.let { entry ->
         zip.getInputStream(entry).use { SafeDocumentXml.parse(it, MAX_SUPPORT_XML, name).second.documentElement }
     }
@@ -27,7 +27,7 @@ internal fun readDocumentRenderModel(source: File, workingXml: String): Document
     } catch (_: Exception) {
         emptyMap() // Unreadable image relationships do not hide the document body.
     }
-    DocumentRenderModel(Renderer(part("styles.xml"), part("numbering.xml"), relationships).read(document), source)
+    Renderer(part("styles.xml"), part("numbering.xml"), relationships).read(document, source, hideBibliography)
 }
 
 internal fun Element.word(name: String) = localName == name && (namespaceURI == WORD || namespaceURI == STRICT_WORD)
@@ -75,16 +75,35 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         levels.asReversed()
     }
 
-    fun read(document: Element): List<RenderBlock> = blocks(requireNotNull(document.get("body")) { "Missing document body" })
-
-    private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap {
-        when {
-            it.word("p") -> paragraph(it).asSequence()
-            it.word("tbl") -> sequenceOf(table(it, ::blocks))
-            it.word("sdt") || it.word("sdtContent") || it.word("customXml") -> blocks(it).asSequence()
-            else -> emptySequence()
+    fun read(document: Element, source: File, hideBibliography: Boolean): DocumentRenderModel {
+        val body = requireNotNull(document.get("body")) { "Missing document body" }
+        val elements = body.children().toList()
+        val bibliography = mutableSetOf<Int>()
+        if (hideBibliography) elements.forEachIndexed { index, element ->
+            if (element.word("bookmarkStart") && element.attr("name") == "BLK_BIBLIOGRAPHY") {
+                val id = element.attr("id")
+                val end = (index + 1 until elements.size).firstOrNull {
+                    elements[it].word("bookmarkEnd") && elements[it].attr("id") == id
+                }
+                if (end != null) bibliography.addAll(index..end)
+            }
         }
-    }.toList()
+        val result = mutableListOf<RenderBlock>()
+        val indices = mutableListOf<Int>()
+        elements.forEachIndexed { index, element ->
+            if (index !in bibliography) renderBlock(element).forEach { block -> result.add(block); indices.add(index) }
+        }
+        return DocumentRenderModel(result, source, indices)
+    }
+
+    private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap { renderBlock(it).asSequence() }.toList()
+
+    private fun renderBlock(element: Element): List<RenderBlock> = when {
+        element.word("p") -> paragraph(element)
+        element.word("tbl") -> listOf(table(element, ::blocks))
+        element.word("sdt") || element.word("sdtContent") || element.word("customXml") -> blocks(element)
+        else -> emptyList()
+    }
 
     private fun paragraph(element: Element): List<RenderBlock> {
         val direct = element.get("pPr")
@@ -110,9 +129,16 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             acc.overlay(runFormat(style.get("rPr")))
         }
         val pieces = mutableListOf<Any>()
+        val activeCitations = linkedMapOf<String, Int>()
         fun collect(parent: Element) {
             parent.children().forEach { child ->
                 when {
+                    child.word("bookmarkStart") -> {
+                        val number = child.attr("name")?.let(CITATION_MARKER::matchEntire)?.groupValues?.get(1)?.toIntOrNull()
+                        val id = child.attr("id")
+                        if (number != null && id != null) activeCitations[id] = number
+                    }
+                    child.word("bookmarkEnd") -> child.attr("id")?.let(activeCitations::remove)
                     child.word("r") -> {
                         val props = child.get("rPr")
                         val format = chain(props.value("rStyle")).fold(baseRun) { acc, style ->
@@ -120,7 +146,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         }.overlay(runFormat(props))
                         val text = StringBuilder()
                         fun flush() {
-                            if (text.isNotEmpty()) pieces.add(RenderRun(text.toString(), format))
+                            if (text.isNotEmpty()) pieces.add(RenderRun(text.toString(), format, activeCitations.values.lastOrNull()))
                             text.setLength(0)
                         }
                         child.children().forEach {
@@ -174,7 +200,10 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
 
     }
 
-    private companion object { val HEADING = Regex("heading\\s*([1-9])", RegexOption.IGNORE_CASE) }
+    private companion object {
+        val HEADING = Regex("heading\\s*([1-9])", RegexOption.IGNORE_CASE)
+        val CITATION_MARKER = Regex("BLK_[A-Z0-9]+_(\\d+)")
+    }
 }
 
 private class Numbering(private val root: Element?) {

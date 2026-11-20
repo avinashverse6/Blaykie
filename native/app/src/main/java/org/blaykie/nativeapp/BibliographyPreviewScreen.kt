@@ -9,8 +9,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -29,17 +27,21 @@ import org.blaykie.nativeapp.export.BibliographyPreviewContent
 import org.blaykie.nativeapp.export.PreviewReferences
 import org.blaykie.nativeapp.export.renderBibliographyPreview
 
+internal data class BibliographyViewState(
+    val content: BibliographyPreviewContent?, val fetching: Int, val error: String?,
+    val keyMissing: Boolean, val lookupAttempted: Boolean, val retry: () -> Unit,
+)
+
 @Composable
-internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, options: BibliographyOptions,
-                                        onOptionsChange: (BibliographyOptions) -> Boolean, onClose: () -> Unit,
-                                        prepare: suspend ((Int) -> Unit) -> PreviewReferences,
-                                        buildXml: suspend (DocxProject, Boolean) -> String) {
-    var saveFailed by remember(project) { mutableStateOf(false) }
+internal fun rememberBibliographyView(
+    project: DocxProject, styleKey: Any, options: BibliographyOptions, revision: Int = 0, bibliographyOnly: Boolean = false,
+    prepare: suspend ((Int) -> Unit) -> PreviewReferences, buildXml: suspend (DocxProject, Boolean) -> String,
+): BibliographyViewState {
     var attempt by remember { mutableIntStateOf(0) }
-    var fetching by remember(project, options.enabled, attempt) { mutableIntStateOf(0) }
-    var references by remember(project, options.enabled, attempt) { mutableStateOf<PreviewReferences?>(null) }
-    var prepareFailed by remember(project, options.enabled, attempt) { mutableStateOf(false) }
-    LaunchedEffect(project, options.enabled, attempt) {
+    var fetching by remember(project, revision, options.enabled, attempt) { mutableIntStateOf(0) }
+    var references by remember(project, revision, options.enabled, attempt) { mutableStateOf<PreviewReferences?>(null) }
+    var prepareFailed by remember(project, revision, options.enabled, attempt) { mutableStateOf(false) }
+    LaunchedEffect(project, revision, options.enabled, attempt) {
         try {
             references = prepare { fetching = it }
         } catch (cancelled: CancellationException) {
@@ -54,13 +56,24 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, opti
     var renderFailed by remember(ready, styleKey, options) { mutableStateOf(false) }
     LaunchedEffect(ready, styleKey, options) {
         if (ready != null) try {
-            preview = renderBibliographyPreview(ready, buildXml)
+            preview = renderBibliographyPreview(ready, bibliographyOnly = bibliographyOnly, buildXml = buildXml)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             renderFailed = true
         }
     }
+    return BibliographyViewState(preview, fetching,
+        lookupFailure?.message ?: if (prepareFailed || renderFailed) "Could not prepare the bibliography. Try again." else null,
+        lookupFailure?.keyMissing == true, ready?.lookupAttempted == true, retry = { attempt++ })
+}
+
+@Composable
+internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, options: BibliographyOptions,
+                                        onClose: () -> Unit,
+                                        prepare: suspend ((Int) -> Unit) -> PreviewReferences,
+                                        buildXml: suspend (DocxProject, Boolean) -> String) {
+    val state = rememberBibliographyView(project, styleKey, options, prepare = prepare, buildXml = buildXml)
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) {
@@ -68,33 +81,12 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, opti
             }
             Text("Bibliography preview", style = MaterialTheme.typography.titleLarge)
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Add to end of document", Modifier.weight(1f))
-            Switch(checked = options.enabled, onCheckedChange = {
-                saveFailed = !onOptionsChange(options.copy(enabled = it))
-            }, modifier = Modifier.semantics { contentDescription = "Add to end of document" })
-        }
-        OutlinedTextField(
-            value = options.heading,
-            onValueChange = { saveFailed = !onOptionsChange(options.copy(heading = it)) },
-            label = { Text("Heading") }, singleLine = true, enabled = options.enabled,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        )
-        if (saveFailed) Text("Could not save bibliography options.", Modifier.padding(16.dp))
-        val result = preview
-        if (result != null && ready?.lookupAttempted == true) {
-            TextButton(onClick = { attempt++ }, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Retry") }
+        val result = state.content
+        if (result != null && state.lookupAttempted) {
+            TextButton(onClick = state.retry, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Retry") }
         }
         when {
-            lookupFailure != null || prepareFailed || renderFailed -> Column(Modifier.padding(16.dp)) {
-                Text(lookupFailure?.message ?: "Could not prepare the bibliography. Try again.")
-                if (lookupFailure?.keyMissing == true) Text("Check your Zotero key in Settings > Account.")
-                TextButton(onClick = { attempt++ }) { Text("Retry") }
-            }
-            result == null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                CircularProgressIndicator()
-                if (fetching > 0) Text("Fetching reference details... ($fetching items)")
-            }
+            state.error != null || result == null -> BibliographyStatus(state, Modifier.padding(16.dp))
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     Text("Preview (end of document)", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleMedium)
@@ -113,8 +105,23 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, opti
     }
 }
 
-private fun LazyListScope.bibliography(paragraphs: List<EndPreviewParagraph>) {
+internal fun LazyListScope.bibliography(paragraphs: List<EndPreviewParagraph>) {
     items(paragraphs.size) { index -> PreviewParagraph(paragraphs[index], centered = index == 0) }
+}
+
+@Composable
+internal fun BibliographyStatus(state: BibliographyViewState, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        val error = state.error
+        if (error != null) {
+            Text(error)
+            if (state.keyMissing) Text("Check your Zotero key in Settings > Account.")
+            TextButton(onClick = state.retry) { Text("Retry") }
+        } else {
+            CircularProgressIndicator()
+            if (state.fetching > 0) Text("Fetching reference details... (${state.fetching} items)")
+        }
+    }
 }
 
 @Composable
