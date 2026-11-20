@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp.render
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -40,6 +41,7 @@ internal data class PrintRow(val blockIndex: Int, val top: Float, val item: Mobi
                              val reference: EndPreviewParagraph? = null, val title: Boolean = false, val label: String? = null)
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, footer: BibliographyViewState?,
                            fonts: MutableMap<String, FontFamily?>, tableScroll: MutableMap<Int, ScrollState>) {
     val setup = document.setup
