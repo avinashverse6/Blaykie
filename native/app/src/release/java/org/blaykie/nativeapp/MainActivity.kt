@@ -200,7 +200,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations())
+            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations(), view = mobile.view)
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
@@ -308,7 +308,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         activeStore = opened.store
         activeId = opened.id
         accept(loaded)
-        mobile = MobileDocumentState(opened.state.position)
+        mobile = MobileDocumentState(opened.state.position, opened.state.view)
         selectedCitation = null
         session?.let(::recordDocumentState)
         if (!restoring) navigate(Screen.DOCUMENT)
@@ -449,7 +449,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                         preparePreviewReferences(p.copyForBibliographyPreview(), true, accountStore::read, progress)
                     },
                 ) { copy, allowMissing -> withContext(Dispatchers.Default) { copy.buildXml(allowMissing = allowMissing, options = current.bibliography) } }
-                MobileDocumentScreen(p, mobile, bibliography, onParagraph = ::editParagraph,
+                MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
                     onCitation = { block, number -> selectedCitation = block to number })
                 selectedCitation?.let { (block, number) ->
                     AlertDialog(onDismissRequest = { selectedCitation = null }, title = { Text("Citation") },

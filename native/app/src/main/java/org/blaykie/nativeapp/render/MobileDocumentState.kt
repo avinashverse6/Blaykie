@@ -9,13 +9,40 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.document.DocumentPosition
+import org.blaykie.nativeapp.document.DocumentView
 import org.blaykie.nativeapp.docx.DocxProject
 
-internal data class MobilePage(val source: File, val items: List<MobilePageItem>)
+internal data class MobilePage(val source: File, val items: List<MobilePageItem>, val setup: PageSetup)
 
 /** The page survives trips into the editor. Only changed paragraphs are parsed on return. */
-internal class MobileDocumentState(position: DocumentPosition = DocumentPosition()) {
+internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile) {
     val scroll = LazyListState()
+    val printScroll = LazyListState()
+    var view by mutableStateOf(initialView)
+        private set
+    private var printPages: List<PrintPage> = emptyList()
+    private var printPixelsPerPoint = 1f
+
+    fun switchView(next: DocumentView) {
+        if (next == view) return
+        focus = DocumentPosition(position().paragraphIndex)
+        view = next
+    }
+
+    fun printScale(pixelsPerPoint: Float) { printPixelsPerPoint = pixelsPerPoint }
+
+    suspend fun showPrintPages(pages: List<PrintPage>, topMarginPoints: Float) {
+        val target = focus ?: if (printPages.isNotEmpty() && printPages != pages) position() else null
+        printPages = pages
+        if (target == null || pages.isEmpty() || view != DocumentView.Print) return
+        val index = pages.indexOfFirst { sheet -> sheet.rows.any { it.blockIndex >= target.paragraphIndex } }
+            .takeIf { it >= 0 } ?: pages.lastIndex
+        val row = pages[index].rows.firstOrNull { it.blockIndex >= target.paragraphIndex }
+        val offset = if (row == null || row == pages[index].rows.firstOrNull()) 0 else
+            ((topMarginPoints + row.top) * printPixelsPerPoint).toInt()
+        printScroll.scrollToItem(index, offset)
+        focus = null
+    }
     var page by mutableStateOf<MobilePage?>(null)
         private set
     var revision by mutableIntStateOf(0)
@@ -35,6 +62,11 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
 
     fun position(): DocumentPosition {
         focus?.let { return it }
+        if (view == DocumentView.Print) {
+            val rows = printPages.getOrNull(printScroll.firstVisibleItemIndex)?.rows.orEmpty()
+            val y = printScroll.firstVisibleItemScrollOffset / printPixelsPerPoint - (page?.setup?.topTwips ?: 0) / 20f
+            return DocumentPosition((rows.lastOrNull { it.top <= y } ?: rows.firstOrNull())?.blockIndex ?: 0)
+        }
         val items = page?.items.orEmpty()
         val index = scroll.firstVisibleItemIndex
         return DocumentPosition(items.getOrNull(index)?.blockIndex ?: items.lastOrNull()?.blockIndex ?: 0,
@@ -50,12 +82,11 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
         val startRevision = revision
         val inputs = if (reload || previous == null) emptyMap() else dirty.associateWith { project.renderInput(it) }
         if (!reload && previous != null && inputs.isEmpty()) {
-            restoreFocus(previous)
             return
         }
         val full = if (inputs.isEmpty()) project.renderInput() else null
         val next = withContext(Dispatchers.Default) {
-            if (full != null) full.read(hideBibliography = hideBibliography).let { MobilePage(it.source, it.pageItems()) }
+            if (full != null) full.read(hideBibliography = hideBibliography).let { MobilePage(it.source, it.pageItems(), it.pageSetup) }
             else {
                 checkNotNull(previous)
                 val groups = inputs.mapValues { (block, input) ->
@@ -74,7 +105,7 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
                     if (updated == null) listOf(item)
                     else if (replaced.add(item.blockIndex)) updated else emptyList()
                 }
-                MobilePage(previous.source, items)
+                MobilePage(previous.source, items, previous.setup)
             }
         }
         if (revision != startRevision) return
@@ -82,10 +113,10 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
         page = next
         reload = false
         dirty.clear()
-        restoreFocus(next)
     }
 
-    private suspend fun restoreFocus(page: MobilePage) {
+    suspend fun restoreMobileFocus(page: MobilePage) {
+        if (view != DocumentView.Mobile) return
         val position = focus ?: return
         if (page.items.isNotEmpty()) {
             val index = page.items.indexOfFirst { it.blockIndex >= position.paragraphIndex }

@@ -125,7 +125,7 @@ internal fun BibliographyStatus(state: BibliographyViewState, modifier: Modifier
 }
 
 @Composable
-private fun PreviewParagraph(paragraph: EndPreviewParagraph, centered: Boolean = false) {
+internal fun PreviewParagraph(paragraph: EndPreviewParagraph, centered: Boolean = false) {
     val text = buildAnnotatedString {
         paragraph.runs.forEach { run ->
             withStyle(SpanStyle(

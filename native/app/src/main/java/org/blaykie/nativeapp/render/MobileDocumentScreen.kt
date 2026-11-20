@@ -38,10 +38,12 @@ import org.blaykie.nativeapp.BibliographyViewState
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.bibliography
 import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.document.DocumentView
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentState, footer: BibliographyViewState?,
-                                  onParagraph: (Int) -> Unit, onCitation: (Int, Int) -> Unit) {
+                                  onViewChanged: () -> Unit, onParagraph: (Int) -> Unit, onCitation: (Int, Int) -> Unit) {
     var failed by remember(project, state.revision) { mutableStateOf(false) }
     val hideBibliography = remember(project) { project.hasBlaykieBibliography() } && when {
         footer == null || footer.error != null -> false
@@ -60,25 +62,29 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
     val fonts = remember { mutableMapOf<String, FontFamily?>() }
     val tableScroll = remember(state) { mutableMapOf<Int, ScrollState>() }
     val content = state.page
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+        DocumentView.entries.forEachIndexed { index, view ->
+            SegmentedButton(selected = state.view == view, onClick = {
+                if (state.view != view) { state.switchView(view); onViewChanged() }
+            }, shape = SegmentedButtonDefaults.itemShape(index, DocumentView.entries.size)) {
+                Text(if (view == DocumentView.Mobile) "Mobile view" else "Print layout")
+            }
+        }
+    }
+    LaunchedEffect(content, state.view) {
+        if (content != null && state.view == DocumentView.Mobile) state.restoreMobileFocus(content)
+    }
     when {
         failed -> Text("Could not load the mobile view for this document.", Modifier.padding(16.dp))
         content == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        state.view == DocumentView.Print -> PrintDocument(content, state, footer, fonts, tableScroll)
         else -> LazyColumn(state = state.scroll, contentPadding = PaddingValues(16.dp)) {
             if (content.items.isEmpty()) item { Text("No readable document content.", Modifier.padding(16.dp)) }
             itemsIndexed(content.items) { index, item ->
-                when (item) {
-                    is MobilePageItem.Block -> when (val block = item.content) {
-                        is RenderParagraph -> MobileParagraph(block, fonts,
-                            onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) },
-                            previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
-                                ?.content as? RenderParagraph)?.afterTwips ?: 0)
-                        is RenderImage -> MobileImage(content.source, block)
-                        is RenderHorizontalRule -> MobileHorizontalRule(block)
-                        is RenderTable -> Unit // Table bands are emitted separately in pageItems().
-                    }
-                    is MobilePageItem.TableRows -> MobileTableBand(content.source, item.widths, item.band,
-                        tableScroll.getOrPut(item.blockIndex) { ScrollState(0) }, fonts)
-                }
+                DocumentBlock(content.source, item, fonts, tableScroll,
+                    previousAfterTwips = ((content.items.getOrNull(index - 1) as? MobilePageItem.Block)
+                        ?.content as? RenderParagraph)?.afterTwips ?: 0,
+                    onParagraph = { onParagraph(item.blockIndex) }, onCitation = { onCitation(item.blockIndex, it) })
             }
             if (footer != null) {
                 val result = footer.content
@@ -96,6 +102,22 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
 }
 
 @Composable
+internal fun DocumentBlock(source: java.io.File, item: MobilePageItem, fonts: MutableMap<String, FontFamily?>,
+                           tableScroll: MutableMap<Int, ScrollState>, previousAfterTwips: Int = 0,
+                           onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null) {
+    when (item) {
+        is MobilePageItem.Block -> when (val block = item.content) {
+            is RenderParagraph -> MobileParagraph(block, fonts, onParagraph, onCitation, previousAfterTwips)
+            is RenderImage -> MobileImage(source, block)
+            is RenderHorizontalRule -> MobileHorizontalRule(block)
+            is RenderTable -> Unit
+        }
+        is MobilePageItem.TableRows -> MobileTableBand(source, item.widths, item.band,
+            tableScroll.getOrPut(item.blockIndex) { ScrollState(0) }, fonts)
+    }
+}
+
+@Composable
 internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>,
                              onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null,
                              previousAfterTwips: Int = 0) {
@@ -103,7 +125,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     val background = MaterialTheme.colorScheme.background
     val foreground = MaterialTheme.colorScheme.onBackground
     val heading = paragraph.headingLevel
-    val defaultSize = if (heading == null) body.fontSize.value else (28f - (heading - 1) * 2).coerceAtLeast(18f)
+    val defaultSize = paragraph.defaultFontSize(body.fontSize.value)
     val citationBackground = MaterialTheme.colorScheme.primaryContainer
     val citationForeground = MaterialTheme.colorScheme.onPrimaryContainer
     val liveCitationHandler by rememberUpdatedState(onCitation)
@@ -153,15 +175,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     val continuation = if (left == 0f) listIndent else left
     val first = if (paragraph.list != null && hanging == 0f) (continuation - 16f).coerceAtLeast(0f)
         else (continuation - hanging + paragraph.firstLineTwips.coerceIn(0, 1440) / 20f).coerceAtLeast(0f)
-    val maxSize = paragraph.runs.maxOfOrNull { it.format.sizePoints?.coerceIn(6f, 100f) ?: defaultSize } ?: defaultSize
-    val naturalLine = maxSize * 1.2f
-    val line = paragraph.lineSpacing?.takeIf { it > 0 }?.let {
-        when (paragraph.lineRule) {
-            "exact" -> it / 20f
-            "atLeast" -> maxOf(naturalLine, it / 20f)
-            else -> naturalLine * it / 240f
-        }.coerceIn(1f, 240f)
-    } ?: naturalLine
+    val line = paragraph.lineHeightPoints(defaultSize)
     val interaction = if (onParagraph == null) Modifier else Modifier.clickable(onClick = onParagraph)
     val borders = paragraph.borders
     val edgeModifier = if (borders == RenderBorders()) Modifier else Modifier.drawBehind {
@@ -199,7 +213,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
         }))
 }
 
-private fun borderInset(border: RenderBorder?): Float =
+internal fun borderInset(border: RenderBorder?): Float =
     border?.let { it.spacePoints + it.widthEighthPoints / 8f } ?: 0f
 
 private val documentSerif = FontFamily(
@@ -207,7 +221,7 @@ private val documentSerif = FontFamily(
     Font(R.font.lora_bold, FontWeight.Bold),
 )
 
-private fun availableFont(name: String): FontFamily {
+internal fun availableFont(name: String): FontFamily {
     val family = name.trim()
     val fallback = when (documentFontCategory(family)) {
         DocumentFontCategory.SansSerif -> FontFamily.SansSerif
@@ -220,4 +234,20 @@ private fun availableFont(name: String): FontFamily {
         // Android silently substitutes its default Typeface when a name is not installed.
         if (typeface == Typeface.DEFAULT) fallback else FontFamily(typeface)
     }.getOrDefault(fallback)
+}
+
+internal fun RenderParagraph.defaultFontSize(bodySize: Float): Float =
+    headingLevel?.let { (28f - (it - 1) * 2).coerceAtLeast(18f) } ?: bodySize
+
+internal fun RenderParagraph.lineHeightPoints(defaultSize: Float): Float {
+    val maxSize = runs.maxOfOrNull { it.format.sizePoints?.coerceIn(6f, 100f) ?: defaultSize } ?: defaultSize
+    val naturalLine = maxSize * 1.2f
+    val line = lineSpacing?.takeIf { it > 0 }?.let {
+        when (lineRule) {
+            "exact" -> it / 20f
+            "atLeast" -> maxOf(naturalLine, it / 20f)
+            else -> naturalLine * it / 240f
+        }.coerceIn(1f, 240f)
+    } ?: naturalLine
+    return line
 }

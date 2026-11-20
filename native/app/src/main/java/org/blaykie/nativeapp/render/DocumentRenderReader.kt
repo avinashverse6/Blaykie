@@ -93,7 +93,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         elements.forEachIndexed { index, element ->
             if (index !in bibliography) renderBlock(element).forEach { block -> result.add(block); indices.add(index) }
         }
-        return DocumentRenderModel(result, source, indices)
+        return DocumentRenderModel(result, source, indices, readPageSetup(body.get("sectPr")))
     }
 
     private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap { renderBlock(it).asSequence() }.toList()
@@ -130,6 +130,8 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             acc.overlay(runFormat(style.get("rPr")))
         }
         val pieces = mutableListOf<Any>()
+        val pageBreaks = mutableListOf<Int>()
+        var textLength = 0
         val activeCitations = linkedMapOf<String, Int>()
         fun collect(parent: Element) {
             parent.children().forEach { child ->
@@ -149,13 +151,17 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         val text = StringBuilder()
                         fun flush() {
                             if (text.isNotEmpty()) pieces.add(RenderRun(text.toString(), format, activeCitations.values.lastOrNull()))
+                            textLength += text.length
                             text.setLength(0)
                         }
                         child.children().forEach {
                             when {
                                 it.word("t") -> text.append(it.textContent)
                                 it.word("tab") -> text.append('\t')
-                                it.word("br") || it.word("cr") -> text.append('\n')
+                                it.word("br") || it.word("cr") -> {
+                                    if (it.word("br") && it.attr("type") == "page") pageBreaks.add(textLength + text.length)
+                                    text.append('\n')
+                                }
                                 it.word("noBreakHyphen") -> text.append('\u2011')
                                 it.isAlternateDrawing() -> {
                                     flush()
@@ -198,21 +204,31 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             lineSpacing, lineRule,
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
-            RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")))
+            RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")),
+            layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks)
         if (pieces.none { it is RenderBlock }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {
             val pending = mutableListOf<RenderRun>()
             var hadText = false
+            var emittedLength = 0
             fun emitText() {
                 if (pending.isEmpty()) return
-                add(paragraph.copy(runs = pending.toList(), list = if (hadText) null else paragraph.list))
+                val end = emittedLength + pending.sumOf { it.text.length }
+                add(paragraph.copy(runs = pending.toList(), list = if (hadText) null else paragraph.list,
+                    pageBreakBefore = !hadText && paragraph.pageBreakBefore,
+                    pageBreaks = pageBreaks.filter { it in emittedLength until end }.map { it - emittedLength }))
+                emittedLength = end
                 pending.clear()
                 hadText = true
             }
             for (piece in pieces) when (piece) {
                 is RenderRun -> pending.add(piece)
-                is RenderBlock -> { emitText(); add(piece) }
+                is RenderBlock -> {
+                    emitText()
+                    if (isEmpty() && paragraph.pageBreakBefore) add(paragraph.copy(pageBreaks = emptyList()))
+                    add(piece)
+                }
             }
             emitText()
         }.groupImageFailures()

@@ -161,6 +161,29 @@ class DocumentRenderReaderTest {
         assertNull(imagePlaceholderText(ImageDisplay.Drawn))
     }
 
+    @Test fun readsPaperSizeMarginsAndOrientationFromSectionProperties() {
+        assertEquals(PageSetup(), render("<w:p/>").pageSetup)
+        val a4 = render("""<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>
+            <w:pgMar w:top="720" w:right="1080" w:bottom="1260" w:left="1600"/></w:sectPr>""").pageSetup
+        assertEquals(PageSetup(11906, 16838, false, 720, 1080, 1260, 1600), a4)
+        val letter = render("""<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>""").pageSetup
+        assertEquals(PageSetup(12240, 15840), letter)
+        val landscape = render("""<w:sectPr><w:pgSz w:w="15840" w:h="12240" w:orient="landscape"/>
+            <w:pgMar w:left="1000" w:right="1100"/></w:sectPr>""").pageSetup
+        assertEquals(PageSetup(15840, 12240, true, rightTwips = 1100, leftTwips = 1000), landscape)
+    }
+
+    @Test fun printHonorsPageBreakBeforeAndSplitsTextAtExplicitBreaks() {
+        val styles = """<w:styles $ns><w:style w:type="paragraph" w:styleId="NewPage">
+            <w:pPr><w:pageBreakBefore/></w:pPr></w:style></w:styles>"""
+        val paragraph = render("""<w:p><w:pPr><w:pStyle w:val="NewPage"/></w:pPr>
+            <w:r><w:t>Before</w:t><w:br w:type="page"/><w:t>After</w:t></w:r></w:p>""", styles)
+            .blocks.single() as RenderParagraph
+        assertTrue(paragraph.pageBreakBefore)
+        assertEquals("Before\nAfter", paragraph.runs.single().text)
+        assertEquals(listOf("Before", "After"), paragraph.printFragments().map { it.runs.single().text })
+    }
+
     @Test fun readsBulletAndNumberedItemsAndSkipsUnsupportedElements() {
         val numbering = """<w:numbering $ns>
             <w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/>

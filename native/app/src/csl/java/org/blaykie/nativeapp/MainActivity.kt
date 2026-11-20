@@ -240,7 +240,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, documentStyle ?: "apa", documentLanguage, mobile.position(), documentLanguageExplicit, project?.citations())
+            documents.recordSession(id, value, documentStyle ?: "apa", documentLanguage, mobile.position(), documentLanguageExplicit, project?.citations(), view = mobile.view)
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
@@ -346,7 +346,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     suspend fun activate(opened: OpenDocument, restoring: Boolean) {
         val loaded = Loaded(opened.ready.session, opened.ready.project)
         accept(loaded, opened)
-        mobile = MobileDocumentState(opened.state.position)
+        mobile = MobileDocumentState(opened.state.position, opened.state.view)
         selectedCitation = null
         session?.let(::recordDocumentState)
         if (!restoring) navigate(Screen.DOCUMENT)
@@ -535,7 +535,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                         preparePreviewReferences(p.copyForBibliographyPreview(), true, accountStore::read, progress)
                     },
                 ) { copy, allowMissing -> org.blaykie.nativeapp.export.previewBibliographyXml(context, copy, current, settings.customCitationStyles, allowMissing) }
-                MobileDocumentScreen(p, mobile, bibliography, onParagraph = ::editParagraph,
+                MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
                     onCitation = { block, number -> selectedCitation = block to number })
                 selectedCitation?.let { (block, number) ->
                     AlertDialog(onDismissRequest = { selectedCitation = null }, title = { Text("Citation") },
