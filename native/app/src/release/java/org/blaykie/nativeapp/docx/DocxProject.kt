@@ -113,6 +113,19 @@ private class Paragraph(private val xml: String) {
         text = segments.joinToString("") { it.text }
     }
 
+    fun citationRange(number: Int): Pair<Int, Int>? {
+        val marker = Regex("w:name=\"BLK_[A-Z0-9]+_${number}\"")
+        val id = Regex("w:id=\"(\\d+)\"")
+        val starts = segments.filter { it.tag == "w:bookmarkStart" && marker.containsMatchIn(xml.substring(it.start, it.end)) }
+        val ids = starts.mapNotNull { id.find(xml.substring(it.start, it.end))?.groupValues?.get(1) }.toSet()
+        if (starts.isEmpty() || ids.size != starts.size) return null
+        val ends = segments.filter { it.tag == "w:bookmarkEnd" && id.find(xml.substring(it.start, it.end))?.groupValues?.get(1) in ids }
+        val from = starts.first().off0
+        val to = ends.firstOrNull()?.off0 ?: return null
+        return (from to to).takeIf { ends.size == starts.size && starts.all { it.off0 == from } &&
+            ends.all { it.off0 == to } && to > from }
+    }
+
     fun format(start: Int, end: Int): String = (segments.firstOrNull { it.kind == "text" && it.text.isNotEmpty() && it.off0 < start && start <= it.off1 }
         ?: segments.firstOrNull { it.kind == "text" && it.text.isNotEmpty() && it.off0 >= end }
         ?: segments.firstOrNull { it.kind == "text" })?.rpr ?: ""
@@ -207,13 +220,21 @@ data class Citation(val number: Int, val keys: List<String>, val text: String) {
     internal var style = "parenthetical"
     internal var page = ""
     internal var prefix = ""
+    internal var options = CitationOptions()
+    internal var block = -1
+    internal var position = 0
+    internal var leadingSpace = false
+    internal var trailingSpace = false
 }
 private data class Snapshot(
     val xml: List<String>, val items: Map<String, CitationItem>, val nextCitation: Int,
     val nextBookmark: Int, val citations: List<Citation>, val removed: Int, val added: Int,
 )
 
-class DocxProject(private val source: File) {
+class DocxProject private constructor(private val source: File, preview: DocxProject?) {
+    constructor(source: File) : this(source, null)
+
+    internal fun copyForBibliographyPreview(): DocxProject = DocxProject(source, this)
     private val prefix: String
     private val suffix: String
     private val tail: String
@@ -228,21 +249,36 @@ class DocxProject(private val source: File) {
     private var nextCitation: Int
     private var nextBookmark: Int
     init {
-        val bytes = ZipFile(source).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml") ?: throw IllegalArgumentException("Missing document.xml")).use { it.readBytes() } }
-        bom = bytes.size >= 3 && bytes[0] == 0xef.toByte() && bytes[1] == 0xbb.toByte() && bytes[2] == 0xbf.toByte()
-        val xml = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
-        originalXml = xml
-        val body = Regex("<w:body\\b[^>]*>").find(xml) ?: throw IllegalArgumentException("This file has no document body.")
-        val lo = body.range.last + 1; val hi = xml.lastIndexOf("</w:body>")
-        require(hi >= lo) { "This file has no document body." }
-        prefix = xml.substring(0, lo); suffix = xml.substring(hi)
-        blocks = mutableListOf()
-        var cursor = lo
-        for (e in children(xml, lo, hi)) { blocks += Block(e.tag, xml.substring(cursor, e.start), xml.substring(e.start, e.end)); cursor = e.end }
-        tail = xml.substring(cursor, hi)
-        nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
-        nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
+        if (preview != null) {
+            prefix = preview.prefix; suffix = preview.suffix; tail = preview.tail
+            bom = preview.bom; originalXml = preview.originalXml
+            blocks = preview.blocks.mapTo(mutableListOf()) { it.copy() }
+            known = LinkedHashMap(preview.known)
+            citationOperations = preview.citationOperations.toMutableList()
+            nextCitation = preview.nextCitation; nextBookmark = preview.nextBookmark
+        } else {
+            val bytes = ZipFile(source).use { zip -> zip.getInputStream(zip.getEntry("word/document.xml") ?: throw IllegalArgumentException("Missing document.xml")).use { it.readBytes() } }
+            bom = bytes.size >= 3 && bytes[0] == 0xef.toByte() && bytes[1] == 0xbb.toByte() && bytes[2] == 0xbf.toByte()
+            val xml = bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")
+            originalXml = xml
+            val body = Regex("<w:body\\b[^>]*>").find(xml) ?: throw IllegalArgumentException("This file has no document body.")
+            val lo = body.range.last + 1; val hi = xml.lastIndexOf("</w:body>")
+            require(hi >= lo) { "This file has no document body." }
+            prefix = xml.substring(0, lo); suffix = xml.substring(hi)
+            blocks = mutableListOf()
+            var cursor = lo
+            for (e in children(xml, lo, hi)) { blocks += Block(e.tag, xml.substring(cursor, e.start), xml.substring(e.start, e.end)); cursor = e.end }
+            tail = xml.substring(cursor, hi)
+            nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
+            nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
+        }
     }
+    internal fun renderInput(onlyBlock: Int? = null) = org.blaykie.nativeapp.render.DocumentRenderInput(source, buildList {
+        add(prefix)
+        if (onlyBlock == null) blocks.forEach { add(it.gap); add(it.xml) }
+        else add(blocks[onlyBlock].xml)
+        add(tail); add(suffix)
+    })
     val blockCount get() = blocks.size
     fun blockText(index: Int): String {
         val block = blocks[index]
@@ -279,7 +315,7 @@ class DocxProject(private val source: File) {
     fun editSummary(): Pair<Int, Int> = removed to added
     private fun snapshot() = Snapshot(blocks.map { it.xml }, known.toMap(), nextCitation, nextBookmark, citationOperations.toList(), removed, added)
     private fun change(index: Int, xml: String, previous: Snapshot) { blocks[index].xml = xml; history += previous }
-    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = ""): Int {
+    fun insertCitation(block: Int, start: Int, end: Int, items: List<CitationItem>, style: String = "parenthetical", page: String = "", prefix: String = "", options: CitationOptions = CitationOptions()): Int {
         val chosen = items.distinctBy { it.key }
         require(chosen.isNotEmpty()) { "Choose at least one reference." }
         val para = paragraph(block)
@@ -290,15 +326,52 @@ class DocxProject(private val source: File) {
         val ids = chosen.indices.map { nextBookmark + it }
         val rpr = para.format(start, end)
         val marks = chosen.zip(ids).joinToString("") { (item, id) -> "<w:bookmarkStart w:id=\"$id\" w:name=\"BLK_${itemKey(item)}_$nextCitation\"/>" }
-        val citationText = CitationFormatting.citationText(chosen, style, page, prefix)
+        val locator = citationField(page, 64).trim()
+        val leadIn = citationField(prefix, 160).trim()
+        val extra = options.normalized(style, locator)
+        val citationText = CitationFormatting.citationText(chosen, style, locator, leadIn, options = extra)
         val replacement = makeRun(rpr, lead) + marks + makeRun(rpr, citationText) + ids.reversed().joinToString("") { "<w:bookmarkEnd w:id=\"$it\"/>" } + makeRun(rpr, trail)
         val newXml = para.replace(start, end, replacement)
         val old = snapshot(); chosen.forEach { known[itemKey(it)] = it }; val number = nextCitation++
         citationOperations.add(Citation(number, chosen.map { it.key }, citationText).apply {
-            this.items = chosen; this.style = style; this.page = page; this.prefix = prefix
+            this.items = chosen; this.style = style; this.page = locator; this.prefix = leadIn; this.options = extra
+            this.block = block; position = start; leadingSpace = lead.isNotEmpty(); trailingSpace = trail.isNotEmpty()
         })
         nextBookmark += chosen.size; change(block, newXml, old)
         return number
+    }
+    internal fun citationPosition(block: Int, number: Int): Int? = paragraph(block).citationRange(number)?.first
+
+    internal fun editCitation(block: Int, number: Int, style: String, page: String, prefix: String,
+                              options: CitationOptions): String {
+        val index = citationOperations.indexOfFirst { it.block == block && it.number == number }
+        if (index < 0) throw NotEditable("The original citation options are unavailable.")
+        val prior = citationOperations[index]
+        val para = paragraph(block)
+        val (start, end) = para.citationRange(number) ?: throw NotEditable("This citation cannot be edited safely.")
+        val locator = citationField(page, 64).trim()
+        val lead = citationField(prefix, 160).trim()
+        val extra = options.normalized(style, locator)
+        val text = CitationFormatting.citationText(prior.items, style, locator, lead, options = extra)
+        val newXml = para.replace(start, end, makeRun(para.format(start, end), text))
+        val previous = snapshot()
+        citationOperations[index] = Citation(number, prior.keys, text).apply {
+            items = prior.items; this.style = style; this.page = locator; this.prefix = lead; this.options = extra
+            this.block = block; position = start; leadingSpace = prior.leadingSpace; trailingSpace = prior.trailingSpace
+        }
+        change(block, newXml, previous)
+        return text
+    }
+
+    /** Remove the complete tagged citation, never a guessed substring of paragraph text. */
+    internal fun removeCitation(block: Int, number: Int) {
+        val para = paragraph(block)
+        val (start, end) = para.citationRange(number) ?: throw NotEditable("This citation cannot be removed safely.")
+        val inserted = citationOperations.firstOrNull { it.number == number && it.block == block }
+        val from = if (inserted?.leadingSpace == true && para.text.getOrNull(start - 1) == ' ') start - 1 else start
+        val to = if (inserted?.trailingSpace == true && para.text.getOrNull(end) == ' ') end + 1 else end
+        deleteRange(block, from, to, tidy = inserted == null)
+        citationOperations.removeAll { it.number == number && it.block == block }
     }
     fun deleteRange(block: Int, start: Int, end: Int, tidy: Boolean = true) {
         val para = paragraph(block)
@@ -398,7 +471,7 @@ class DocxProject(private val source: File) {
             val first = citation.items.firstOrNull() ?: continue
             val name = "BLK_${itemKey(first)}_${citation.number}"
             val pattern = Regex("(<w:bookmarkStart w:id=\"\\d+\" w:name=\"${Regex.escape(name)}\"/>(?:<w:bookmarkStart [^>]*/>)*<w:r>(?:<w:rPr>.*?</w:rPr>)?<w:t xml:space=\"preserve\">)(.*?)(</w:t></w:r>)", RegexOption.DOT_MATCHES_ALL)
-            val fresh = escape(CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items))
+            val fresh = escape(CitationFormatting.citationText(citation.items, citation.style, citation.page, citation.prefix, items, citation.options))
             pattern.find(joined)?.let { match ->
                 joined = joined.replaceRange(match.range, match.groupValues[1] + fresh + match.groupValues[3])
             }

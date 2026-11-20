@@ -13,6 +13,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.account.AccountRead
 import org.blaykie.nativeapp.account.AccountStore
+import org.blaykie.nativeapp.docx.Citation
+import org.blaykie.nativeapp.docx.CitationOptions
+import org.blaykie.nativeapp.docx.LocatorLabel
+import org.blaykie.nativeapp.docx.citationField
 import org.blaykie.nativeapp.docx.CitationFormatting
 import org.blaykie.nativeapp.docx.CitationItem
 import org.blaykie.nativeapp.zotero.ZoteroClient
@@ -37,11 +41,14 @@ internal data class SearchState(
     val open: Boolean = false, val block: Int = 0, val position: Int = 0,
     val query: String = "", val results: List<ZoteroItem> = emptyList(), val selected: Set<Int> = emptySet(),
     val style: String = "parenthetical", val page: String = "", val prefix: String = "",
+    val options: CitationOptions = CitationOptions(), val editNumber: Int? = null,
+    val existingItems: List<CitationItem> = emptyList(),
     val loading: Boolean = false, val hasKey: Boolean = true, val message: String = "", val shown: Int = 20,
 ) {
     override fun toString() = "SearchState(redacted)"
-    fun selectedItems(): List<CitationItem> = chosenItems(results, selected)
-    fun preview(): String = CitationFormatting.citationText(selectedItems(), style, page, prefix)
+    fun selectedItems(): List<CitationItem> = if (editNumber != null) existingItems else chosenItems(results, selected)
+    fun savedOptions(): CitationOptions = options.normalized(style, page)
+    fun preview(): String = CitationFormatting.citationText(selectedItems(), style, page, prefix, options = savedOptions())
 }
 
 /** Retains only search data across rotation. Credentials are read for each request, never in state. */
@@ -57,8 +64,14 @@ internal class CitationSearchController(private val accounts: AccountStore) : Vi
         mutable.value = SearchState(open = true, block = block, position = position)
         refreshAccount()
     }
+    fun openEdit(block: Int, position: Int, citation: Citation) {
+        close()
+        mutable.value = SearchState(open = true, block = block, position = position, editNumber = citation.number,
+            existingItems = citation.items, style = citation.style, page = citation.page, prefix = citation.prefix,
+            options = citation.options)
+    }
     fun refreshAccount() {
-        if (!mutable.value.open) return
+        if (!mutable.value.open || mutable.value.editNumber != null) return
         val current = generation
         scope.launch {
             val present = withContext(Dispatchers.IO) { hasUsableKey(accounts.read()) }
@@ -72,8 +85,11 @@ internal class CitationSearchController(private val accounts: AccountStore) : Vi
     }
     fun query(value: String) { mutable.value = mutable.value.copy(query = value) }
     fun style(value: String) { mutable.value = mutable.value.copy(style = value) }
-    fun page(value: String) { mutable.value = mutable.value.copy(page = value) }
-    fun prefix(value: String) { mutable.value = mutable.value.copy(prefix = value) }
+    fun page(value: String) { mutable.value = mutable.value.copy(page = citationField(value, 64)) }
+    fun prefix(value: String) { mutable.value = mutable.value.copy(prefix = citationField(value, 160)) }
+    fun suffix(value: String) { mutable.value = mutable.value.copy(options = mutable.value.options.copy(suffix = citationField(value, 160))) }
+    fun label(value: LocatorLabel) { mutable.value = mutable.value.copy(options = mutable.value.options.copy(label = value)) }
+    fun omitAuthor(value: Boolean) { mutable.value = mutable.value.copy(options = mutable.value.options.copy(omitAuthor = value)) }
     fun toggle(index: Int) {
         val selected = mutable.value.selected.toMutableSet()
         if (!selected.add(index)) selected.remove(index)

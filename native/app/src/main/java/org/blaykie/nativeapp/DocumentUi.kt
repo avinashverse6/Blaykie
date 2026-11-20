@@ -26,7 +26,7 @@ internal fun documentSummary(citations: Int, edits: Int): String = "$citations c
 
 @Composable
 internal fun DocumentTopBar(filename: String, citations: Int, edits: Int, onClose: () -> Unit,
-                            onUndo: () -> Unit, onExport: () -> Unit, extraSubtitle: @Composable () -> Unit = {}) {
+                            onUndo: () -> Unit, onExport: () -> Unit, menu: @Composable () -> Unit = {}, extraSubtitle: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onClose, modifier = Modifier.size(48.dp)) {
             Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Close")
@@ -42,6 +42,7 @@ internal fun DocumentTopBar(filename: String, citations: Int, edits: Int, onClos
         }
         Button(onClick = onExport, modifier = Modifier.heightIn(min = 48.dp), shape = CircleShape,
             contentPadding = PaddingValues(horizontal = 16.dp)) { Text("Export", maxLines = 1) }
+        menu()
     }
 }
 

@@ -24,6 +24,9 @@ internal data class InsertedCitation(
 @Serializable
 internal data class DocumentPosition(val paragraphIndex: Int = 0, val scrollOffset: Int = 0)
 
+@Serializable
+internal enum class DocumentView { Mobile, Print }
+
 /** Only document metadata: no account details, source URI, or arbitrary metadata map. */
 @Serializable
 internal data class DocumentState(
@@ -35,6 +38,7 @@ internal data class DocumentState(
     val citationStyle: String = "apa",
     val citationLanguage: String = "en-US",
     val position: DocumentPosition = DocumentPosition(),
+    val view: DocumentView = DocumentView.Mobile,
     val schemaVersion: Int = DOCUMENT_SCHEMA_VERSION,
     val citationLanguageExplicit: Boolean = !citationLanguage.equals("en-US", ignoreCase = true),
 )

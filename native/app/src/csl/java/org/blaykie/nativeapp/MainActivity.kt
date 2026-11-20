@@ -29,9 +29,6 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -82,13 +79,16 @@ import org.blaykie.nativeapp.citation.style.citationInsertionNote
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
+import org.blaykie.nativeapp.render.BibliographyMenu
+import org.blaykie.nativeapp.render.MobileDocumentScreen
+import org.blaykie.nativeapp.render.MobileDocumentState
+import org.blaykie.nativeapp.export.preparePreviewReferences
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.beginExport
 import org.blaykie.nativeapp.export.ExportScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import org.blaykie.nativeapp.document.DocumentPosition
 import org.blaykie.nativeapp.document.DocumentRepository
 import org.blaykie.nativeapp.document.DocumentsScreen
 import org.blaykie.nativeapp.document.OpenDocument
@@ -101,12 +101,7 @@ import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
 import java.io.File
 
-private data class CardData(val index: Int, val kind: String, val text: String)
-private data class Loaded(val session: Session, val project: DocxProject, val cards: List<CardData>)
-private fun cards(project: DocxProject): List<CardData> = (0 until project.blockCount).mapNotNull { i ->
-    val kind = project.blockKind(i); val text = project.blockText(i)
-    if (kind == "table" || text.isNotBlank()) CardData(i, kind, text) else null
-}
+private data class Loaded(val session: Session, val project: DocxProject)
 private fun readName(context: Context, uri: Uri): String {
     return context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
         if (c.moveToFirst()) c.getString(0) else null
@@ -168,7 +163,7 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
                             val loadedSettings = settings
                             if (loadedSettings != null) {
-                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController) }
+                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController, accountStore) }
                             }
                         }
                     }
@@ -180,7 +175,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController, accountStore: AccountStore) {
     val accountState by account.state.collectAsState()
     val searchState by citationSearch.state.collectAsState()
     val exportState by exportController.state.collectAsState()
@@ -193,8 +188,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var activeStore by remember { mutableStateOf<SessionStore?>(null) }
     var session by remember { mutableStateOf<Session?>(null) }
     var project by remember { mutableStateOf<DocxProject?>(null) }
-    var blockCards by remember { mutableStateOf<List<CardData>>(emptyList()) }
-    var documentScroll by remember { mutableStateOf(LazyListState()) }
+    var mobile by remember { mutableStateOf(MobileDocumentState()) }
+    var selectedCitation by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var field by remember { mutableStateOf(TextFieldValue()) }
     // The draft text is already persisted in the session; save only its selection in
     // instance state, avoiding a second copy of a potentially very long paragraph.
@@ -232,7 +227,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         documentStyle = style
         documentLanguage = saved.citationLanguage
         documentLanguageExplicit = saved.citationLanguageExplicit
-        session = resolved; project = loaded.project; blockCards = loaded.cards
+        session = resolved; project = loaded.project
         val draft = resolved.draft
         if (draft != null) {
             val restoreSelection = screen == Screen.EDITOR && selectionBlock == draft.block
@@ -242,20 +237,16 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             selectionBlock = draft.block; selectionStart = start; selectionEnd = end
         }
     }
-    fun documentPosition(): DocumentPosition = DocumentPosition(
-        blockCards.getOrNull(documentScroll.firstVisibleItemIndex)?.index ?: 0,
-        documentScroll.firstVisibleItemScrollOffset,
-    )
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, documentStyle ?: "apa", documentLanguage, documentPosition(), documentLanguageExplicit)
+            documents.recordSession(id, value, documentStyle ?: "apa", documentLanguage, mobile.position(), documentLanguageExplicit, project?.citations(), view = mobile.view)
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
     }
     fun navigate(target: Screen) {
-        if (screen == Screen.DOCUMENT && target != screen) session?.let(::recordDocumentState)
+        if (screen in setOf(Screen.DOCUMENT, Screen.MOBILE_VIEW) && target != screen) session?.let(::recordDocumentState)
         screen = target; screenName = target.name
     }
     val saveOnBackground by rememberUpdatedState({ session?.let(::recordDocumentState); Unit })
@@ -270,14 +261,6 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun persist(value: Session): Boolean = try {
         checkNotNull(activeStore).save(value); session = value; recordDocumentState(value); true
     } catch (_: Exception) { message = "Could not save the session."; false }
-    fun reloadCards() {
-        val p = project ?: return
-        scope.launch {
-            loading = true
-            blockCards = withContext(Dispatchers.IO) { cards(p) }
-            loading = false
-        }
-    }
     fun syncEditor(keepDraft: Boolean): Boolean {
         val p = project ?: return false
         val s = session ?: return false
@@ -286,7 +269,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             val changed = p.applyTextEdit(draft.block, field.text)
             val updated = s.copy(edits = if (changed) s.edits + EditOperation(draft.block, field.text) else s.edits, draft = if (keepDraft) Draft(draft.block, field.text) else null)
             if (!persist(updated)) { if (changed) p.undo(); false }
-            else { reloadCards(); message = ""; true }
+            else { if (changed) mobile.changed(draft.block); message = ""; true }
         } catch (error: NotEditable) {
             val original = p.blockText(draft.block)
             field = TextFieldValue(original)
@@ -299,24 +282,64 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun finishEditor(): Boolean = syncEditor(false)
     fun undoSession(draftBlock: Int? = null) {
         val current = session ?: return
-        when (val result = checkNotNull(activeStore).undo(current, draftBlock)) {
-            is UndoResult.Success -> {
-                project = result.project; session = result.session; recordDocumentState(result.session)
-                if (draftBlock != null) {
-                    field = TextFieldValue(result.session.draft!!.text)
-                    selectionBlock = draftBlock; selectionStart = 0; selectionEnd = 0
+        val store = activeStore ?: return
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                when (val result = withContext(Dispatchers.IO) { store.undo(current, draftBlock) }) {
+                    is UndoResult.Success -> {
+                        project = result.project; session = result.session
+                        mobile.changed(current.edits.lastOrNull()?.block)
+                        recordDocumentState(result.session)
+                        if (draftBlock != null) {
+                            field = TextFieldValue(result.session.draft!!.text)
+                            selectionBlock = draftBlock; selectionStart = 0; selectionEnd = 0
+                        }
+                        message = ""
+                    }
+                    UndoResult.Empty -> message = "Nothing to undo."
+                    UndoResult.Failed -> message = "Could not save the session. Undo was not applied."
                 }
-                message = ""; reloadCards()
-            }
-            UndoResult.Empty -> message = "Nothing to undo."
-            UndoResult.Failed -> message = "Could not save the session. Undo was not applied."
+            } finally { loading = false }
         }
+    }
+    fun editParagraph(block: Int) {
+        val p = project ?: return
+        val current = session ?: return
+        if (block !in 0 until p.blockCount || p.blockKind(block) in setOf("table", "other")) return
+        val draft = current.draft?.takeIf { it.block == block } ?: Draft(block, p.blockText(block))
+        if (persist(current.copy(draft = draft))) {
+            field = TextFieldValue(draft.text)
+            selectionBlock = block; selectionStart = 0; selectionEnd = 0
+            mobile.focusParagraph(block)
+            message = ""
+            navigate(Screen.EDITOR)
+        }
+    }
+    fun openCitationEditor(block: Int, number: Int) {
+        val p = project ?: return
+        val citation = p.citations().firstOrNull { it.block == block && it.number == number } ?: return
+        val at = p.citationPosition(block, number) ?: return
+        editParagraph(block)
+        if (screen == Screen.EDITOR) citationSearch.openEdit(block, at, citation)
+    }
+    fun removeCitation(block: Int, number: Int) {
+        val p = project ?: return
+        val current = session ?: return
+        try {
+            p.removeCitation(block, number)
+            val updated = current.copy(edits = current.edits + EditOperation(block, type = "removeCitation", position = number),
+                draft = current.draft?.takeUnless { it.block == block })
+            if (!persist(updated)) p.undo()
+            else { mobile.changed(block); message = "Citation removed." }
+        } catch (_: NotEditable) { message = "This citation cannot be removed safely." }
     }
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
             Screen.BIBLIOGRAPHY -> navigate(Screen.DOCUMENT)
-            Screen.DOCUMENT -> navigate(Screen.HOME)
+            Screen.DOCUMENT, Screen.MOBILE_VIEW -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
             Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
@@ -328,20 +351,18 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         if (searchState.open) citationSearch.refreshAccount()
     }
     suspend fun activate(opened: OpenDocument, restoring: Boolean) {
-        val loaded = withContext(Dispatchers.IO) { Loaded(opened.ready.session, opened.ready.project, cards(opened.ready.project)) }
+        val loaded = Loaded(opened.ready.session, opened.ready.project)
         accept(loaded, opened)
-        val position = opened.state.position
-        val index = loaded.cards.indexOfFirst { it.index >= position.paragraphIndex }
-            .takeIf { it >= 0 } ?: loaded.cards.lastIndex.coerceAtLeast(0)
-        documentScroll = LazyListState(index, if (loaded.cards.getOrNull(index)?.index == position.paragraphIndex) position.scrollOffset else 0)
+        mobile = MobileDocumentState(opened.state.position, opened.state.view)
+        selectedCitation = null
         session?.let(::recordDocumentState)
-        if (!restoring) navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT)
+        if (!restoring) navigate(Screen.DOCUMENT)
         else if (screen == Screen.EDITOR && session?.draft == null) navigate(Screen.DOCUMENT)
     }
     LaunchedEffect(Unit) {
         try {
             val id = activeId
-            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY)) {
+            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY, Screen.MOBILE_VIEW)) {
                 val opened = withContext(Dispatchers.IO) { id?.let(documents::openDocument) }
                 if (opened == null) navigate(Screen.HOME) else activate(opened, restoring = true)
             }
@@ -390,7 +411,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 } else {
                     if (activeId == id) {
                         activeId = null; activeStore = null; session = null; project = null
-                        blockCards = emptyList()
+                        mobile = MobileDocumentState(); selectedCitation = null
                         navigate(Screen.HOME)
                     }
                     documentRows = refreshed
@@ -480,7 +501,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         finally { selectionSync = false }
     }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.MOBILE_VIEW, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
     if (loading || selectionSync) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
@@ -495,36 +516,47 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             textSize = settings.textSize,
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
         )
-        Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
-            DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
+        Screen.DOCUMENT, Screen.MOBILE_VIEW -> Column(Modifier.fillMaxSize()) {
+            val p = project
+            val current = session
+            val store = activeStore
+            DocumentTopBar(current?.fileName.orEmpty(), p?.citations()?.size ?: 0, current?.edits?.size ?: 0,
                 onClose = { navigate(Screen.HOME) }, onUndo = { undoSession() },
                 onExport = { exportController.reset(); navigate(Screen.EXPORT) },
+                menu = {
+                    if (current != null) BibliographyMenu(current.bibliography,
+                        onChange = { persist(current.copy(bibliography = it)) }, onPreview = { navigate(Screen.BIBLIOGRAPHY) })
+                },
                 extraSubtitle = { CitationStyleSubtitle(context, session, settings.customCitationStyles) },
             )
             CitationStyleBanner(context, session, settings.customCitationStyles, documentStyle, useBuiltInForCurrentSession)
-            TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("Bibliography")
-            }
-            val legacyCount = project?.legacyCitationCount() ?: 0
-            if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
-                DocumentTonalBanner {
-                    Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall)
-                }
+            val legacyCount = p?.legacyCitationCount() ?: 0
+            if (legacyCount > 0 || p?.hasBlaykieBibliography() == true) DocumentTonalBanner {
+                Text("$legacyCount earlier marked citation(s). Citation data may be incomplete; text without citation markers is not protected.", style = MaterialTheme.typography.bodySmall)
             }
             if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
-            val edits = session?.edits.orEmpty()
-            val markers = remember(edits) { documentMarkers(edits) }
-            LazyColumn(state = documentScroll, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
-                if (blockCards.isEmpty()) item { AppEmptyState("This document has no readable paragraphs.") }
-                items(blockCards, key = { it.index }) { card ->
-                    DocumentBlock(card.kind, card.text, markers[card.index], onClick = {
-                        if (card.kind == "table" || card.kind == "other") message = "Tables and special blocks cannot be edited."
-                        else {
-                            field = TextFieldValue(card.text)
-                            selectionBlock = card.index; selectionStart = 0; selectionEnd = 0
-                            session?.let { if (persist(it.copy(draft = Draft(card.index, card.text)))) { message = ""; navigate(Screen.EDITOR) } }
-                        }
-                    })
+            if (p != null && current != null && store != null) {
+                val bibliography = if (!current.bibliography.enabled) null else rememberBibliographyView(
+                    p, Triple(current.debugCitationStyleId, current.debugCitationLanguage, settings.customCitationStyles), current.bibliography, revision = mobile.revision, bibliographyOnly = true,
+                    prepare = { progress ->
+                        preparePreviewReferences(p.copyForBibliographyPreview(), true, accountStore::read, progress)
+                    },
+                ) { copy, allowMissing -> org.blaykie.nativeapp.export.previewBibliographyXml(context, copy, current, settings.customCitationStyles, allowMissing) }
+                MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
+                    onCitation = { block, number -> selectedCitation = block to number })
+                selectedCitation?.let { (block, number) ->
+                    val editable = p.citations().any { it.block == block && it.number == number }
+                    AlertDialog(onDismissRequest = { selectedCitation = null }, title = { Text("Citation") },
+                        confirmButton = {
+                            if (editable) TextButton(onClick = { selectedCitation = null; openCitationEditor(block, number) }) { Text("Edit") }
+                            else TextButton(onClick = { selectedCitation = null; removeCitation(block, number) }) { Text("Remove") }
+                        },
+                        dismissButton = {
+                            if (editable) TextButton(onClick = { selectedCitation = null; removeCitation(block, number) }) { Text("Remove") }
+                            if (current.edits.isNotEmpty()) TextButton(onClick = { selectedCitation = null; undoSession() }) { Text("Undo") }
+                            TextButton(onClick = { selectedCitation = null }) { Text("Cancel") }
+                        },
+                    )
                 }
             }
         }
@@ -541,21 +573,29 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                             return
                         }
                         try {
-                            p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, snapshot.page.trim(), snapshot.prefix.trim(), preview)
-                            val operation = EditOperation(block = snapshot.block, type = "citation", position = snapshot.position, items = chosen,
-                                style = snapshot.style, page = snapshot.page.trim(), prefix = snapshot.prefix.trim(), previewText = preview)
+                            val edit = snapshot.editNumber
+                            val page = snapshot.page.trim(); val prefix = snapshot.prefix.trim()
+                            val options = snapshot.savedOptions()
+                            val citation = if (edit != null) p.editCitation(snapshot.block, edit, snapshot.style, page, prefix, options, preview)
+                                else {
+                                    p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, page, prefix, preview, options)
+                                    p.citations().last().text
+                                }
+                            val operation = EditOperation(block = snapshot.block, type = if (edit == null) "citation" else "editCitation",
+                                position = edit ?: snapshot.position, items = if (edit == null) chosen else emptyList(),
+                                style = snapshot.style, page = page, prefix = prefix, previewText = preview, citationOptions = options)
                             if (!persist(current.copy(edits = current.edits + operation, draft = null))) p.undo()
                             else {
-                                val citation = p.citations().last().text
-                                citationSearch.close(); reloadCards(); navigate(Screen.DOCUMENT)
-                                message = "Citation added: " + citation.take(50) + when {
+                                citationSearch.close(); mobile.changed(snapshot.block); mobile.focusParagraph(snapshot.block); navigate(Screen.DOCUMENT)
+                                message = (if (edit == null) "Citation added: " else "Citation updated: ") + citation.take(50) + when {
+                                    options.needsApa && citationUsesCsl(current, settings.customCitationStyles) -> "\nOptions apply to the built-in APA style only"
                                     else -> citationInsertionNote(fallback, preview != null)
                                 }
                             }
                         } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
                         catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
                     }
-                    if (!citationUsesCsl(s, settings.customCitationStyles)) insert(null, false)
+                    if (!citationUsesCsl(s, settings.customCitationStyles) || snapshot.savedOptions().needsApa) insert(null, false)
                     else if (!inserting && citationOptionRestriction(context, s, snapshot, settings.customCitationStyles) == null) {
                         inserting = true
                         scope.launch {
@@ -598,11 +638,15 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Screen.BIBLIOGRAPHY -> {
             val p = project
             val current = session
-            if (p != null && current != null) BibliographyPreviewScreen(
+            val store = activeStore
+            if (p != null && current != null && store != null) BibliographyPreviewScreen(
                 p, Triple(current.debugCitationStyleId, current.debugCitationLanguage, settings.customCitationStyles), current.bibliography,
-                onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
-            ) {
-                org.blaykie.nativeapp.export.previewBibliography(context, p, current, settings.customCitationStyles)
+                onClose = { back() },
+                prepare = { progress ->
+                    preparePreviewReferences(store, current.sourceName, current.bibliography.enabled, accountStore::read, progress)
+                },
+            ) { copy, allowMissing ->
+                org.blaykie.nativeapp.export.previewBibliographyXml(context, copy, current, settings.customCitationStyles, allowMissing)
             }
         }
         Screen.EXPORT -> project?.let { p ->

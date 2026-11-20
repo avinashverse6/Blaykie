@@ -342,6 +342,7 @@ internal fun citationOptionRestriction(context: Context, session: Session?, sear
     val styleId = session?.debugCitationStyleId ?: return null
     val choice = controllerFor(context).state.value.choices.firstOrNull { it.id == styleId }
     if (choice?.disabledReason != null) return choice.disabledReason
+    if (search.savedOptions().needsApa) return null
     return citationRestriction(choice?.originalId ?: styleId, search.style, search.selectedItems().size, search.page, search.prefix)
 }
 internal suspend fun renderCitationPreview(context: Context, session: Session, search: SearchState, citationContext: List<CitationItem>, enabled: Boolean = true): String? {

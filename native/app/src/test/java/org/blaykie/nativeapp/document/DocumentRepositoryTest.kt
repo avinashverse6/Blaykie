@@ -26,6 +26,19 @@ class DocumentRepositoryTest {
 
     private fun stateFile(document: StoredDocument) = File(document.workingDocx.parentFile, "state.json")
 
+    @Test fun printChoiceRoundTripsPerDocumentAndOldStateDefaultsToMobile() {
+        val files = temp.newFolder()
+        val repository = DocumentRepository(files)
+        val print = pickedDocx().inputStream().use { repository.create("Print.docx", it) }
+        val mobile = pickedDocx().inputStream().use { repository.create("Old.docx", it) }
+        stateFile(mobile).writeText("""{"displayName":"Old.docx","createdAtMillis":1,"lastEditedAtMillis":1}""")
+        repository.saveState(print.id, print.state.copy(view = DocumentView.Print, position = DocumentPosition(3)))
+        val reopened = DocumentRepository(files)
+        assertEquals(DocumentView.Print, reopened.load(print.id)?.state?.view)
+        assertEquals(DocumentPosition(3), reopened.load(print.id)?.state?.position)
+        assertEquals(DocumentView.Mobile, reopened.load(mobile.id)?.state?.view)
+    }
+
     @Test fun createsListsLoadsAndDeletesIndependentDocuments() {
         val filesDir = temp.newFolder()
         var clock = 10L
@@ -120,6 +133,6 @@ class DocumentRepositoryTest {
         assertEquals(before, stateFile.readText())
         assertFalse(before.contains(secret))
         assertEquals(setOf("displayName", "createdAtMillis", "lastEditedAtMillis", "citations", "bibliography",
-            "citationStyle", "citationLanguage", "position", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
+            "citationStyle", "citationLanguage", "position", "view", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
     }
 }
