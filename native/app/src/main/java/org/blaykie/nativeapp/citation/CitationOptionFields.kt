@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import org.blaykie.nativeapp.AppShapes
 import org.blaykie.nativeapp.docx.LocatorLabel
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -15,21 +16,26 @@ internal fun CitationOptionFields(state: SearchState, controller: CitationSearch
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
             OutlinedTextField(value = state.page, onValueChange = controller::page,
-                label = { Text("Locator") }, singleLine = true, modifier = Modifier.width(130.dp))
-            Box {
-                OutlinedButton(onClick = { menuOpen = true }) { Text(state.options.label.title) }
-                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                    LocatorLabel.entries.forEach { label ->
-                        DropdownMenuItem(text = { Text(label.title) }, onClick = { controller.label(label); menuOpen = false })
-                    }
+                label = { Text("Locator") }, singleLine = true, shape = AppShapes.small, modifier = Modifier.width(130.dp))
+            OutlinedButton(onClick = { menuOpen = !menuOpen }, shape = AppShapes.small) {
+                Text(state.options.label.title + if (menuOpen) " ▴" else " ▾")
+            }
+        }
+        // Expand in the scroll flow rather than covering the locator or nearby fields.
+        if (menuOpen) Surface(shape = AppShapes.small, color = MaterialTheme.colorScheme.surfaceVariant) {
+            Column(Modifier.fillMaxWidth()) {
+                LocatorLabel.entries.forEach { label ->
+                    DropdownMenuItem(text = { Text(label.title) }, onClick = { controller.label(label); menuOpen = false },
+                        trailingIcon = if (state.options.label == label) { { Text("✓") } } else null)
                 }
             }
         }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(value = state.prefix, onValueChange = controller::prefix,
-                label = { Text("Prefix") }, singleLine = true, modifier = Modifier.weight(1f))
+                label = { Text("Prefix") }, singleLine = true, shape = AppShapes.small, modifier = Modifier.weight(1f))
             OutlinedTextField(value = state.options.suffix, onValueChange = controller::suffix,
-                label = { Text("Suffix") }, singleLine = true, modifier = Modifier.weight(1f))
+                label = { Text("Suffix") }, singleLine = true, shape = AppShapes.small, modifier = Modifier.weight(1f))
         }
         if (state.style == "parenthetical") Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("Omit author", Modifier.weight(1f))
