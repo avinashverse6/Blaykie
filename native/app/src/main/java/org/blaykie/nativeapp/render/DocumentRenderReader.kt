@@ -148,20 +148,23 @@ private class Renderer(stylePart: Element?, numberingPart: Element?) {
     private companion object { val HEADING = Regex("heading\\s*([1-9])", RegexOption.IGNORE_CASE) }
 }
 
-private class Numbering(root: Element?) {
-    private fun entries(name: String, id: String) = root?.children().orEmpty().filter { it.word(name) }
-        .mapNotNull { node -> node.attr(id)?.toIntOrNull()?.let { it to node } }.toMap()
+private class Numbering(private val root: Element?) {
+    private fun entries(name: String, id: String): Map<Int, Element> = root?.children().orEmpty()
+        .filter { element: Element -> element.word(name) }
+        .mapNotNull { element: Element -> element.attr(id)?.toIntOrNull()?.let { key: Int -> key to element } }
+        .toMap()
     private val instances = entries("num", "numId")
     private val definitions = entries("abstractNum", "abstractNumId")
     private val counters = mutableMapOf<Int, MutableMap<Int, Int>>()
-    private fun instance(id: Int) = instances[id]
-    private fun levelOverride(id: Int, level: Int) = instance(id)?.children()?.firstOrNull {
-        it.word("lvlOverride") && it.attr("ilvl")?.toIntOrNull() == level
+    private fun instance(id: Int): Element? = instances[id]
+    private fun levelOverride(id: Int, level: Int): Element? = instance(id)?.children()?.firstOrNull { element: Element ->
+        element.word("lvlOverride") && element.attr("ilvl")?.toIntOrNull() == level
     }
     private fun definition(id: Int, level: Int): Element? = levelOverride(id, level).get("lvl")
-        ?: instance(id).value("abstractNumId")?.toIntOrNull()?.let(definitions::get)?.children()?.firstOrNull {
-            it.word("lvl") && it.attr("ilvl")?.toIntOrNull() == level
-        }
+        ?: instance(id).value("abstractNumId")?.toIntOrNull()?.let { key: Int -> definitions[key] }
+            ?.children()?.firstOrNull { element: Element ->
+                element.word("lvl") && element.attr("ilvl")?.toIntOrNull() == level
+            }
     private fun start(id: Int, level: Int) = (levelOverride(id, level).value("startOverride")?.toIntOrNull()
         ?: definition(id, level).value("start")?.toIntOrNull() ?: 1).coerceIn(0, 1_000_000)
 
