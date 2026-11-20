@@ -5,6 +5,7 @@ import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.OutputStream
 import org.blaykie.nativeapp.docx.DocxProject
+import org.blaykie.nativeapp.docx.BibliographyOptions
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroResult
 
@@ -56,9 +57,9 @@ internal fun shouldCancelOptionalExport(optional: Boolean, phase: ExportPhase): 
     optional && phase in setOf(ExportPhase.PREPARING, ExportPhase.FALLBACK, ExportPhase.CHOOSE, ExportPhase.WAITING)
 
 internal class SourceDestinationConflict : IllegalArgumentException()
-internal fun writeVerifiedExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, sameSource: Boolean, beforeCopy: () -> Unit, destination: () -> OutputStream) {
+internal fun writeVerifiedExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, sameSource: Boolean, beforeCopy: () -> Unit, destination: () -> OutputStream, options: BibliographyOptions = BibliographyOptions()) {
     if (sameSource) throw SourceDestinationConflict()
-    project.export(file, line, allowMissing)
+    project.export(file, line, allowMissing, options)
     DocxProject(file)
     beforeCopy()
     destination().use { target -> file.inputStream().use { it.copyTo(target) }; target.flush() }

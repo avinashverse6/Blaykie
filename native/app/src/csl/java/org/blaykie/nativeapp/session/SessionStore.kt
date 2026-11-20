@@ -4,6 +4,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.serialization.Serializable
+import org.blaykie.nativeapp.docx.BibliographyOptions
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.blaykie.nativeapp.docx.DocxProject
@@ -15,7 +16,7 @@ import org.blaykie.nativeapp.docx.CitationItem
     val page: String = "", val prefix: String = "", val previewText: String? = null,
 )
 @Serializable data class Draft(val block: Int, val text: String)
-@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val debugCitationStyleId: String? = null, val debugCitationLanguage: String = "en-US", val debugCitationLanguageExplicit: Boolean = !debugCitationLanguage.equals("en-US", ignoreCase = true))
+@Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val debugCitationStyleId: String? = null, val debugCitationLanguage: String = "en-US", val debugCitationLanguageExplicit: Boolean = !debugCitationLanguage.equals("en-US", ignoreCase = true), val bibliography: BibliographyOptions = BibliographyOptions())
 sealed class SessionRead {
     data class Ready(val session: Session, val project: DocxProject) : SessionRead()
     object Missing : SessionRead()
@@ -49,12 +50,17 @@ internal fun unexportedCount(current: List<String>, exported: List<String>): Int
 }
 
 /** All paths and content are confined to the application's private files directory. */
-class SessionStore(private val root: File) {
+class SessionStore(private val root: File, private val workingDocx: File? = null) {
+    internal val usesPrivateCopy: Boolean get() = workingDocx != null
     private val sources = File(root, "session-sources")
     private val metadata = File(root, "session.json")
     private val exportRevision = File(root, "export-revision.json")
     private val json = Json { ignoreUnknownKeys = true }
     private fun source(name: String): File {
+        if (workingDocx != null) {
+            require(name == root.name + ".docx")
+            return workingDocx
+        }
         require(Regex("[a-f0-9-]+\\.docx").matches(name))
         return File(sources, name)
     }
@@ -118,6 +124,15 @@ class SessionStore(private val root: File) {
         val draftChanged = session.draft?.let { it.text != project.blockText(it.block) } == true
         return unexportedCount(fingerprints(session), exported) + if (draftChanged) 1 else 0
     }
+    /** Attach the repository's already-copied source without copying it again. */
+    @Synchronized internal fun attach(uri: String, name: String): SessionRead.Ready {
+        val file = requireNotNull(workingDocx)
+        check(!metadata.exists())
+        val project = DocxProject(file)
+        val session = Session(uri, name, root.name + ".docx", version = 2)
+        save(session)
+        return SessionRead.Ready(session, project)
+    }
     /** Copies first and commits metadata only after the new document parses. */
     @Synchronized fun open(uri: String, name: String, copy: (File) -> Unit): SessionRead.Ready {
         sources.mkdirs()
@@ -140,9 +155,9 @@ class SessionStore(private val root: File) {
     }
 }
 
-enum class Screen { HOME, DOCUMENT, EDITOR, EXPORT, SETTINGS, ABOUT, LAST_CRASH }
+enum class Screen { HOME, DOCUMENT, EDITOR, EXPORT, SETTINGS, ABOUT, LAST_CRASH, BIBLIOGRAPHY }
 fun backTarget(screen: Screen): Screen? = when (screen) {
-    Screen.EDITOR, Screen.EXPORT -> Screen.DOCUMENT
+    Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY -> Screen.DOCUMENT
     Screen.DOCUMENT, Screen.SETTINGS -> Screen.HOME
     Screen.ABOUT, Screen.LAST_CRASH -> Screen.SETTINGS
     Screen.HOME -> null

@@ -1,6 +1,5 @@
 package org.blaykie.nativeapp
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -16,7 +15,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -50,20 +48,24 @@ internal fun BrandPrimaryButton(text: String, onClick: () -> Unit, modifier: Mod
 }
 
 @Composable
-internal fun HomeLayout(
-    textSize: TextSize, filename: String?, editCount: Int, message: String,
-    extraStep: HomeExtraStep? = null,
-    onOpen: () -> Unit, onContinue: () -> Unit, onEnd: () -> Unit, onSettings: () -> Unit,
-) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 16.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BrandLogo()
-            Spacer(Modifier.width(Space.medium))
-            Text("Blaykie", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
-            IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
-                Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings")
-            }
+internal fun HomeHeader(onSettings: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        BrandLogo()
+        Spacer(Modifier.width(Space.medium))
+        Text("Blaykie", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.weight(1f))
+        IconButton(onClick = onSettings, modifier = Modifier.size(48.dp)) {
+            Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings")
         }
+    }
+}
+
+@Composable
+internal fun HomeLayout(
+    textSize: TextSize, message: String, extraStep: HomeExtraStep? = null,
+    onOpen: () -> Unit, onSettings: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Space.large, vertical = Space.medium)) {
+        HomeHeader(onSettings)
         Spacer(Modifier.height(40.dp))
         BrandChip("APA 7 · ZOTERO")
         Spacer(Modifier.height(Space.medium))
@@ -73,32 +75,6 @@ internal fun HomeLayout(
         Text("Insert APA 7 citations from your Zotero library into your own Word file.", style = MaterialTheme.typography.bodyLarge)
         Spacer(Modifier.height(Space.large))
         BrandPrimaryButton("Open a Word document", onOpen, Modifier.fillMaxWidth())
-        if (filename != null) {
-            Spacer(Modifier.height(Space.extraLarge))
-            Text("In progress", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(Space.medium))
-            Card(onClick = onContinue, modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-                shape = RoundedCornerShape(24.dp), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Row(Modifier.fillMaxWidth().padding(Space.medium), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(64.dp).clip(AppShapes.medium).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
-                        Icon(painterResource(R.drawable.ic_document_outline), contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(32.dp))
-                    }
-                    Spacer(Modifier.width(Space.medium))
-                    Column(Modifier.weight(1f)) {
-                        Text("Continue working", style = MaterialTheme.typography.titleSmall)
-                        Text(filename, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("$editCount edits", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.width(Space.small))
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-                        Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
-                    }
-                }
-            }
-            AppTextButton(onClick = onEnd, modifier = Modifier.fillMaxWidth()) { Text("End session") }
-        }
         if (message.isNotEmpty()) {
             Spacer(Modifier.height(Space.medium))
             AppErrorState(message)
@@ -107,9 +83,9 @@ internal fun HomeLayout(
         Text("How Blaykie works", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(Space.medium))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val steps = homeSteps(extraStep)
+            val steps = homeSteps(extraStep, includePreview = extraStep == null)
             val vertical = verticalHomeSteps(maxWidth.value, textSize, LocalDensity.current.fontScale) ||
-                (extraStep != null && maxWidth.value < 480f)
+                (steps.size > 3 && maxWidth.value < 480f)
             if (vertical) VerticalSteps(steps) else HorizontalSteps(steps)
         }
         Spacer(Modifier.height(Space.extraLarge))
@@ -118,17 +94,18 @@ internal fun HomeLayout(
 
 internal data class HomeExtraStep(val label: String, val icon: Int)
 internal data class HomeStep(val number: String, val label: String, val icon: Int?)
-internal fun homeSteps(extra: HomeExtraStep?): List<HomeStep> = buildList {
+internal fun homeSteps(extra: HomeExtraStep?, includePreview: Boolean = false): List<HomeStep> = buildList {
     add(HomeStep("01", "Open your document", R.drawable.ic_document_outline))
     if (extra != null) add(HomeStep("02", extra.label, extra.icon))
     add(HomeStep(if (extra == null) "02" else "03", "Insert Zotero citations", null))
-    add(HomeStep(if (extra == null) "03" else "04", "Export a new doc with bibliography", R.drawable.ic_export_arrow))
+    if (includePreview && extra == null) add(HomeStep("03", "Preview your bibliography", R.drawable.ic_document_outline))
+    add(HomeStep(if (extra == null && !includePreview) "03" else "04", "Export a new doc with bibliography", R.drawable.ic_export_arrow))
 }
 
 @Composable
-private fun StepBadge(step: HomeStep) {
+internal fun HomeIconBadge(icon: Int?) {
     Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-        if (step.icon != null) Icon(painterResource(step.icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+        if (icon != null) Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
         else Text("Z", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleMedium)
     }
 }
@@ -139,7 +116,7 @@ private fun HorizontalSteps(steps: List<HomeStep>) {
         steps.forEachIndexed { index, step ->
             Column(Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    StepBadge(step)
+                    HomeIconBadge(step.icon)
                     if (index < steps.lastIndex) HorizontalDivider(Modifier.weight(1f).padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline)
                 }
                 Spacer(Modifier.height(Space.small))
@@ -155,7 +132,7 @@ private fun VerticalSteps(steps: List<HomeStep>) {
     Column {
         steps.forEachIndexed { index, step ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StepBadge(step)
+                HomeIconBadge(step.icon)
                 Spacer(Modifier.width(Space.medium))
                 Column(Modifier.weight(1f)) {
                     Text(step.number, style = MaterialTheme.typography.titleMedium)

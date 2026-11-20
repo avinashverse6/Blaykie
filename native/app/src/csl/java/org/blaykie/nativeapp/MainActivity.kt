@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -85,6 +86,16 @@ import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.beginExport
 import org.blaykie.nativeapp.export.ExportScreen
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import org.blaykie.nativeapp.document.DocumentPosition
+import org.blaykie.nativeapp.document.DocumentRepository
+import org.blaykie.nativeapp.document.DocumentsScreen
+import org.blaykie.nativeapp.document.OpenDocument
+import org.blaykie.nativeapp.document.StoredDocument
+import org.blaykie.nativeapp.document.importDocument
+import org.blaykie.nativeapp.document.openDocument
+import org.blaykie.nativeapp.document.recordSession
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.docx.NotEditable
 import org.blaykie.nativeapp.session.*
@@ -157,7 +168,7 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
                             val loadedSettings = settings
                             if (loadedSettings != null) {
-                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, sessions, account, citationSearch, exportController) }
+                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController) }
                             }
                         }
                     }
@@ -169,17 +180,21 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, sessions: SessionStore, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
     val accountState by account.state.collectAsState()
     val searchState by citationSearch.state.collectAsState()
     val exportState by exportController.state.collectAsState()
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
-    fun navigate(target: Screen) { screen = target; screenName = target.name }
+    val documents = remember(context) { DocumentRepository(context) }
+    var documentRows by remember { mutableStateOf<List<StoredDocument>>(emptyList()) }
+    var activeId by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeStore by remember { mutableStateOf<SessionStore?>(null) }
     var session by remember { mutableStateOf<Session?>(null) }
     var project by remember { mutableStateOf<DocxProject?>(null) }
     var blockCards by remember { mutableStateOf<List<CardData>>(emptyList()) }
+    var documentScroll by remember { mutableStateOf(LazyListState()) }
     var field by remember { mutableStateOf(TextFieldValue()) }
     // The draft text is already persisted in the session; save only its selection in
     // instance state, avoiding a second copy of a potentially very long paragraph.
@@ -188,30 +203,35 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     var selectionEnd by rememberSaveable { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
     var selectionSync by remember { mutableStateOf(false) }
-    var sessionStyleFallback by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var documentStyle by remember { mutableStateOf<String?>(null) }
+    var documentLanguage by remember { mutableStateOf("en-US") }
+    var documentLanguageExplicit by remember { mutableStateOf(false) }
+    var observedSettingsSelection by remember { mutableStateOf(settings.styleId to settings.languageTag) }
     var message by remember { mutableStateOf("") }
     var crashText by remember { mutableStateOf("") }
-    var discardAction by rememberSaveable { mutableStateOf<String?>(null) }
-    var discardCount by rememberSaveable { mutableIntStateOf(0) }
     var inserting by remember { mutableStateOf(false) }
     val latestCustomStyles by rememberUpdatedState(settings.customCitationStyles)
-    var previousCustomStyles by remember { mutableStateOf(settings.customCitationStyles) }
 
-    suspend fun resolveSelections(value: Session, adopt: Boolean, enabled: Boolean): Session {
+    suspend fun resolveSelections(value: Session, style: String?, language: String, explicit: Boolean, enabled: Boolean): Session {
+        if (!enabled) return builtInSession(value)
         val (choices, locales) = withContext(Dispatchers.IO) {
             val styles = runCatching { StyleRegistry.load({ context.assets.open(it) }, java.io.File(context.filesDir, "styles")) }.getOrDefault(emptyList())
             val locales = runCatching { LocaleImportStore(java.io.File(context.filesDir, "locales")).list() }.getOrDefault(emptyList())
             styleChoices(styles) to locales
         }
-        val selected = settingsStore.updateOptionalSelection { stored ->
-            reconcileSelections(stored, value, adopt, choices, locales).first
-        }
-        val resolved = reconcileSelections(selected, value, false, choices, locales).second
-        return if (enabled) resolved else builtInSession(resolved)
+        val requested = OptionalSelectionState(style, language.takeIf { explicit }, styleInitialized = true)
+        return reconcileSelections(requested, value, false, choices, locales).second
     }
-    suspend fun accept(loaded: Loaded, adopt: Boolean) {
-        val resolved = resolveSelections(loaded.session, adopt, latestCustomStyles)
-        if (resolved != loaded.session) sessions.save(resolved)
+    suspend fun accept(loaded: Loaded, opened: OpenDocument) {
+        val saved = opened.state
+        val style = saved.citationStyle.takeUnless { it == "apa" }
+        val resolved = resolveSelections(loaded.session, style, saved.citationLanguage, saved.citationLanguageExplicit, latestCustomStyles)
+        if (resolved != loaded.session) opened.store.save(resolved)
+        activeStore = opened.store
+        activeId = opened.id
+        documentStyle = style
+        documentLanguage = saved.citationLanguage
+        documentLanguageExplicit = saved.citationLanguageExplicit
         session = resolved; project = loaded.project; blockCards = loaded.cards
         val draft = resolved.draft
         if (draft != null) {
@@ -222,8 +242,33 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             selectionBlock = draft.block; selectionStart = start; selectionEnd = end
         }
     }
+    fun documentPosition(): DocumentPosition = DocumentPosition(
+        blockCards.getOrNull(documentScroll.firstVisibleItemIndex)?.index ?: 0,
+        documentScroll.firstVisibleItemScrollOffset,
+    )
+    fun recordDocumentState(value: Session) {
+        val id = activeId ?: return
+        try {
+            documents.recordSession(id, value, documentStyle ?: "apa", documentLanguage, documentPosition(), documentLanguageExplicit)
+        } catch (_: Exception) {
+            // The session journal has already been committed; do not roll back the edit.
+        }
+    }
+    fun navigate(target: Screen) {
+        if (screen == Screen.DOCUMENT && target != screen) session?.let(::recordDocumentState)
+        screen = target; screenName = target.name
+    }
+    val saveOnBackground by rememberUpdatedState({ session?.let(::recordDocumentState); Unit })
+    val lifecycle = (context as ComponentActivity).lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) saveOnBackground()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     fun persist(value: Session): Boolean = try {
-        sessions.save(value); session = value; true
+        checkNotNull(activeStore).save(value); session = value; recordDocumentState(value); true
     } catch (_: Exception) { message = "Could not save the session."; false }
     fun reloadCards() {
         val p = project ?: return
@@ -254,9 +299,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun finishEditor(): Boolean = syncEditor(false)
     fun undoSession(draftBlock: Int? = null) {
         val current = session ?: return
-        when (val result = sessions.undo(current, draftBlock)) {
+        when (val result = checkNotNull(activeStore).undo(current, draftBlock)) {
             is UndoResult.Success -> {
-                project = result.project; session = result.session
+                project = result.project; session = result.session; recordDocumentState(result.session)
                 if (draftBlock != null) {
                     field = TextFieldValue(result.session.draft!!.text)
                     selectionBlock = draftBlock; selectionStart = 0; selectionEnd = 0
@@ -270,6 +315,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
+            Screen.BIBLIOGRAPHY -> navigate(Screen.DOCUMENT)
             Screen.DOCUMENT -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
@@ -281,59 +327,97 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     LaunchedEffect(accountState.account, searchState.open) {
         if (searchState.open) citationSearch.refreshAccount()
     }
+    suspend fun activate(opened: OpenDocument, restoring: Boolean) {
+        val loaded = withContext(Dispatchers.IO) { Loaded(opened.ready.session, opened.ready.project, cards(opened.ready.project)) }
+        accept(loaded, opened)
+        val position = opened.state.position
+        val index = loaded.cards.indexOfFirst { it.index >= position.paragraphIndex }
+            .takeIf { it >= 0 } ?: loaded.cards.lastIndex.coerceAtLeast(0)
+        documentScroll = LazyListState(index, if (loaded.cards.getOrNull(index)?.index == position.paragraphIndex) position.scrollOffset else 0)
+        session?.let(::recordDocumentState)
+        if (!restoring) navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT)
+        else if (screen == Screen.EDITOR && session?.draft == null) navigate(Screen.DOCUMENT)
+    }
     LaunchedEffect(Unit) {
-        val restored = withContext(Dispatchers.IO) {
-            when (val r = sessions.read()) {
-                is SessionRead.Ready -> Loaded(r.session, r.project, cards(r.project))
-                else -> r
+        try {
+            val id = activeId
+            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY)) {
+                val opened = withContext(Dispatchers.IO) { id?.let(documents::openDocument) }
+                if (opened == null) navigate(Screen.HOME) else activate(opened, restoring = true)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { navigate(Screen.HOME); message = "Could not restore the document." }
+        finally { loading = false }
+    }
+    LaunchedEffect(screen) {
+        if (screen == Screen.HOME) documentRows = withContext(Dispatchers.IO) { documents.list() }
+    }
+    fun openDocument(id: String) {
+        if (loading) return
+        loading = true; message = ""
+        scope.launch {
+            try {
+                val opened = withContext(Dispatchers.IO) { documents.openDocument(id) }
+                if (opened != null) activate(opened, restoring = false) else message = "Could not open this document."
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not open this document." }
+            finally { loading = false }
         }
-        when (restored) {
-            is Loaded -> {
-                try {
-                    accept(restored, adopt = true)
-                    if (screen == Screen.EDITOR && restored.session.draft == null) navigate(Screen.DOCUMENT)
-                } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                catch (_: Exception) { navigate(Screen.HOME); message = "Could not load the session settings." }
-            }
-            SessionRead.Invalid -> { navigate(Screen.HOME); message = "Could not restore the last session." }
-            else -> if (screen == Screen.EDITOR || screen == Screen.DOCUMENT || screen == Screen.EXPORT) navigate(Screen.HOME)
+    }
+    fun renameDocument(id: String, name: String) {
+        scope.launch {
+            try {
+                documentRows = withContext(Dispatchers.IO) {
+                    val current = checkNotNull(documents.load(id))
+                    checkNotNull(documents.saveState(id, current.state.copy(displayName = name)))
+                    documents.list()
+                }
+                message = ""
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not rename this document." }
         }
-        loading = false
+    }
+    fun deleteDocument(id: String) {
+        if (loading) return
+        loading = true
+        scope.launch {
+            try {
+                val refreshed = withContext(Dispatchers.IO) {
+                    if (documents.delete(id)) documents.list() else null
+                }
+                if (refreshed == null) {
+                    message = "Could not delete this document."
+                } else {
+                    if (activeId == id) {
+                        activeId = null; activeStore = null; session = null; project = null
+                        blockCards = emptyList()
+                        navigate(Screen.HOME)
+                    }
+                    documentRows = refreshed
+                    message = ""
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { message = "Could not delete this document." }
+            finally { loading = false }
+        }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
             loading = true; message = ""
-            val opened = withContext(Dispatchers.IO) {
-                try {
-                    try { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: SecurityException) { }
+            try {
+                val opened = withContext(Dispatchers.IO) {
                     val name = readName(context, uri)
-                    if (!name.endsWith(".docx", ignoreCase = true)) return@withContext null to "Please choose a .docx file."
-                    val result = sessions.open(uri.toString(), name) { file ->
-                        val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
-                        input.use { source -> file.outputStream().use { output -> source.copyTo(output) } }
-                    }
-                    Loaded(result.session, result.project, cards(result.project)) to ""
-                } catch (_: Exception) { null to "This file could not be read as a Word document." }
-            }
-            if (opened.first == null) message = opened.second
-            else try { accept(opened.first!!, adopt = false); navigate(Screen.DOCUMENT) }
-            catch (e: kotlinx.coroutines.CancellationException) { throw e }
-            catch (_: Exception) { message = "Could not load the session settings." }
-            loading = false
+                    require(name.endsWith(".docx", ignoreCase = true))
+                    val input = context.contentResolver.openInputStream(uri) ?: error("Unable to open source")
+                    input.use { documents.importDocument(uri.toString(), name, it) }
+                }
+                activate(opened, restoring = false)
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                message = "This file could not be opened as a Word document."
+                documentRows = withContext(Dispatchers.IO) { documents.list() }
+            } finally { loading = false }
         }
-    }
-    fun performDiscardAction(action: String) {
-        when (action) {
-            "open" -> try { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) } catch (_: Exception) { message = "Could not open the file picker." }
-            "end" -> { sessions.end(); session = null; project = null; blockCards = emptyList(); message = "" }
-        }
-    }
-    fun requestDiscardAction(action: String) {
-        val current = session; val p = project
-        val count = if (current != null && p != null) sessions.unexportedEdits(current, p) else 0
-        if (count > 0) { discardCount = count; discardAction = action }
-        else performDiscardAction(action)
     }
     val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DOCX_MIME)) { uri -> exportController.destination(uri) }
     LaunchedEffect(exportState.phase) {
@@ -352,70 +436,64 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         } catch (_: ActivityNotFoundException) { exportController.message(if (open) "No app is available to open a .docx." else "Could not open the share sheet.") }
         catch (_: Exception) { exportController.message(if (open) "Could not open the document." else "Could not open the share sheet.") }
     }
-    val useBuiltInForSession: (String?) -> Boolean = { id -> session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false }
-    LaunchedEffect(session?.sourceName, settings.styleId, settings.customCitationStyles) {
-        if (!settings.customCitationStyles || sessionStyleFallback != (session?.sourceName to settings.styleId)) sessionStyleFallback = null
+    val useBuiltInForSession: (String?) -> Boolean = { id ->
+        // Host fallback changes the effective processor, not the document's saved choice.
+        session?.let { persist(it.copy(debugCitationStyleId = id)) } ?: false
     }
     val useBuiltInForCurrentSession: () -> Boolean = {
-        val current = session
-        val style = settings.styleId
-        if (current == null || style == null || !useBuiltInForSession(null)) false
-        else { sessionStyleFallback = current.sourceName to style; true }
+        val previous = documentStyle
+        documentStyle = null
+        val saved = useBuiltInForSession(null)
+        if (!saved) documentStyle = previous
+        saved
     }
     val removalRevision by inventoryRevision.collectAsState()
-    LaunchedEffect(session?.sourceName, settings.styleId, settings.languageTag, settings.customCitationStyles, screen, removalRevision) {
+    LaunchedEffect(settings.styleId, settings.languageTag, settings.customCitationStyles, removalRevision) {
+        val selection = settings.styleId to settings.languageTag
+        val previous = observedSettingsSelection
+        observedSettingsSelection = selection
+        if (!settings.customCitationStyles) exportController.disableOptionalExport()
         val current = session ?: return@LaunchedEffect
+        val style = if (selection.first != previous.first) selection.first else documentStyle
+        val languageChanged = selection.second != previous.second
+        val language = if (languageChanged) selection.second ?: "en-US" else documentLanguage
+        val explicit = if (languageChanged) selection.second != null else documentLanguageExplicit
         selectionSync = true
         try {
-            val selection = resolveSelections(current, false, settings.customCitationStyles)
-            val resolved = if (sessionStyleFallback == (current.sourceName to settings.styleId)) builtInSession(selection) else selection
+            val resolved = resolveSelections(current, style, language, explicit, settings.customCitationStyles)
             val latest = session
             if (latest != null && latest.sourceName == current.sourceName) {
                 val updated = latest.copy(debugCitationStyleId = resolved.debugCitationStyleId,
                     debugCitationLanguage = resolved.debugCitationLanguage,
                     debugCitationLanguageExplicit = resolved.debugCitationLanguageExplicit)
-                if (updated != latest) persist(updated)
+                val previousChoice = Triple(documentStyle, documentLanguage, documentLanguageExplicit)
+                documentStyle = style; documentLanguage = language; documentLanguageExplicit = explicit
+                if (updated == latest) recordDocumentState(latest)
+                else if (!persist(updated)) {
+                    documentStyle = previousChoice.first
+                    documentLanguage = previousChoice.second
+                    documentLanguageExplicit = previousChoice.third
+                }
             }
         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { message = "Could not load the session settings." }
         finally { selectionSync = false }
     }
     val saveAutomaticCitationLanguage: (String) -> Boolean = { tag -> session?.let { persist(it.copy(debugCitationLanguage = tag)) } ?: false }
-    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
-    LaunchedEffect(settings.customCitationStyles, session?.sourceName, session?.debugCitationStyleId) {
-        val turnedOff = previousCustomStyles && !settings.customCitationStyles
-        if (!settings.customCitationStyles) exportController.disableOptionalExport()
-        previousCustomStyles = settings.customCitationStyles
-        val current = session
-        if (!settings.customCitationStyles && current != null) {
-            val reset = builtInSession(current)
-            val changed = reset != current
-            if ((!changed || persist(reset)) && (turnedOff || current.debugCitationStyleId != null)) {
-                message = "Custom citation styles off; using built-in APA."
-            }
-        }
-    }
+    CitationStyleSession(context, session, settings.customCitationStyles, screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY), !loading && !selectionSync, useBuiltInForSession, saveAutomaticCitationLanguage)
     if (loading || selectionSync) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-    if (discardAction != null) AlertDialog(
-        onDismissRequest = { discardAction = null },
-        title = { Text("Discard $discardCount unexported edits?") },
-        confirmButton = { TextButton(onClick = { val action = discardAction; discardAction = null; if (action != null) performDiscardAction(action) }) { Text("Discard") } },
-        dismissButton = { TextButton(onClick = { discardAction = null }) { Text("Cancel") } },
-    )
     when (screen) {
-        Screen.HOME -> HomeLayout(
+        Screen.HOME -> DocumentsScreen(documentRows, message,
+            onAdd = {
+                try { picker.launch(arrayOf(DOCX_MIME)) }
+                catch (_: Exception) { message = "Could not open the file picker." }
+            },
+            onOpen = ::openDocument, onRename = ::renameDocument, onDelete = ::deleteDocument, onSettings = { navigate(Screen.SETTINGS) },
             textSize = settings.textSize,
-            filename = if (session != null && project != null) session?.fileName else null,
-            editCount = session?.edits?.size ?: 0,
-            message = message,
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
-            onOpen = { requestDiscardAction("open") },
-            onContinue = { navigate(if (session?.draft != null) Screen.EDITOR else Screen.DOCUMENT) },
-            onEnd = { requestDiscardAction("end") },
-            onSettings = { navigate(Screen.SETTINGS) },
         )
         Screen.DOCUMENT -> Column(Modifier.fillMaxSize()) {
             DocumentTopBar(session?.fileName.orEmpty(), project?.citations()?.size ?: 0, session?.edits?.size ?: 0,
@@ -423,7 +501,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 onExport = { exportController.reset(); navigate(Screen.EXPORT) },
                 extraSubtitle = { CitationStyleSubtitle(context, session, settings.customCitationStyles) },
             )
-            CitationStyleBanner(context, session, settings.customCitationStyles, settings.styleId, useBuiltInForCurrentSession)
+            CitationStyleBanner(context, session, settings.customCitationStyles, documentStyle, useBuiltInForCurrentSession)
+            TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }, modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text("Bibliography")
+            }
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
                 DocumentTonalBanner {
@@ -433,7 +514,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
             val edits = session?.edits.orEmpty()
             val markers = remember(edits) { documentMarkers(edits) }
-            LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
+            LazyColumn(state = documentScroll, contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.weight(1f)) {
                 if (blockCards.isEmpty()) item { AppEmptyState("This document has no readable paragraphs.") }
                 items(blockCards, key = { it.index }) { card ->
                     DocumentBlock(card.kind, card.text, markers[card.index], onClick = {
@@ -514,8 +595,18 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
         }
+        Screen.BIBLIOGRAPHY -> {
+            val p = project
+            val current = session
+            if (p != null && current != null) BibliographyPreviewScreen(
+                p, Triple(current.debugCitationStyleId, current.debugCitationLanguage, settings.customCitationStyles), current.bibliography,
+                onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
+            ) {
+                org.blaykie.nativeapp.export.previewBibliography(context, p, current, settings.customCitationStyles)
+            }
+        }
         Screen.EXPORT -> project?.let { p ->
-            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
+            ExportScreen(p, exportState, exportController, onExport = { session?.let { beginExport(context, exportController, it, settings.customCitationStyles, checkNotNull(activeStore)) } }, onClose = { back() }, onAddKey = { account.openKey(false) }, onShare = { sendExport(false) }, onOpen = { sendExport(true) })
         }
         Screen.SETTINGS -> SettingsScreen(settings, settingsStore, accountState, onBack = { navigate(Screen.HOME) }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }

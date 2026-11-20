@@ -2,22 +2,49 @@ package org.blaykie.nativeapp.export
 
 import android.content.Context
 import java.io.File
+import org.blaykie.nativeapp.docx.BibliographyOptions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.blaykie.nativeapp.docx.DocumentEndPreview
+import org.blaykie.nativeapp.docx.previewDocumentEnd
+import org.blaykie.nativeapp.docx.readDocumentEnd
+import org.blaykie.nativeapp.docx.CitationExportInput
+import org.blaykie.nativeapp.citation.processor.BibliographyLayout
+import org.blaykie.nativeapp.citation.processor.BibliographyResult
+import org.blaykie.nativeapp.citation.processor.CitationProcessor
 import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.session.Session
+import org.blaykie.nativeapp.session.SessionStore
 import org.blaykie.nativeapp.citation.style.citationUsesCsl
 import org.blaykie.nativeapp.citation.style.exportCslStyle
 import org.blaykie.nativeapp.citation.style.whenCustomStylesEnabled
 
 internal data class ExportCslStyle(val title: String, val processor: org.blaykie.nativeapp.citation.processor.CitationProcessor, val language: String = "en-US")
 
+internal suspend fun buildCslBibliography(input: CitationExportInput, processor: CitationProcessor): BibliographyResult =
+    if (input.items.isEmpty()) BibliographyResult(emptyList(), BibliographyLayout(), emptyList())
+    else processor.bibliography(input.items, input.clusters)
+
+internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session, enabled: Boolean): DocumentEndPreview {
+    val options = session.bibliography
+    val selection = bibliographySelection(context, session, enabled)
+    if (selection == null || project.presentKeys().isEmpty()) {
+        return withContext(Dispatchers.Default) { project.previewDocumentEnd(options) }
+    }
+    val input = project.citationExportInput(allowMissing = !options.enabled)
+    val result = buildCslBibliography(input, requireNotNull(selection.processor))
+    return withContext(Dispatchers.Default) {
+        readDocumentEnd(project.buildXmlWithProcessor("match", !options.enabled, result, options))
+    }
+}
+
 /** Prepare and reopen privately; caller must not offer a destination unless this succeeds. */
-internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?): Int {
+internal suspend fun prepareCslExport(project: DocxProject, file: File, line: String, allowMissing: Boolean, style: ExportCslStyle?, options: BibliographyOptions = BibliographyOptions()): Int {
     try {
         val selected = requireNotNull(style) { "Citation style is not ready" }
         val input = project.citationExportInput(allowMissing)
-        val result = if (input.items.isEmpty()) org.blaykie.nativeapp.citation.processor.BibliographyResult(emptyList(), org.blaykie.nativeapp.citation.processor.BibliographyLayout(), emptyList())
-            else selected.processor.bibliography(input.items, input.clusters)
-        project.exportWithProcessor(file, line, allowMissing, result)
+        val result = buildCslBibliography(input, selected.processor)
+        project.exportWithProcessor(file, line, allowMissing, result, options)
         DocxProject(file)
         return input.legacyCount
     } catch (e: Exception) {
@@ -32,9 +59,12 @@ internal fun optionalExportSelection(enabled: Boolean, session: Session, style: 
         ProcessorSelection(selected?.processor, selected?.title.orEmpty(), selected?.language.orEmpty())
     }
 
-internal fun beginExport(context: Context, controller: ExportController, session: Session, enabled: Boolean) {
-    val selection = optionalExportSelection(enabled, session) { exportCslStyle(context, session) }
-    controller.begin(session, selection, showOptionalSummary = enabled)
+private fun bibliographySelection(context: Context, session: Session, enabled: Boolean): ProcessorSelection? =
+    optionalExportSelection(enabled, session) { exportCslStyle(context, session) }
+
+internal fun beginExport(context: Context, controller: ExportController, session: Session, enabled: Boolean, store: SessionStore) {
+    val selection = bibliographySelection(context, session, enabled)
+    controller.begin(session, selection, showOptionalSummary = enabled, store = store)
 }
 
 /** Explicit transitions keep a failed preparation from implicitly choosing a fallback. */

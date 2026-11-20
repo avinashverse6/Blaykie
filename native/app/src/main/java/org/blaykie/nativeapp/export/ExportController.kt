@@ -34,7 +34,7 @@ internal data class ExportState(
     val message: String = "", val needsKey: Boolean = false, val omitted: Int = 0,
     val shareFile: File? = null, val styleTitle: String = "", val legacyCount: Int = 0, val languageSummary: String = "",
 ) { override fun toString() = "ExportState(redacted)" }
-private data class Prepared(val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val oldBibliographyRetained: Boolean, val details: ExportDetails? = null)
+private data class Prepared(val store: SessionStore, val project: DocxProject, val session: Session, val sourceUri: String, val name: String, val omitted: Int, val details: ExportDetails? = null)
 internal class ExportController(private val context: Context, private val sessions: SessionStore, private val accounts: AccountStore) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mutable = MutableStateFlow(ExportState())
@@ -46,7 +46,7 @@ internal class ExportController(private val context: Context, private val sessio
     private var preparationGeneration = 0
     private var optionalSelection = false
     fun setLine(line: String) { if (mutable.value.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) mutable.value = mutable.value.copy(line = line) }
-    fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true) {
+    fun begin(session: Session, selection: ProcessorSelection? = null, showOptionalSummary: Boolean = true, store: SessionStore = sessions) {
         if (!mayStartExport(mutable.value.phase)) return
         cancelled = false; prepared = null
         val token = ++preparationGeneration
@@ -59,13 +59,15 @@ internal class ExportController(private val context: Context, private val sessio
                 try {
                     cleanExportCache(context.cacheDir)
                     stage = FailureStage.SOURCE
-                    context.contentResolver.openInputStream(Uri.parse(session.uri))?.use { } ?: throw FileNotFoundException()
-                    val read = sessions.read() as? SessionRead.Ready ?: throw FileNotFoundException()
+                    if (!store.usesPrivateCopy) {
+                        context.contentResolver.openInputStream(Uri.parse(session.uri))?.use { } ?: throw FileNotFoundException()
+                    }
+                    val read = store.read() as? SessionRead.Ready ?: throw FileNotFoundException()
                     if (read.session.sourceName != session.sourceName) throw FileNotFoundException()
                     val project = read.project
                     if (cancelled) return@withContext Pair(null, "Lookup cancelled.")
                     var omitted = 0
-                    if (project.missingKeys().isNotEmpty()) {
+                    if (read.session.bibliography.enabled && project.missingKeys().isNotEmpty()) {
                         val account = accounts.read() as? AccountRead.Present
                             ?: return@withContext Pair(null, "Some earlier citations need their references. Add your Zotero details first.")
                         val lookup = ZoteroClient(); client = lookup
@@ -78,7 +80,7 @@ internal class ExportController(private val context: Context, private val sessio
                         client = null
                     }
                     if (cancelled) return@withContext Pair(null, "Lookup cancelled.")
-                    Pair(Prepared(project, read.session, session.uri, exportName(session.fileName), omitted, omitted > 0 && project.presentKeys().size == omitted && project.hasBlaykieBibliography()), "")
+                    Pair(Prepared(store, project, read.session, session.uri, exportName(session.fileName), omitted), "")
                 } catch (e: Exception) { Pair(null, exportError(e, stage)) }
             }
             if (token != preparationGeneration) return@launch
@@ -92,7 +94,7 @@ internal class ExportController(private val context: Context, private val sessio
                 } else {
                     try {
                         val file = File(File(context.cacheDir, CACHE_FOLDER), ready.name)
-                        val details = requireNotNull(PlatformExportHook.prepare(ready.project, file, line, ready.omitted > 0, selection))
+                        val details = requireNotNull(PlatformExportHook.prepare(ready.project, file, line, ready.omitted > 0 || !ready.session.bibliography.enabled, selection, ready.session.bibliography))
                         check(!cancelled) { "Export cancelled." }
                         prepared = ready.copy(details = details)
                         mutable.value = mutable.value.copy(phase = ExportPhase.CHOOSE, omitted = ready.omitted, styleTitle = details.title, languageSummary = details.languageSummary, legacyCount = details.legacyCount, message = "Choose where to save the document.")
@@ -159,14 +161,18 @@ internal class ExportController(private val context: Context, private val sessio
                         (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }.use { target ->
                             preparedFile.inputStream().use { it.copyTo(target) }; target.flush()
                         }
-                    } else writeVerifiedExport(work.project, file, line, work.omitted > 0, sameSource,
+                    } else writeVerifiedExport(work.project, file, line, work.omitted > 0 || !work.session.bibliography.enabled, sameSource,
                         beforeCopy = { stage = FailureStage.DESTINATION }, destination = {
                             (context.contentResolver.openOutputStream(uri, "wt") ?: throw IOException("Destination unavailable")).also { outputOpened = true }
-                        })
-                    val tracked = sessions.recordExport(work.session)
+                        }, options = work.session.bibliography)
+                    val tracked = work.store.recordExport(work.session)
                     val saved = if (savedName.isNullOrBlank()) "Saved." else "Saved as $savedName."
                     val warning = if (tracked) "" else " Export tracking could not be saved; edits may still be treated as unexported."
-                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + PlatformExportHook.completionSuffix(work.details) + (if (work.omitted > 0) " ${work.omitted} reference(s) not found." + if (work.oldBibliographyRetained) " The existing bibliography remains unchanged." else " They were omitted from the new list." else "") + warning)
+                    val omissionNote = if (work.omitted == 0) "" else {
+                        val retained = work.omitted == work.project.presentKeys().size && work.project.hasBlaykieBibliography()
+                        " ${work.omitted} reference(s) not found." + if (retained) " The existing bibliography remains unchanged." else " They were omitted from the new list."
+                    }
+                    Pair(file, "Exported (${file.length() / 1024} KB). $saved" + PlatformExportHook.completionSuffix(work.details) + omissionNote + warning)
                 } catch (_: SourceDestinationConflict) { Pair(null, "Choose a different file. The original is never changed.") }
                 catch (e: Exception) {
                     val message = if (stage == FailureStage.DESTINATION && outputOpened) failedCopyMessage(e, destinationName) {
