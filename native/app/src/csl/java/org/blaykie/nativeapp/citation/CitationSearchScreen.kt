@@ -73,7 +73,10 @@ internal fun CitationSearchScreen(state: SearchState, controller: CitationSearch
             item {
                 val position = state.position.coerceIn(0, paragraph.length)
                 val start = (position - 60).coerceAtLeast(0); val end = (position + 60).coerceAtMost(paragraph.length)
-                Text(paragraph.substring(start, position) + "|" + paragraph.substring(position, end), style = MaterialTheme.typography.bodyMedium, maxLines = 3)
+                // The list already provides 8 dp above this item.
+                Text(paragraph.substring(start, position) + "|" + paragraph.substring(position, end),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium, maxLines = 3)
                 val preview = state.preview()
                 Text(if (preview.isEmpty()) "Select one or more references." else if (cslSelected && !state.savedOptions().needsApa) citationPreviewNote() else "Preview: $preview", style = MaterialTheme.typography.bodyMedium)
                 if (cslSelected && state.savedOptions().needsApa) Text("Options apply to the built-in APA style only", style = MaterialTheme.typography.bodySmall)
