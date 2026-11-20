@@ -1,133 +1,161 @@
-# Blaykie
+<div align="center">
 
-**Cite smarter. APA 7 in seconds.**
+# Blaykie Citation Manager
 
-## Native Android app
+**Add Zotero-style citations and a formatted bibliography to your Word file, right on your phone.**
 
-The native app opens a Word `.docx`, lets you edit supported paragraphs and insert citations from your Zotero library, and exports a new document with references. Review the exported document and keep the original.
+Desktop-style citing on Android. APA 7 built in, plus your own citation styles.
 
-### Install
+[![Release](https://img.shields.io/github/v/release/avinashverse6/Blaykie?label=release&color=2f5bea)](https://github.com/avinashverse6/Blaykie/releases)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-orange)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/avinashverse6/Blaykie/total?color=brightgreen)](https://github.com/avinashverse6/Blaykie/releases)
+[![Android](https://img.shields.io/badge/Android-7.0%2B-3ddc84)](#install)
+[![Citations](https://img.shields.io/badge/APA%207%20%C2%B7%20Zotero%20%C2%B7%20CSL-1d2230)](#works-beyond-apa)
 
-When a native release is published, download its APK from the [Releases](../../releases) page, open it on an Android 7.0 (API 24) or newer device, and allow installation from your chosen source if Android asks. Verify the APK using the accompanying SHA-256 checksum; a debug build is a separate app and does not share the release app's data.
+[Download](https://github.com/avinashverse6/Blaykie/releases) · [What it does](#what-it-does) · [How to use it](#how-to-use-it) · [Beyond APA](#works-beyond-apa) · [Privacy](#privacy-and-safety) · [Compare](#how-is-this-different)
 
-### Custom citation styles (experimental)
+</div>
 
-Custom styles use Citation Style Language (CSL) to format citations and references. The feature is **off by default in release**; enable **Custom citation styles (experimental)** in Settings, then open a document. Built-in APA remains available.
+> **Not affiliated.** Blaykie is an independent project. It is not affiliated with, endorsed by, or connected to Zotero or Microsoft. "Zotero" and "Microsoft Word" are trademarks of their respective owners and are used here only to say what Blaykie works with.
 
-Use independent author-date styles. In the document, open **Citation style** and choose **Import style (.csl)** to pick a file on your device. To add a language, open **Citation language**, choose **Import language (locale .xml)**, then select the imported language. Imported files stay on your device. CSL numeric and note styles are not supported yet. Hindi and Gujarati names have a known limitation: name parts are joined without a comma.
+<p align="center">
+  <img src="docs/images/01-home.jpg" width="230" alt="Blaykie home screen">
+  &nbsp;
+  <img src="docs/images/03-mobile-view.jpg" width="230" alt="Citation highlighted in the document view">
+  &nbsp;
+  <img src="docs/images/05-insert-citation.jpg" width="230" alt="Insert citation screen">
+</p>
 
-### Privacy
+## What it does
 
-Your Zotero API key is stored encrypted on the phone. The app has no analytics and sends app network requests only to `api.zotero.org`; the key-creation button opens `zotero.org` in your browser.
+You write your essay, thesis chapter or paper in a normal Word (`.docx`) file. Blaykie lets you open that file on your phone, tap the place where a citation belongs, pick the source from **your own Zotero library**, and the citation is written into your text. At the end of the document, a **bibliography** is built for you, with hanging indent and italics where the style asks for them.
 
-### Known limitations
+Then you export. Blaykie saves a **new copy** of your document. **Your original file is never changed.**
 
-- A Zotero API key must be supplied manually for now.
-- Documents are presented as paragraph cards rather than a page view.
-- Tables and protected document content cannot be edited; review formatting after export.
+It is made for people who write on the move: students, researchers, and teachers in the humanities and social sciences who want proper citations without waiting to get back to a laptop.
 
-## Kivy app
+## Why it exists
 
-The remainder of this document describes the existing Kivy app and its build process.
+On a laptop, the Zotero plugin in Word puts a citation into your document with one click. On a phone, that has been missing: Word mobile does not have the usual citation tools, and Zotero's Android app is for managing your library and reading PDFs, not for placing citations inside your document. Blaykie fills that gap.
 
-Blaykie is an Android app that inserts APA 7 citations from your [Zotero](https://www.zotero.org) library straight into your own Word document, right where you tap, and builds the reference list for you. It then exports a **new** `.docx`. Your original file is never changed.
+## How to use it
 
-Blaykie is not a word processor. It does one job: citing from Zotero into your document, on your phone.
+1. **Open your document.** Tap *Open a Word document* and pick your `.docx`.
+2. **Tap where the citation goes.** Tap a paragraph in the document view. It works in both views: *Mobile* (text fits your screen) and *Print* (looks like a real page).
+3. **Search and pick.** Search your Zotero library and choose one or more sources.
+4. **Add details if needed.** Page number, chapter, a prefix like "see", a suffix, or hide the author, and check the live preview.
+5. **Insert.** The citation appears highlighted in your text, and the bibliography at the end updates by itself.
+6. **Export.** Blaykie saves a new `.docx` with everything in place. Open it in Word or Google Docs.
 
-## How it works
+You can keep several documents in the app (for example, a paper and a proposal) and go back to any of them exactly where you stopped.
 
-1. Open your `.docx` file.
-2. Tap the paragraph where the citation should go, and place the cursor.
-3. Search your Zotero library and pick one or more references.
-4. Choose the style, add a page number or prefix if needed, check the live preview, and insert.
-5. Export. Blaykie adds a formatted **References** section and saves `<document>_Blaykie.docx`.
+<p align="center">
+  <img src="docs/images/02-documents.jpg" width="230" alt="Your documents list">
+  &nbsp;
+  <img src="docs/images/04-print-layout.jpg" width="230" alt="Print layout view">
+  &nbsp;
+  <img src="docs/images/06-bibliography.jpg" width="230" alt="Bibliography with hanging indent and italics">
+</p>
+
+> The citations and references in these screenshots are sample data used only to show how the app looks. They do not represent the views or claims of the cited authors.
 
 ## Features
 
-- **Cite in place.** Insert at the cursor, or right after a selection. Blaykie never deletes or replaces your text when inserting.
-- **Zotero search.** Searches your personal library through the official Zotero Web API (up to 60 results, with "Show more").
-- **Citation styles.** `(Author, 2020)` or `Author (2020)`, with optional page number and prefix such as "see".
-- **Multiple references at once.** Alphabetical order, same-author years merged, `2020a` / `2020b` suffixes, initials when surnames clash, and APA et al. rules.
-- **APA 7 reference list.** Hanging indent, italic journal and book titles, up to 20 authors, DOI links, "n.d.", "in press", group authors, and no-author works.
-- **Many source types.** Journal article, book, edited book, chapter, report, thesis, web page, blog post, newspaper, magazine, conference paper, preprint and generic items.
-- **Edit paragraph text.** Type, cut, copy and paste inside a paragraph. Everything is undoable.
-- **Undo.** Every insert and edit can be undone.
-- **Resume.** Close the app and continue exactly where you left off.
-- **Re-open exported files.** Open a Blaykie export again and keep citing. The reference list is rebuilt, not duplicated.
-- **Line spacing on export.** Like your document (default), 1.5 lines, or double (APA).
-- **Safe by design.** Zotero plugin fields, hyperlinks, tracked changes and tables are protected from edits. Only the spot you touch is changed; everything else in the file is copied unchanged.
-- **Private.** Your Zotero ID and key stay on your phone. The app talks only to `api.zotero.org`.
+- **Cite in place.** Tap a paragraph, insert a citation, see it highlighted. Remove it or undo it any time.
+- **Bibliography that builds itself.** Added at the end of your document and updated after every change, with hanging indent and italics.
+- **Citation options.** Page, chapter, paragraph or section; prefix and suffix; "Author (2020)" or "(Author, 2020)"; omit the author; edit a citation later.
+- **Two views.** *Mobile view* for comfortable reading, *Print layout* to see your pages.
+- **Many documents, no losing your place.** Rename, delete, and resume each document with its citations and settings.
+- **Your Zotero library.** Search and pick from your own library. Your Zotero key stays on your phone.
+- **Hindi and Gujarati text** displays correctly.
+- **Original file stays safe.** Blaykie always exports a new file.
+
+## Works beyond APA
+
+APA 7 is built in and works out of the box. If your field uses something else, you can bring your own style.
+
+- Blaykie supports **Citation Style Language (CSL)** styles. Import a `.csl` file for your department, journal or university, for example an **ASA**, **Harvard** or **Chicago author-date** style, and Blaykie uses it for your citations and bibliography.
+- This is **experimental** and **off by default**. Turn on *Custom citation styles (experimental)* in Settings, then import your style under *Settings → Citations*.
+- Use independent **author-date** styles. Numbered and footnote styles are not supported yet.
+- No styles are bundled with the app. You choose and import the files you need. Get them from the [CSL style repository](https://www.zotero.org/styles).
+- Known limit: for Hindi and Gujarati author names, a custom style may join the surname and the given name without a comma. The built-in APA handles them correctly.
+
+## How is this different?
+
+Short answer: Blaykie is for **placing citations into your Word file on a phone**. It is not a library manager and not a word processor.
+
+| | **Blaykie** | **Zotero for Android** | **Word mobile app** |
+|---|---|---|---|
+| Insert a citation from your Zotero library into your Word file on the phone | Yes | Not listed among its features | Not available, as far as we know |
+| Bibliography built and updated automatically | Yes | Not listed among its features | Not available, as far as we know |
+| Hanging indent and italics in the bibliography | Yes | Not listed among its features | Manual formatting |
+| Manage and organise your library, read and annotate PDFs | No | Yes | No |
+| Full word processing (tables, review tools, and more) | No | No | Yes |
+
+*Comparison based on public documentation as of November 2026. Apps change, so please check each app's current features. Zotero's documentation describes inserting items into a word processor as something done from the Zotero desktop app, with the word-processor plugin.*
+
+Blaykie works best **together** with the apps above: keep your library in Zotero, write in Word, and use Blaykie to put the citations in when you are on your phone.
+
+## Privacy and safety
+
+- **Your Zotero key stays on your phone**, stored encrypted. It is never written into your documents or logs.
+- Blaykie has **no analytics** and no accounts. The app talks only to `api.zotero.org` to read your library. The button that helps you create a key opens `zotero.org` in your browser.
+- **Your original document is never modified.** Citations are written only into the new exported copy.
+- The app works with your own Zotero library using a key you create with **read-only** access.
 
 ## Install
 
-Download the APK that matches your phone from the [Releases](../../releases) page:
+1. Open the [**Releases**](https://github.com/avinashverse6/Blaykie/releases) page and download the latest `.apk` file.
+2. Open the file on your Android phone (Android 7.0 or newer). If Android asks, allow installation from your browser or file manager.
+3. To update later, download the newer `.apk` and install it over the old one.
 
-| Phone | APK |
-|-------|-----|
-| 32-bit | `armeabi-v7a` |
-| 64-bit (most recent phones) | `arm64-v8a` |
+There is one APK for all phones. Each release also has a `.apk.sha256` file so you can check that your download is untouched.
 
-Requires Android 7.0 (API 24) or newer.
+<details>
+<summary>Check your download (optional)</summary>
 
-> APKs are signed with a debug key that changes with every build. To install a newer version, **uninstall the old one first** and enter your Zotero details again.
+Compare the SHA-256 of the downloaded `.apk` with the value in the `.apk.sha256` file. Official releases are signed with a certificate whose SHA-256 fingerprint is:
 
-## Getting your Zotero credentials
+`7E:D9:EA:9F:95:80:B9:14:70:AB:53:CB:D7:C6:65:19:80:32:3C:92:3C:71:FD:F7:E7:39:26:71:B1:4F:3F:9A`
 
-1. Sign in at [zotero.org](https://www.zotero.org) and open **Settings → Security**.
-2. Note your numeric **User ID** ("Your userID for use in API calls").
-3. Create a new private key with **read** access to your personal library.
-4. In Blaykie, tap the gear icon and enter the User ID and API key.
+A debug build is a separate app with a different signature and does not share data with the release app.
 
-## Current limits
+</details>
 
-- APA 7 only.
-- Personal Zotero library only (group libraries are not supported yet).
-- Citations cannot be placed inside tables or footnotes yet.
-- Existing Blaykie citations cannot yet be edited by tapping them. Use Undo, or cut and re-insert.
-- Titles are used exactly as stored in Zotero. No automatic sentence-case conversion is applied.
+## Get your Zotero key
 
-## Project structure
+1. Sign in at [zotero.org](https://www.zotero.org) and open **Settings → Security** (or [zotero.org/settings/keys](https://www.zotero.org/settings/keys)).
+2. Create a new private key with **read** access to your personal library.
+3. In Blaykie, paste the key on the first screen (or later under *Settings → Account*).
 
-| File | Purpose |
-|------|---------|
-| `main.py` | App screens and flow (Kivy) |
-| `ui.py` | Colours and custom widgets |
-| `blaykie_docx.py` | `.docx` engine: citations, edits, undo, bibliography, export |
-| `zotero_engine.py` | Zotero API search and APA 7 formatting |
-| `buildozer.spec` | Android build configuration |
-| `.github/workflows/build-apk.yml` | GitHub Actions workflow that builds both APKs |
+## What it can't do yet
 
-## Building the APK
+- It is not a full word processor: you tap a paragraph and edit there, rather than typing freely on the page.
+- Tables and protected parts of a document cannot be edited. Check the formatting after export.
+- In *Print layout*, page breaks are close to Word's but not exact.
+- Older citations that were not made in Blaykie can be removed but not edited.
+- Numbered and footnote citation styles are not supported yet.
 
-The easiest way is GitHub Actions: open the **Actions** tab, choose **Build Android APK**, and click **Run workflow**. It builds one APK per processor type (`armeabi-v7a` and `arm64-v8a`) and uploads them as artifacts.
+Planned next: sign in to Zotero without copying a key, page numbers and headers in the page view, and a typing editor.
 
-To build locally (Linux or WSL):
+## For developers
 
-```bash
-pip install buildozer cython==0.29.37
-buildozer -v android debug
-```
-
-The APK is written to the `bin/` folder. Set `android.archs` in `buildozer.spec` to build one processor type at a time.
-
-## Citation metadata privacy (experimental)
-
-The native citation-record codec is under development and is **not yet connected to DOCX export**. Its proposed records contain the document style; each citation's UUID, bookmark name, mode, page locator and label, and prefix; and each item's Zotero item key, title, author and editor first/last/group names, date, publication title, volume, issue, pages, DOI, item type, publisher, book title, edition, URL, editor-lead flag, website type/title, blog title, report number/type, institution, thesis type, university, archive, proceedings title, conference name, place and repository. It discards free-form Extra except for a DOI used by the formatter. There is no field for a Zotero account ID or API key.
-
-Bibliographic text and URLs can themselves contain sensitive information. Review the data you put in citations before sharing a document; the codec does not scan or redact free text.
+Blaykie is a native Android app (Kotlin and Jetpack Compose) in the [`native/`](native) folder. Builds and releases run on GitHub Actions. Custom CSL styles run through [citeproc-js](https://github.com/Juris-M/citeproc-js) in a hidden WebView. See [`docs/`](docs) for notes, [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for credits, and the issue tracker for bugs and ideas. The repository root also contains an older prototype that is no longer maintained.
 
 ## Contributing
 
-Bug reports and suggestions are welcome. Please open an issue.
+Bug reports and suggestions are welcome. Please [open an issue](https://github.com/avinashverse6/Blaykie/issues).
 
 ## License
 
-Copyright (C) 2026 avinashverse6
+Copyright (C) 2026 Avinash
 
-Licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Licensed under **AGPL-3.0-or-later**. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Versions released before this license change were MIT-licensed and remain MIT-licensed for those versions. The last commit on main carrying the MIT license was `2971cc3c3bcb86b497cf19e5d5c32263a1c02b6d` (2026-11-07 07:08:43 +05:30).
+Versions released before this license change were MIT-licensed and remain MIT-licensed for those versions. The last commit on `main` carrying the MIT license was `2971cc3c3bcb86b497cf19e5d5c32263a1c02b6d` (2026-11-07 07:08:43 +05:30).
 
 For other license requests, please use this repository's GitHub page.
 
-Blaykie is not affiliated with Zotero.
+---
+
+Made by Avinash. Blaykie is not affiliated with Zotero.
