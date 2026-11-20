@@ -14,10 +14,11 @@ import org.blaykie.nativeapp.docx.LocatorLabel
 internal fun CitationOptionFields(state: SearchState, controller: CitationSearchController) {
     var menuOpen by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.Center) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(value = state.page, onValueChange = controller::page,
-                label = { Text("Locator") }, singleLine = true, shape = AppShapes.small, modifier = Modifier.width(130.dp))
-            OutlinedButton(onClick = { menuOpen = !menuOpen }, shape = AppShapes.small) {
+                label = { Text("Locator") }, singleLine = true, shape = AppShapes.small, modifier = Modifier.weight(1f))
+            OutlinedButton(onClick = { menuOpen = !menuOpen }, shape = AppShapes.small, modifier = Modifier.weight(.62f).heightIn(min = 52.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp)) {
                 Text(state.options.label.title + if (menuOpen) " ▴" else " ▾")
             }
         }
