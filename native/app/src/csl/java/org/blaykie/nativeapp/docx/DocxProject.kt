@@ -249,6 +249,11 @@ class DocxProject(private val source: File) {
         nextBookmark = (Regex("<w:bookmarkStart\\b[^>]*\\bw:id=\"(\\d+)\"").findAll(xml).map { it.groupValues[1].toInt() }.maxOrNull() ?: 0) + 1
         nextCitation = (bookmarkPattern.findAll(xml).map { it.groupValues[2].toInt() }.maxOrNull() ?: 0) + 1
     }
+    internal fun renderInput() = org.blaykie.nativeapp.render.DocumentRenderInput(source, buildList {
+        add(prefix)
+        blocks.forEach { add(it.gap); add(it.xml) }
+        add(tail); add(suffix)
+    })
     val blockCount get() = blocks.size
     fun blockText(index: Int): String {
         val block = blocks[index]

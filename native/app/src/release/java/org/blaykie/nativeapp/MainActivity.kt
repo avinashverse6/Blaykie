@@ -276,7 +276,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun back() {
         when (screen) {
             Screen.EDITOR -> if (finishEditor()) navigate(Screen.DOCUMENT)
-            Screen.BIBLIOGRAPHY -> navigate(Screen.DOCUMENT)
+            Screen.BIBLIOGRAPHY, Screen.MOBILE_VIEW -> navigate(Screen.DOCUMENT)
             Screen.DOCUMENT -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
@@ -304,7 +304,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     LaunchedEffect(Unit) {
         try {
             val id = activeId
-            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY)) {
+            if (screen in setOf(Screen.DOCUMENT, Screen.EDITOR, Screen.EXPORT, Screen.BIBLIOGRAPHY, Screen.MOBILE_VIEW)) {
                 val opened = withContext(Dispatchers.IO) { id?.let(documents::openDocument) }
                 if (opened == null) navigate(Screen.HOME) else activate(opened, restoring = true)
             }
@@ -417,8 +417,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 onClose = { navigate(Screen.HOME) }, onUndo = { undoSession() },
                 onExport = { exportController.reset(); navigate(Screen.EXPORT) },
             )
-            TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }, modifier = Modifier.padding(horizontal = 16.dp)) {
-                Text("Bibliography")
+            FlowRow(Modifier.padding(horizontal = 16.dp)) {
+                TextButton(onClick = { navigate(Screen.BIBLIOGRAPHY) }) { Text("Bibliography") }
+                TextButton(onClick = { navigate(Screen.MOBILE_VIEW) }) { Text("Mobile view") }
             }
             val legacyCount = project?.legacyCitationCount() ?: 0
             if (legacyCount > 0 || project?.hasBlaykieBibliography() == true) {
@@ -486,6 +487,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
             })
         }
+        Screen.MOBILE_VIEW -> project?.let { org.blaykie.nativeapp.render.MobileDocumentScreen(it) { back() } }
         Screen.BIBLIOGRAPHY -> {
             val p = project
             val current = session
