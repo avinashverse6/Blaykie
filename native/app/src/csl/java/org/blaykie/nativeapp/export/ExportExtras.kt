@@ -5,9 +5,6 @@ import java.io.File
 import org.blaykie.nativeapp.docx.BibliographyOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.blaykie.nativeapp.docx.DocumentEndPreview
-import org.blaykie.nativeapp.docx.previewDocumentEnd
-import org.blaykie.nativeapp.docx.readDocumentEnd
 import org.blaykie.nativeapp.docx.CitationExportInput
 import org.blaykie.nativeapp.citation.processor.BibliographyLayout
 import org.blaykie.nativeapp.citation.processor.BibliographyResult
@@ -25,16 +22,16 @@ internal suspend fun buildCslBibliography(input: CitationExportInput, processor:
     if (input.items.isEmpty()) BibliographyResult(emptyList(), BibliographyLayout(), emptyList())
     else processor.bibliography(input.items, input.clusters)
 
-internal suspend fun previewBibliography(context: Context, project: DocxProject, session: Session, enabled: Boolean): DocumentEndPreview {
+internal suspend fun previewBibliographyXml(context: Context, project: DocxProject, session: Session, enabled: Boolean, allowMissing: Boolean): String {
     val options = session.bibliography
     val selection = bibliographySelection(context, session, enabled)
     if (selection == null || project.presentKeys().isEmpty()) {
-        return withContext(Dispatchers.Default) { project.previewDocumentEnd(options) }
+        return withContext(Dispatchers.Default) { project.buildXml(allowMissing = allowMissing, options = options) }
     }
-    val input = project.citationExportInput(allowMissing = !options.enabled)
+    val input = withContext(Dispatchers.Default) { project.citationExportInput(allowMissing || !options.enabled) }
     val result = buildCslBibliography(input, requireNotNull(selection.processor))
     return withContext(Dispatchers.Default) {
-        readDocumentEnd(project.buildXmlWithProcessor("match", !options.enabled, result, options))
+        project.buildXmlWithProcessor("match", allowMissing, result, options)
     }
 }
 

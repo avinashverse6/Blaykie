@@ -82,6 +82,7 @@ import org.blaykie.nativeapp.citation.style.citationInsertionNote
 import org.blaykie.nativeapp.citation.CitationSearchScreen
 import org.blaykie.nativeapp.citation.insertionPoint
 import org.blaykie.nativeapp.export.DOCX_MIME
+import org.blaykie.nativeapp.export.preparePreviewReferences
 import org.blaykie.nativeapp.export.ExportController
 import org.blaykie.nativeapp.export.ExportPhase
 import org.blaykie.nativeapp.export.beginExport
@@ -168,7 +169,7 @@ class MainActivity : ComponentActivity() {
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
                             val loadedSettings = settings
                             if (loadedSettings != null) {
-                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController) }
+                                AccountGate(this@MainActivity, account) { AppScreens(this@MainActivity, settingsStore, loadedSettings, account, citationSearch, exportController, accountStore) }
                             }
                         }
                     }
@@ -180,7 +181,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController) {
+private fun AppScreens(context: Context, settingsStore: SettingsStore, settings: Settings, account: AccountController, citationSearch: CitationSearchController, exportController: ExportController, accountStore: AccountStore) {
     val accountState by account.state.collectAsState()
     val searchState by citationSearch.state.collectAsState()
     val exportState by exportController.state.collectAsState()
@@ -600,11 +601,15 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         Screen.BIBLIOGRAPHY -> {
             val p = project
             val current = session
-            if (p != null && current != null) BibliographyPreviewScreen(
+            val store = activeStore
+            if (p != null && current != null && store != null) BibliographyPreviewScreen(
                 p, Triple(current.debugCitationStyleId, current.debugCitationLanguage, settings.customCitationStyles), current.bibliography,
                 onOptionsChange = { persist(current.copy(bibliography = it)) }, onClose = { back() },
-            ) {
-                org.blaykie.nativeapp.export.previewBibliography(context, p, current, settings.customCitationStyles)
+                prepare = { progress ->
+                    preparePreviewReferences(store, current.sourceName, current.bibliography.enabled, accountStore::read, progress)
+                },
+            ) { copy, allowMissing ->
+                org.blaykie.nativeapp.export.previewBibliographyXml(context, copy, current, settings.customCitationStyles, allowMissing)
             }
         }
         Screen.EXPORT -> project?.let { p ->

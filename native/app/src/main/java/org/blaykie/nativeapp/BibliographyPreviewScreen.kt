@@ -24,25 +24,41 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import org.blaykie.nativeapp.docx.BibliographyOptions
 import org.blaykie.nativeapp.docx.DocxProject
-import org.blaykie.nativeapp.docx.DocumentEndPreview
 import org.blaykie.nativeapp.docx.EndPreviewParagraph
+import org.blaykie.nativeapp.export.BibliographyPreviewContent
+import org.blaykie.nativeapp.export.PreviewReferences
+import org.blaykie.nativeapp.export.renderBibliographyPreview
 
 @Composable
 internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, options: BibliographyOptions,
                                         onOptionsChange: (BibliographyOptions) -> Boolean, onClose: () -> Unit,
-                                        load: suspend () -> DocumentEndPreview) {
+                                        prepare: suspend ((Int) -> Unit) -> PreviewReferences,
+                                        buildXml: suspend (DocxProject, Boolean) -> String) {
     var saveFailed by remember(project) { mutableStateOf(false) }
     var attempt by remember { mutableIntStateOf(0) }
-    var preview by remember(project, styleKey, options, attempt) { mutableStateOf<DocumentEndPreview?>(null) }
-    var error by remember(project, styleKey, options, attempt) { mutableStateOf<String?>(null) }
-    LaunchedEffect(project, styleKey, options, attempt) {
+    var fetching by remember(project, options.enabled, attempt) { mutableIntStateOf(0) }
+    var references by remember(project, options.enabled, attempt) { mutableStateOf<PreviewReferences?>(null) }
+    var prepareFailed by remember(project, options.enabled, attempt) { mutableStateOf(false) }
+    LaunchedEffect(project, options.enabled, attempt) {
         try {
-            preview = load()
+            references = prepare { fetching = it }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
-            error = if (project.missingKeys().isNotEmpty()) "Some earlier citations are missing reference details."
-                else "Could not prepare the bibliography. Try again."
+            prepareFailed = true
+        } finally { fetching = 0 }
+    }
+    val ready = references as? PreviewReferences.Ready
+    val lookupFailure = references as? PreviewReferences.LookupFailed
+    var preview by remember(ready, styleKey, options) { mutableStateOf<BibliographyPreviewContent?>(null) }
+    var renderFailed by remember(ready, styleKey, options) { mutableStateOf(false) }
+    LaunchedEffect(ready, styleKey, options) {
+        if (ready != null) try {
+            preview = renderBibliographyPreview(ready, buildXml)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            renderFailed = true
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -66,23 +82,32 @@ internal fun BibliographyPreviewScreen(project: DocxProject, styleKey: Any, opti
         )
         if (saveFailed) Text("Could not save bibliography options.", Modifier.padding(16.dp))
         val result = preview
+        if (result != null && ready?.lookupAttempted == true) {
+            TextButton(onClick = { attempt++ }, modifier = Modifier.padding(horizontal = 16.dp)) { Text("Retry") }
+        }
         when {
-            error != null -> Column(Modifier.padding(16.dp)) {
-                Text(error.orEmpty())
+            lookupFailure != null || prepareFailed || renderFailed -> Column(Modifier.padding(16.dp)) {
+                Text(lookupFailure?.message ?: "Could not prepare the bibliography. Try again.")
+                if (lookupFailure?.keyMissing == true) Text("Check your Zotero key in Settings > Account.")
                 TextButton(onClick = { attempt++ }) { Text("Retry") }
             }
-            result == null -> CircularProgressIndicator(Modifier.padding(16.dp))
+            result == null -> Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CircularProgressIndicator()
+                if (fetching > 0) Text("Fetching reference details... ($fetching items)")
+            }
             else -> LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
                     Text("Preview (end of document)", Modifier.padding(top = 16.dp), style = MaterialTheme.typography.titleMedium)
                 }
-                if (result.paragraphs.isEmpty()) item { Text("No document paragraphs.") }
-                items(result.paragraphs) { PreviewParagraph(it) }
+                if (result.end.paragraphs.isEmpty()) item { Text("No document paragraphs.") }
+                items(result.end.paragraphs) { PreviewParagraph(it) }
                 when {
                     !options.enabled -> item { Text("Bibliography will not be added") }
-                    result.bibliography.isEmpty() -> item { Text("No citations yet.") }
-                    else -> bibliography(result.bibliography)
+                    result.end.bibliography.isEmpty() && result.missingCitations.isEmpty() -> item { Text("No citations yet.") }
+                    else -> bibliography(result.end.bibliography)
                 }
+                result.missingNote?.let { note -> item { Text(note, style = MaterialTheme.typography.titleSmall) } }
+                items(result.missingCitations) { Text(it, style = MaterialTheme.typography.bodyMedium) }
             }
         }
     }
