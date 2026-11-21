@@ -14,6 +14,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        testInstrumentationRunner = "org.blaykie.nativeapp.render.PrintLayoutTestRunner"
         applicationId = "io.github.avinashverse6.blaykie"
         minSdk = 24
         targetSdk = 35

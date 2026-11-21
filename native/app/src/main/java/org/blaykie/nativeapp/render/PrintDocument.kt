@@ -336,7 +336,7 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
 
 private fun MobilePageItem.paragraph(): RenderParagraph? = (this as? MobilePageItem.Block)?.content as? RenderParagraph
 
-private class PrintMeasure(private val measurer: TextMeasurer, private val bodySize: Float, private val fontScale: Float, private val cache: PrintMeasurements, private val ink: PrintInk) {
+internal class PrintMeasure(private val measurer: TextMeasurer, private val bodySize: Float, private val fontScale: Float, private val cache: PrintMeasurements, private val ink: PrintInk) {
     // Layout in paper points independent of zoom. Text measurement uses Android shaping and font fallback.
     private val density = Density(1f, fontScale)
     private val fonts = mutableMapOf<String, FontFamily>()
