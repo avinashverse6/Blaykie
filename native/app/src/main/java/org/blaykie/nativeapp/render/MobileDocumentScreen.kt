@@ -187,14 +187,14 @@ internal fun DocumentBlock(source: java.io.File, item: MobilePageItem, fonts: Mu
 @Composable
 internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<String, FontFamily?>,
                              onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null,
-                             previousAfterTwips: Int = 0) {
+                             previousAfterTwips: Int = 0, printLines: PrintLines? = null, printLineCount: Int = 0) {
     val body = MaterialTheme.typography.bodyLarge
     val paper = LocalDarkPaper.current
     val paragraphShade = paper?.let { page -> paragraph.shadingRgb?.let { printColor(it, page.onSurface, page.background) } }
     val background = paragraphShade ?: paper?.background ?: MaterialTheme.colorScheme.background
     val foreground = paper?.onSurface ?: MaterialTheme.colorScheme.onBackground
     val heading = paragraph.headingLevel
-    val defaultSize = paragraph.defaultFontSize(body.fontSize.value)
+    val defaultSize = printLines?.size ?: paragraph.defaultFontSize(body.fontSize.value)
     val colors = MaterialTheme.colorScheme
     val citationBackground = if (paper != null) printColor(null, colors.primaryContainer, background) else colors.primaryContainer
     val citationForeground = if (paper != null) printColor(null, colors.onPrimaryContainer, citationBackground) else colors.onPrimaryContainer
@@ -252,7 +252,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     val continuation = if (left == 0f) listIndent else left
     val first = if (paragraph.list != null && hanging == 0f) (continuation - 16f).coerceAtLeast(0f)
         else (continuation - hanging + paragraph.firstLineTwips.coerceIn(0, 1440) / 20f).coerceAtLeast(0f)
-    val line = paragraph.lineHeightPoints(defaultSize)
+    val line = printLines?.let { it.height / androidx.compose.ui.platform.LocalDensity.current.fontScale } ?: paragraph.lineHeightPoints(defaultSize)
     val interaction = if (onParagraph == null) Modifier else Modifier.clickable(onClick = onParagraph)
     val borders = paragraph.borders
     val edgeModifier = if (borders == RenderBorders()) Modifier else Modifier.drawBehind {
@@ -279,7 +279,11 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     Text(text, modifier = Modifier.fillMaxWidth().then(interaction).padding(
         top = (before / 20f).dp,
         bottom = (paragraph.afterTwips.coerceIn(0, 4800) / 20f).dp,
-    ).then(if (paragraphShade == null) Modifier else Modifier.background(paragraphShade)).then(edgeModifier), color = foreground, style = body.copy(fontFamily = FontFamily.SansSerif,
+    ).then(if (paragraphShade == null) Modifier else Modifier.background(paragraphShade)).then(edgeModifier)
+        .then(if (printLines == null) Modifier else Modifier.height((printLines.height * printLineCount).dp)),
+        softWrap = printLines == null, color = foreground, style = body.copy(fontFamily =
+            if (printLines != null && paragraph.runs.isEmpty()) paragraph.print.mark.font?.let(::availableFont) ?: FontFamily.SansSerif
+            else FontFamily.SansSerif,
         fontSize = defaultSize.sp, lineHeight = line.sp,
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
         textIndent = TextIndent(firstLine = first.sp, restLine = continuation.sp),

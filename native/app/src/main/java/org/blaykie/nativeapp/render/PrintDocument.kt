@@ -39,7 +39,8 @@ import kotlin.math.roundToInt
 internal data class PrintPage(val rows: List<PrintRow>)
 private data class PrintPagination(val revision: Int, val pages: List<PrintPage>)
 internal data class PrintRow(val blockIndex: Int, val top: Float, val item: MobilePageItem? = null,
-                             val reference: EndPreviewParagraph? = null, val title: Boolean = false, val label: String? = null) {
+                             val reference: EndPreviewParagraph? = null, val title: Boolean = false, val label: String? = null,
+                             val lines: PrintLines? = null, val lineCount: Int = 0, val input: Int = -1) {
     // Compose hit-tests the scaled row, so the source target does not depend on zoom or pan.
     val editorBlock: Int? get() = (item as? MobilePageItem.Block)?.takeIf { it.editable }?.blockIndex
     fun printOffsetPx(topMargin: Float, pixelsPerPoint: Float): Int = ((topMargin + top) * pixelsPerPoint).roundToInt()
@@ -57,11 +58,21 @@ internal fun printBibliographyRows(block: Int, entries: List<EndPreviewParagraph
 /** Bounded per-document cache survives editor navigation. Unchanged paragraphs are not remeasured. */
 internal class PrintMeasurements {
     private data class Key(val paragraph: RenderParagraph, val width: Float, val size: Float, val fontScale: Float)
-    private val heights = object : LinkedHashMap<Key, Float>(128, .75f, true) {
+    private val heights = object : LinkedHashMap<Key, PrintLines>(128, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, PrintLines>): Boolean = size > 4096
+    }
+    private val legacyHeights = object : LinkedHashMap<Key, Float>(128, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, Float>): Boolean = size > 4096
     }
     @Synchronized
-    fun paragraph(p: RenderParagraph, width: Float, size: Float, scale: Float, measure: () -> Float): Float =
+    fun legacy(p: RenderParagraph, width: Float, size: Float, scale: Float, measure: () -> Float): Float =
+        legacyHeights.getOrPut(Key(p, width, size, scale), measure)
+
+    data class Snapshot(val items: List<MobilePageItem>, val setup: PageSetup, val size: Float, val scale: Float,
+                        val pages: List<PrintPage>, val tailHeight: Float, val tailAfter: Int)
+    @Volatile var snapshot: Snapshot? = null
+    @Synchronized
+    fun paragraph(p: RenderParagraph, width: Float, size: Float, scale: Float, measure: () -> PrintLines): PrintLines =
         heights.getOrPut(Key(p, width, size, scale), measure)
 }
 
@@ -84,44 +95,34 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
     val pagination by produceState<PrintPagination?>(null, document, result, typography, measurer, fontScale, renderedRevision) {
         value = withContext(Dispatchers.Default) {
             val estimate = PrintMeasure(measurer, typography.bodyLarge.fontSize.value, fontScale, state.printMeasurements)
-            val sheets = mutableListOf<PrintPage>()
-            var rows = mutableListOf<PrintRow>()
-            var cursor = 0f
+            val size = typography.bodyLarge.fontSize.value
+            val body = paginatePrintBody(document.items, setup, size, fontScale, state.printMeasurements.snapshot,
+                measureLines = { estimate.lines(it, setup.contentWidthPoints) },
+                measureBlock = { estimate.height(it, setup.contentWidthPoints) }, checkActive = { ensureActive() })
+            ensureActive()
+            state.printMeasurements.snapshot = body
+            val sheets = body.pages.dropLast(1).toMutableList()
+            var rows = body.pages.lastOrNull()?.rows?.toMutableList() ?: mutableListOf()
+            var cursor = body.tailHeight
             fun nextPage() {
                 if (rows.isEmpty()) return
                 sheets.add(PrintPage(rows))
                 rows = mutableListOf()
                 cursor = 0f
             }
-            fun add(row: PrintRow, height: Float, pageBreak: Boolean = false) {
+            fun atomic(row: PrintRow, height: Float, pageBreak: Boolean = false) {
                 if (pageBreak || cursor + height > setup.contentHeightPoints) nextPage()
                 rows.add(row.copy(top = cursor))
                 cursor += height
-            }
-            var previousAfter = 0
-            for (item in document.items) {
-                ensureActive()
-                val p = (item as? MobilePageItem.Block)?.content as? RenderParagraph
-                if (p == null) {
-                    add(PrintRow(item.blockIndex, 0f, item), estimate.height(item, setup.contentWidthPoints))
-                    previousAfter = 0
-                } else for ((index, fragment) in printParagraphItems(item as MobilePageItem.Block).withIndex()) {
-                    val part = fragment.content as RenderParagraph
-                    val explicit = index > 0 || part.pageBreakBefore
-                    val height = estimate.paragraph(part, setup.contentWidthPoints, previousAfter)
-                    val newPage = explicit || cursor + height > setup.contentHeightPoints
-                    add(PrintRow(item.blockIndex, 0f, fragment), if (newPage) height + minOf(previousAfter.coerceIn(0, 4800), part.beforeTwips.coerceIn(0, 4800)) / 20f else height, newPage)
-                    previousAfter = part.afterTwips
-                }
             }
             val end = document.items.lastOrNull()?.blockIndex ?: 0
             for (row in printBibliographyRows(end, result?.end?.bibliography.orEmpty())) {
                 ensureActive()
                 val height = estimate.reference(checkNotNull(row.reference), setup.contentWidthPoints)
-                add(row, height, pageBreak = row.title)
+                atomic(row, height, pageBreak = row.title)
             }
-            result?.missingNote?.let { add(PrintRow(end, 0f, label = it), 24f) }
-            result?.missingCitations?.forEach { add(PrintRow(end, 0f, label = it), 24f) }
+            result?.missingNote?.let { atomic(PrintRow(end, 0f, label = it), 24f) }
+            result?.missingCitations?.forEach { atomic(PrintRow(end, 0f, label = it), 24f) }
             nextPage()
             PrintPagination(renderedRevision, sheets.ifEmpty { listOf(PrintPage(emptyList())) })
         }
@@ -166,9 +167,14 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
                                         when {
                                             item != null -> {
                                                 val target = row.editorBlock
-                                                DocumentBlock(document.source, item, fonts, tableScroll, previousAfter,
-                                                    onParagraph = target?.let { block -> { onParagraph(block) } },
-                                                    onCitation = target?.let { block -> { citation -> onCitation(block, citation) } })
+                                                val openParagraph = target?.let { block -> { onParagraph(block) } }
+                                                val openCitation = target?.let { block -> { citation: Int -> onCitation(block, citation) } }
+                                                val part = item.paragraph()
+                                                if (row.lines != null && part != null) {
+                                                    MobileParagraph(part, fonts, openParagraph, openCitation, previousAfter,
+                                                        row.lines, row.lineCount)
+                                                } else DocumentBlock(document.source, item, fonts, tableScroll, previousAfter,
+                                                    onParagraph = openParagraph, onCitation = openCitation)
                                                 previousAfter = ((item as? MobilePageItem.Block)?.content as? RenderParagraph)?.afterTwips ?: 0
                                             }
                                             row.reference != null -> PreviewParagraph(row.reference, row.title)
@@ -211,18 +217,192 @@ internal fun RenderParagraph.printFragments(): List<RenderParagraph> {
         afterTwips = if (index == chunks.lastIndex) afterTwips else 0) }
 }
 
+internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, size: Float, scale: Float,
+                               previous: PrintMeasurements.Snapshot? = null,
+                               measureLines: (RenderParagraph) -> PrintLines, measureBlock: (MobilePageItem) -> Float,
+                               checkActive: () -> Unit = {}): PrintMeasurements.Snapshot {
+    val capacity = setup.contentHeightPoints
+    val snapshot = previous?.takeIf { it.setup == setup && it.size == size && it.scale == scale }
+    val sheets = mutableListOf<PrintPage>()
+    var start = 0
+    var reuseTail = false
+    if (snapshot != null) {
+        val common = (0 until minOf(snapshot.items.size, items.size)).firstOrNull {
+            snapshot.items[it] != items[it]
+        } ?: minOf(snapshot.items.size, items.size)
+        if (common == items.size && common == snapshot.items.size) {
+            sheets.addAll(snapshot.pages.dropLast(1))
+            reuseTail = snapshot.pages.isNotEmpty()
+            start = common
+        } else if (common > 0) {
+            // A keepNext chain and the tail of a split paragraph can depend on the changed item.
+            var restart = common - 1
+            while (restart > 0 && items[restart - 1].paragraph()?.print?.keepNext == true) restart--
+            for (sheet in snapshot.pages) {
+                if (sheet.rows.last().input >= restart) break
+                sheets.add(sheet)
+            }
+            while (sheets.isNotEmpty()) {
+                val lastInput = sheets.last().rows.last().input
+                val next = snapshot.pages.getOrNull(sheets.size)?.rows?.firstOrNull()?.input
+                if (lastInput != next) break
+                sheets.removeAt(sheets.lastIndex)
+            }
+            start = sheets.lastOrNull()?.rows?.lastOrNull()?.input?.plus(1) ?: 0
+        }
+    }
+    var rows = if (reuseTail) checkNotNull(snapshot).pages.last().rows.toMutableList() else mutableListOf()
+    var cursor = if (reuseTail) checkNotNull(snapshot).tailHeight else 0f
+    var previousAfter = if (reuseTail) checkNotNull(snapshot).tailAfter else 0
+    fun nextPage() {
+        if (rows.isEmpty()) return
+        sheets.add(PrintPage(rows))
+        rows = mutableListOf()
+        cursor = 0f
+        previousAfter = 0
+    }
+    fun add(row: PrintRow, height: Float) {
+        rows.add(row.copy(top = cursor))
+        cursor += height
+    }
+    fun atomic(row: PrintRow, height: Float, pageBreak: Boolean = false) {
+        if (pageBreak || cursor + height > capacity) nextPage()
+        add(row, height)
+    }
+    for (input in start until items.size) {
+        checkActive()
+        val item = items[input]
+        val paragraph = item.paragraph()
+        if (paragraph == null) {
+            atomic(PrintRow(item.blockIndex, 0f, item, input = input), measureBlock(item))
+            previousAfter = 0
+            continue
+        }
+        val fragments = printParagraphItems(item as MobilePageItem.Block)
+        for ((index, fragment) in fragments.withIndex()) {
+            val part = fragment.content as RenderParagraph
+            if (index > 0 || part.pageBreakBefore) nextPage()
+            val lines = measureLines(part)
+            if (index == fragments.lastIndex && part.print.keepNext && rows.isNotEmpty()) {
+                var chainHeight = part.printBefore(0) + lines.ends.size * lines.height + part.printAfter()
+                var after = part.afterTwips
+                for (successor in input + 1 until items.size) {
+                    val next = items[successor].paragraph()
+                    if (next?.pageBreakBefore == true || chainHeight > capacity) break
+                    if (next == null) {
+                        chainHeight += measureBlock(items[successor])
+                        break
+                    }
+                    val head = next.printFragments().first()
+                    val nextLines = measureLines(head)
+                    val count = if (next.print.keepNext || next.print.keepLines) nextLines.ends.size
+                        else minOf(nextLines.ends.size, if (next.print.widowControl) { if (nextLines.ends.size == 3) 3 else 2 } else 1)
+                    chainHeight += head.printBefore(after) + count * nextLines.height +
+                        if (count == nextLines.ends.size) head.printAfter() else 0f
+                    after = head.afterTwips
+                    if (!next.print.keepNext || next.pageBreaks.isNotEmpty()) break
+                }
+                if (movePrintKeepChain(chainHeight, cursor, capacity)) nextPage()
+            }
+            var from = 0
+            while (from < lines.ends.size) {
+                checkActive()
+                val before = if (from == 0) part.printBefore(previousAfter) else 0f
+                val count = printFittingLines(lines.ends.size - from, capacity - cursor, lines.height, before,
+                    part.printAfter(), rows.isNotEmpty(), part.print.keepLines, part.print.widowControl)
+                if (count == 0) {
+                    nextPage()
+                    continue
+                }
+                val until = from + count
+                val last = until == lines.ends.size
+                val slice = part.printLineSlice(from, until, lines)
+                add(PrintRow(item.blockIndex, 0f, fragment.copy(content = slice), lines = lines, lineCount = count,
+                    input = input), before + count * lines.height + if (last) part.printAfter() else 0f)
+                previousAfter = slice.afterTwips
+                from = until
+                if (!last) nextPage()
+            }
+        }
+    }
+    if (rows.isNotEmpty()) sheets.add(PrintPage(rows))
+    return PrintMeasurements.Snapshot(items, setup, size, scale, sheets, cursor, previousAfter)
+}
+
+private fun MobilePageItem.paragraph(): RenderParagraph? = (this as? MobilePageItem.Block)?.content as? RenderParagraph
+
 private class PrintMeasure(private val measurer: TextMeasurer, private val bodySize: Float, private val fontScale: Float, private val cache: PrintMeasurements) {
     // Layout in paper points independent of zoom. Text measurement uses Android shaping and font fallback.
     private val density = Density(1f, fontScale)
     private val fonts = mutableMapOf<String, FontFamily>()
 
     fun paragraph(p: RenderParagraph, width: Float, previousAfter: Int): Float {
-        val measured = cache.paragraph(p, width, bodySize, fontScale) { measureParagraph(p, width) }
+        val measured = cache.legacy(p, width, bodySize, fontScale) { measureLegacyParagraph(p, width) }
         return measured + (p.beforeTwips.coerceIn(0, 4800) - previousAfter.coerceIn(0, 4800)).coerceAtLeast(0) / 20f +
             p.afterTwips.coerceIn(0, 4800) / 20f + borderInset(p.borders.top) + borderInset(p.borders.bottom)
     }
 
-    private fun measureParagraph(p: RenderParagraph, width: Float): Float {
+    fun lines(p: RenderParagraph, width: Float): PrintLines =
+        cache.paragraph(p, width, bodySize, fontScale) { measureLines(p, width) }
+
+    private data class FontMetric(val size: Float, val family: FontFamily, val bold: Boolean, val italic: Boolean)
+    private val metrics = mutableMapOf<FontMetric, Float>()
+    private val paperDensity = Density(4f, fontScale)
+
+    private fun measureLines(p: RenderParagraph, width: Float): PrintLines {
+        val empty = p.runs.all { it.text.isEmpty() } && p.list == null
+        val mark = p.print.mark
+        val size = (mark.sizePoints ?: p.defaultFontSize(bodySize)).coerceIn(6f, 100f)
+        fun font(format: RunFormat) = FontMetric(format.sizePoints?.coerceIn(6f, 100f) ?: size,
+            format.font?.let { fonts.getOrPut(it) { availableFont(it) } } ?: FontFamily.SansSerif,
+            format.bold ?: (p.headingLevel != null), format.italic == true)
+        fun FontMetric.style() = TextStyle(fontFamily = family, fontSize = size.sp,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal)
+        fun natural(metric: FontMetric): Float = metrics.getOrPut(metric) {
+            val sample = measurer.measure(AnnotatedString("Hg"), metric.style(), density = paperDensity, skipCache = true)
+            (sample.getLineBottom(0) - sample.getLineTop(0)) / paperDensity.density
+        }
+        val markFont = font(mark)
+        val single = if (empty) natural(markFont) else p.runs.maxOfOrNull { natural(font(it.format)) } ?: natural(markFont)
+        val scaledLine = printLineSpacing(single, p.lineSpacing, p.lineRule)
+        val line = scaledLine / fontScale
+        if (empty) return PrintLines(listOf(0), scaledLine, size)
+        val left = p.leftTwips.coerceIn(0, 2400) / 20f
+        val hanging = p.hangingTwips.coerceIn(0, 1440) / 20f
+        val indent = if (left == 0f) p.list?.let { 16f + 10 * it.level } ?: 0f else left
+        val first = if (p.list != null && hanging == 0f) (indent - 16f).coerceAtLeast(0f)
+            else (indent - hanging + p.firstLineTwips.coerceIn(0, 1440) / 20f).coerceAtLeast(0f)
+        val text = buildAnnotatedString {
+            p.list?.let { append(it.label); append("\u00a0\u00a0") }
+            // Match the display's run grouping so shaping doesn't break at arbitrary XML boundaries.
+            var pending: RenderRun? = null
+            fun flush() {
+                val run = pending ?: return
+                withStyle(font(run.format).style().toSpanStyle()) { append(run.text) }
+            }
+            for (run in p.runs) {
+                val previous = pending
+                if (previous != null && previous.format == run.format && previous.citationNumber == run.citationNumber) {
+                    pending = previous.copy(text = previous.text + run.text)
+                } else {
+                    flush()
+                    pending = run
+                }
+            }
+            flush()
+        }
+        val style = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = size.sp, lineHeight = line.sp,
+            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
+            textIndent = TextIndent(firstLine = first.sp, restLine = indent.sp))
+        val widthPx = ((width - borderInset(p.borders.left) - borderInset(p.borders.right)) * paperDensity.density)
+            .roundToInt().coerceIn(1, 30_000)
+        val layout = measurer.measure(text, style, constraints = Constraints(maxWidth = widthPx),
+            density = paperDensity, skipCache = true)
+        return PrintLines(List(layout.lineCount) { layout.getLineEnd(it) }, scaledLine, size)
+    }
+
+    private fun measureLegacyParagraph(p: RenderParagraph, width: Float): Float {
         val size = p.defaultFontSize(bodySize)
         val line = p.lineHeightPoints(size)
         val indent = (p.leftTwips.coerceIn(0, 2400) / 20f).takeIf { it > 0 } ?: (p.list?.let { 16f + 10 * it.level } ?: 0f)

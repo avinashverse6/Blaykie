@@ -25,7 +25,13 @@ internal data class RenderParagraph(
     val headingLevel: Int? = null, val list: RenderListItem? = null,
     val borders: RenderBorders = RenderBorders(),
     val pageBreakBefore: Boolean = false, val pageBreaks: List<Int> = emptyList(), val shadingRgb: Int? = null,
+    val print: PrintParagraphProperties = PrintParagraphProperties(),
 ) : RenderBlock
+
+internal data class PrintParagraphProperties(
+    val mark: RunFormat = RunFormat(), val keepNext: Boolean = false,
+    val keepLines: Boolean = false, val widowControl: Boolean = true,
+)
 
 internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList(),
                                 val siblingEntries: List<String> = emptyList(), val inlineExtent: InlineImageExtent? = null) : RenderBlock {

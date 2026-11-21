@@ -213,7 +213,13 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
             RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")),
             layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks,
-            layers.asReversed().firstNotNullOfOrNull { it.get("shd").rgbAttr("fill") })
+            layers.asReversed().firstNotNullOfOrNull { it.get("shd").rgbAttr("fill") },
+            PrintParagraphProperties(
+                layers.fold(baseRun) { mark, layer -> mark.overlay(runFormat(layer.get("rPr"))) },
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("keepNext") } == true,
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("keepLines") } == true,
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("widowControl") } != false,
+            ))
         if (pieces.none { it is RenderBlock }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {

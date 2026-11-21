@@ -374,6 +374,47 @@ class DocumentRenderReaderTest {
     }
 
     private fun document(body: String) = "<w:document $ns><w:body>$body</w:body></w:document>"
+    @Test fun letterThesisPaginationKeepsBlankMarksWidowsAndHeadingChains() {
+        val styles = """<w:styles $ns><w:docDefaults>
+            <w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+            <w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+            </w:docDefaults><w:style w:type="paragraph" w:styleId="Heading1"><w:pPr><w:keepNext/></w:pPr></w:style>
+            </w:styles>"""
+        val setup = """<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440"
+            w:left="1440" w:right="1440" w:bottom="1440"/></w:sectPr>"""
+        val blank = """<w:p><w:pPr><w:rPr><w:sz w:val="28"/><w:b/></w:rPr></w:pPr></w:p>"""
+        val heading = """<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>"""
+        fun lines(count: Int) = "<w:p><w:r>" + List(count) { "<w:t>Thesis line</w:t>" }.joinToString("<w:br/>") + "</w:r></w:p>"
+        fun paginate(body: String): List<PrintPage> {
+            val model = render(body + setup, styles)
+            assertEquals(648f, model.pageSetup.contentHeightPoints, .001f)
+            val items = model.blocks.mapIndexed { index, block -> MobilePageItem.Block(index, block) }
+            return paginatePrintBody(items, model.pageSetup, 12f, 1f, measureLines = { paragraph ->
+                val mark = paragraph.print.mark
+                assertEquals("Times New Roman", mark.font)
+                val size = checkNotNull(mark.sizePoints)
+                val text = paragraph.runs.joinToString("") { it.text }
+                val ends = text.mapIndexedNotNull { index, ch -> (index + 1).takeIf { ch == '\n' } } + text.length
+                PrintLines(ends, printLineSpacing(size * 1.15f, paragraph.lineSpacing, paragraph.lineRule), size)
+            }, measureBlock = { error("Only paragraphs expected") }).pages
+        }
+        val long = paginate(lines(28) + lines(10))
+        assertEquals(3, long.first().rows.last().lineCount)
+        assertEquals(7, long[1].rows.first().lineCount)
+        val blankPages = paginate(blank.repeat(9) + heading + lines(1))
+        assertEquals(11, blankPages.single().rows.size)
+        assertEquals(0f, blankPages.single().rows.first().top, .001f)
+        assertEquals(9 * 14 * 1.15f * 1.5f, blankPages.single().rows[9].top, .001f)
+        val kept = paginate(lines(30) + heading + lines(1))
+        assertEquals(1, kept.first().rows.size)
+        assertEquals(listOf(1, 2), kept[1].rows.map { it.blockIndex })
+        val orphan = paginate(lines(30) + lines(4))
+        assertEquals(1, orphan.first().rows.size)
+        assertEquals(4, orphan[1].rows.first().lineCount)
+        val single = paginate(lines(30) + lines(1))
+        assertEquals(2, single.single().rows.size) // A complete one-line paragraph is not an orphan fragment.
+    }
+
     private fun render(body: String, styles: String? = null, numbering: String? = null): DocumentRenderModel {
         val xml = document(body)
         return readDocumentRenderModel(docx(xml, styles, numbering), xml)
