@@ -411,6 +411,12 @@ class DocumentRenderReaderTest {
         val orphan = paginate(lines(30) + lines(4))
         assertEquals(1, orphan.first().rows.size)
         assertEquals(4, orphan[1].rows.first().lineCount)
+        val withoutWidowControl = lines(4).replace("<w:p>", """<w:p><w:pPr><w:widowControl w:val="0"/></w:pPr>""")
+        assertEquals(1, paginate(lines(30) + withoutWidowControl).first().rows.last().lineCount)
+        val keepLines = lines(4).replace("<w:p>", "<w:p><w:pPr><w:keepLines/></w:pPr>")
+        assertEquals(1, paginate(lines(28) + keepLines).first().rows.size)
+        val forced = blank.replace("<w:pPr>", "<w:pPr><w:pageBreakBefore/>")
+        assertEquals(0f, paginate(lines(1) + forced + heading + lines(1))[1].rows.first().top, .001f)
         val single = paginate(lines(30) + lines(1))
         assertEquals(2, single.single().rows.size) // A complete one-line paragraph is not an orphan fragment.
     }

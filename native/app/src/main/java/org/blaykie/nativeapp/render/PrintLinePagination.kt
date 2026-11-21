@@ -57,9 +57,6 @@ internal fun RenderParagraph.printLineSlice(from: Int, endLine: Int, lines: Prin
             startOffset = end
         }
     }
-    val last = sliced.removeAt(sliced.lastIndex)
-        if (last.text.length > 1) sliced += last.copy(text = last.text.dropLast(1))
-    }
     val last = endLine == lines.ends.size
     return copy(runs = sliced, list = list.takeIf { from == 0 },
         leftTwips = if (from > 0 && leftTwips == 0) (list?.let { 16 + 10 * it.level } ?: 0) * 20 else leftTwips,
