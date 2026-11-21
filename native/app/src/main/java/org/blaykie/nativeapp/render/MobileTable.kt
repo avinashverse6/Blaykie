@@ -10,8 +10,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Constraints
@@ -38,14 +41,30 @@ internal fun MobileTableBand(source: File, widths: List<Int>, band: TableBand,
     if (widths.isEmpty()) return
     val columns = remember(widths) { widths.map { (it / 15f).coerceIn(76f, 240f).dp } }
     val outline = MaterialTheme.colorScheme.outlineVariant
+    val paper = LocalDarkPaper.current
     Layout(
         modifier = Modifier.horizontalScroll(scroll),
         content = {
             band.cells.forEach { cell ->
-                Column(Modifier.padding(6.dp)) {
-                    cell.blocks.forEach { MobileCellBlock(source, it, fonts) }
+                val shade = paper?.let { page -> cell.shadingRgb?.let { printColor(it, page.onSurface, page.background) } }
+                CompositionLocalProvider(LocalDarkPaper provides if (shade != null) paper?.copy(background = shade) else paper) {
+                    Column(Modifier.padding(6.dp)) {
+                        cell.blocks.forEach { MobileCellBlock(source, it, fonts) }
+                    }
                 }
-                Spacer(Modifier.border(1.dp, outline))
+                Spacer(if (paper == null) Modifier.border(1.dp, outline) else Modifier.drawBehind {
+                    if (shade != null) drawRect(shade)
+                    val width = 1.dp.toPx().coerceAtLeast(1f)
+                    val x = width / 2
+                    val right = size.width - x
+                    val bottom = size.height - x
+                    fun edge(i: Int, from: Offset, to: Offset) = drawLine(
+                        printColor(cell.borderColors.getOrNull(i), outline, shade ?: paper.background), from, to, width)
+                    edge(0, Offset(0f, x), Offset(size.width, x))
+                    edge(1, Offset(0f, bottom), Offset(size.width, bottom))
+                    edge(2, Offset(x, 0f), Offset(x, size.height))
+                    edge(3, Offset(right, 0f), Offset(right, size.height))
+                })
             }
         },
     ) { children, constraints ->
@@ -73,8 +92,9 @@ internal fun MobileTableBand(source: File, widths: List<Int>, band: TableBand,
         }
         layout(constraints.constrainWidth(offsets.last()), constraints.constrainHeight(tops.last())) {
             for ((index, cell) in band.cells.withIndex()) {
+                if (paper != null) borders[index].placeRelative(offsets[cell.column], tops[cell.row])
                 content[index].placeRelative(offsets[cell.column], tops[cell.row])
-                borders[index].placeRelative(offsets[cell.column], tops[cell.row])
+                if (paper == null) borders[index].placeRelative(offsets[cell.column], tops[cell.row])
             }
         }
     }

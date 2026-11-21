@@ -21,6 +21,9 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.LinkAnnotation
@@ -49,7 +52,7 @@ import org.blaykie.nativeapp.docx.DocxProject
 import org.blaykie.nativeapp.document.DocumentView
 
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentState, footer: BibliographyViewState?,
                                   onViewChanged: () -> Unit, onParagraph: (Int) -> Unit, onCitation: (Int, Int) -> Unit) {
     var failed by remember(project, state.revision) { mutableStateOf(false) }
@@ -70,6 +73,7 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
     val fonts = remember { mutableMapOf<String, FontFamily?>() }
     val tableScroll = remember(state) { mutableMapOf<Int, ScrollState>() }
     val content = state.page
+    val lightPageAvailable = state.view == DocumentView.Print && MaterialTheme.colorScheme.background.luminance() < .5f
     val list = if (state.view == DocumentView.Print) state.printScroll else state.scroll
     var showToggle by remember(state, state.view) { mutableStateOf(true) }
     val threshold = with(LocalDensity.current) { 12.dp.toPx() }
@@ -94,7 +98,19 @@ internal fun MobileDocumentScreen(project: DocxProject, state: MobileDocumentSta
         if (content != null && state.view == DocumentView.Mobile) state.restoreMobileFocus(content)
     }
     Column(Modifier.fillMaxSize()) {
-        if (showToggle) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp),
+        if (showToggle && lightPageAvailable) {
+            FlowRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Light page", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 6.dp))
+                    Switch(checked = state.lightPrintPage, onCheckedChange = { state.lightPrintPage = it; onViewChanged() },
+                        modifier = Modifier.semantics { contentDescription = "Light page" })
+                }
+                CompactDocumentViewToggle(state.view) { view ->
+                    if (state.view != view) { state.switchView(view); onViewChanged() }
+                }
+            }
+        } else if (showToggle) Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 3.dp),
             contentAlignment = Alignment.CenterEnd) {
             CompactDocumentViewToggle(state.view) { view ->
                 if (state.view != view) { state.switchView(view); onViewChanged() }
@@ -173,14 +189,17 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
                              onParagraph: (() -> Unit)? = null, onCitation: ((Int) -> Unit)? = null,
                              previousAfterTwips: Int = 0) {
     val body = MaterialTheme.typography.bodyLarge
-    val background = MaterialTheme.colorScheme.background
-    val foreground = MaterialTheme.colorScheme.onBackground
+    val paper = LocalDarkPaper.current
+    val paragraphShade = paper?.let { page -> paragraph.shadingRgb?.let { printColor(it, page.onSurface, page.background) } }
+    val background = paragraphShade ?: paper?.background ?: MaterialTheme.colorScheme.background
+    val foreground = paper?.onSurface ?: MaterialTheme.colorScheme.onBackground
     val heading = paragraph.headingLevel
     val defaultSize = paragraph.defaultFontSize(body.fontSize.value)
-    val citationBackground = MaterialTheme.colorScheme.primaryContainer
-    val citationForeground = MaterialTheme.colorScheme.onPrimaryContainer
+    val colors = MaterialTheme.colorScheme
+    val citationBackground = if (paper != null) printColor(null, colors.primaryContainer, background) else colors.primaryContainer
+    val citationForeground = if (paper != null) printColor(null, colors.onPrimaryContainer, citationBackground) else colors.onPrimaryContainer
     val liveCitationHandler by rememberUpdatedState(onCitation)
-    val text = remember(paragraph, body, background, foreground, citationBackground, citationForeground, onCitation != null) {
+    val text = remember(paragraph, body, background, foreground, paper, citationBackground, citationForeground, onCitation != null) {
         buildAnnotatedString {
             paragraph.list?.let { append(it.label); append("\u00a0\u00a0") }
             // Keep same-format runs together so shaping can cross Word's run boundaries.
@@ -195,13 +214,19 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
                 val color = format.rgb?.let { Color(it or 0xff000000.toInt()) } ?: foreground
                 val contrast = (maxOf(color.luminance(), background.luminance()) + .05f) /
                     (minOf(color.luminance(), background.luminance()) + .05f)
+                val highlight = paper?.let { format.shadingRgb?.let { rgb -> printColor(rgb, foreground, background) } }
                 withStyle(SpanStyle(
                     fontFamily = family, fontSize = (format.sizePoints?.coerceIn(6f, 100f) ?: defaultSize).sp,
                     fontWeight = if (format.bold ?: (heading != null)) FontWeight.Bold else FontWeight.Normal,
                     fontStyle = if (format.italic == true) FontStyle.Italic else FontStyle.Normal,
                     textDecoration = if (format.underline == true) TextDecoration.Underline else TextDecoration.None,
-                    color = if (citation != null) citationForeground else if (contrast >= 3f) color else foreground,
-                    background = if (citation != null) citationBackground else Color.Unspecified,
+                    color = when {
+                        citation != null -> citationForeground
+                        paper != null -> printColor(format.rgb, foreground, highlight ?: background)
+                        contrast >= 3f -> color
+                        else -> foreground
+                    },
+                    background = if (citation != null) citationBackground else highlight ?: Color.Unspecified,
                 )) {
                     val number = citation
                     if (number != null && onCitation != null) {
@@ -212,8 +237,9 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
                 buffer.setLength(0)
             }
             for (run in paragraph.runs) {
-                if (run.format != previous || run.citationNumber != citation) {
-                    flush(); previous = run.format; citation = run.citationNumber
+                val format = if (paper == null && run.format.shadingRgb != null) run.format.copy(shadingRgb = null) else run.format
+                if (format != previous || run.citationNumber != citation) {
+                    flush(); previous = format; citation = run.citationNumber
                 }
                 buffer.append(run.text)
             }
@@ -237,7 +263,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
             val coordinate = if (far) cross - width / 2f else width / 2f
             val start = if (horizontal) Offset(0f, coordinate) else Offset(coordinate, 0f)
             val end = if (horizontal) Offset(size.width, coordinate) else Offset(coordinate, size.height)
-            val color = border.rgb?.let { Color(it or 0xff000000.toInt()) } ?: foreground
+            val color = if (paper != null) printColor(border.rgb, foreground, background) else border.rgb?.let { Color(it or 0xff000000.toInt()) } ?: foreground
             drawLine(color, start, end, strokeWidth = width)
         }
         edge(borders.top, horizontal = true, far = false)
@@ -253,7 +279,7 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
     Text(text, modifier = Modifier.fillMaxWidth().then(interaction).padding(
         top = (before / 20f).dp,
         bottom = (paragraph.afterTwips.coerceIn(0, 4800) / 20f).dp,
-    ).then(edgeModifier), color = foreground, style = body.copy(fontFamily = FontFamily.SansSerif,
+    ).then(if (paragraphShade == null) Modifier else Modifier.background(paragraphShade)).then(edgeModifier), color = foreground, style = body.copy(fontFamily = FontFamily.SansSerif,
         fontSize = defaultSize.sp, lineHeight = line.sp,
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
         textIndent = TextIndent(firstLine = first.sp, restLine = continuation.sp),

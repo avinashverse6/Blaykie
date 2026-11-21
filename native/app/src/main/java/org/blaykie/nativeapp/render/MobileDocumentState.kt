@@ -18,8 +18,9 @@ internal data class MobilePage(val source: File, val items: List<MobilePageItem>
                                val bibliographyBlocks: Set<Int> = emptySet())
 
 /** The page survives trips into the editor. Only changed paragraphs are parsed on return. */
-internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile) {
+internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile, initialLightPrintPage: Boolean = false) {
     val scroll = LazyListState()
+    var lightPrintPage by mutableStateOf(initialLightPrintPage)
     val printScroll = LazyListState()
     val printPan = ScrollState(0)
     var printZoom by mutableFloatStateOf(1f)

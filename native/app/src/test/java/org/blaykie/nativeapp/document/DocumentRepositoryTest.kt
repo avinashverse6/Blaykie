@@ -39,6 +39,18 @@ class DocumentRepositoryTest {
         assertEquals(DocumentView.Mobile, reopened.load(mobile.id)?.state?.view)
     }
 
+    @Test fun lightPrintPageRoundTripsAndDefaultsOffForOldState() {
+        val files = temp.newFolder()
+        val repository = DocumentRepository(files)
+        val chosen = pickedDocx().inputStream().use { repository.create("White.docx", it) }
+        val old = pickedDocx().inputStream().use { repository.create("Old.docx", it) }
+        stateFile(old).writeText("""{"displayName":"Old.docx","createdAtMillis":1,"lastEditedAtMillis":1,"view":"Print"}""")
+        repository.saveState(chosen.id, chosen.state.copy(lightPrintPage = true))
+        val reopened = DocumentRepository(files)
+        assertEquals(true, reopened.load(chosen.id)?.state?.lightPrintPage)
+        assertEquals(false, reopened.load(old.id)?.state?.lightPrintPage)
+    }
+
     @Test fun createsListsLoadsAndDeletesIndependentDocuments() {
         val filesDir = temp.newFolder()
         var clock = 10L
@@ -133,6 +145,6 @@ class DocumentRepositoryTest {
         assertEquals(before, stateFile.readText())
         assertFalse(before.contains(secret))
         assertEquals(setOf("displayName", "createdAtMillis", "lastEditedAtMillis", "citations", "bibliography",
-            "citationStyle", "citationLanguage", "position", "view", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
+            "citationStyle", "citationLanguage", "position", "view", "lightPrintPage", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
     }
 }

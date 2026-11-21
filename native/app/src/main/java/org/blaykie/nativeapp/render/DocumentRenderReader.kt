@@ -46,13 +46,19 @@ private fun Element?.value(name: String) = get(name).attr("val")
 private fun Element?.enabled(name: String) = get(name)?.let { it.attr("val") !in setOf("0", "false", "off", "none") }
 
 private fun RunFormat.overlay(other: RunFormat) = RunFormat(other.bold ?: bold, other.italic ?: italic,
-    other.underline ?: underline, other.font ?: font, other.sizePoints ?: sizePoints, other.rgb ?: rgb)
+    other.underline ?: underline, other.font ?: font, other.sizePoints ?: sizePoints, other.rgb ?: rgb, other.shadingRgb ?: shadingRgb)
+internal fun Element?.rgbAttr(name: String): Int? = attr(name)?.takeIf { it.length == 6 }?.toIntOrNull(16)
+private val highlightColors = mapOf("black" to 0x000000, "blue" to 0x0000ff, "cyan" to 0x00ffff,
+    "green" to 0x00ff00, "magenta" to 0xff00ff, "red" to 0xff0000, "yellow" to 0xffff00,
+    "white" to 0xffffff, "darkBlue" to 0x000080, "darkCyan" to 0x008080, "darkGreen" to 0x008000,
+    "darkMagenta" to 0x800080, "darkRed" to 0x800000, "darkYellow" to 0x808000, "darkGray" to 0x808080, "lightGray" to 0xc0c0c0)
+
 private fun runFormat(properties: Element?): RunFormat {
     val fonts = properties.get("rFonts")
     return RunFormat(properties.enabled("b"), properties.enabled("i"), properties.enabled("u"),
         fonts.attr("ascii") ?: fonts.attr("hAnsi") ?: fonts.attr("cs"),
         properties.value("sz")?.toIntOrNull()?.takeIf { it > 0 }?.div(2f),
-        properties.value("color")?.takeIf { it.length == 6 }?.toIntOrNull(16))
+        properties.get("color").rgbAttr("val"), highlightColors[properties.value("highlight")] ?: properties.get("shd").rgbAttr("fill"))
 }
 
 private class Renderer(stylePart: Element?, numberingPart: Element?, private val images: Map<String, String>) {
@@ -206,7 +212,8 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
             RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")),
-            layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks)
+            layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks,
+            layers.asReversed().firstNotNullOfOrNull { it.get("shd").rgbAttr("fill") })
         if (pieces.none { it is RenderBlock }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {

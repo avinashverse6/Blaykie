@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontFamily
@@ -72,7 +73,9 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
     val setup = document.setup
     val typography = MaterialTheme.typography
     val colors = MaterialTheme.colorScheme
-    val paperColors = lightColorScheme(primary = colors.primary, primaryContainer = colors.primaryContainer,
+    val darkPaper = colors.background.luminance() < .5f && !state.lightPrintPage
+    val paper = if (darkPaper) colors.surface else Color.White
+    val paperColors = if (darkPaper) colors.copy(background = paper, onBackground = colors.onSurface) else lightColorScheme(primary = colors.primary, primaryContainer = colors.primaryContainer,
         onPrimaryContainer = colors.onPrimaryContainer, background = Color.White, surface = Color.White)
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val fontScale = LocalDensity.current.fontScale
@@ -129,7 +132,7 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
         state.printZoom = (state.printZoom * change).coerceIn(1f, 3f)
         if (state.printZoom > 1f) pan.dispatchRawDelta(-offset.x)
     }
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xffdedee0))
+    BoxWithConstraints(Modifier.fillMaxSize().background(if (darkPaper) Color(0xff111218) else Color(0xffdedee0))
         .transformable(transform, canPan = { false }, lockRotationOnZoomPan = true)) {
         val density = LocalDensity.current
         val sheetWidth = (maxWidth - 16.dp).coerceAtLeast(1.dp)
@@ -149,10 +152,12 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(sheets) { pageIndex, page ->
-                        CompositionLocalProvider(LocalDensity provides Density(scale, density.fontScale)) {
+                        CompositionLocalProvider(LocalDensity provides Density(scale, density.fontScale),
+                            LocalDarkPaper provides if (darkPaper) DarkPaper(paper, paperColors.onSurface) else null,
+                            LocalContentColor provides if (darkPaper) paperColors.onSurface else LocalContentColor.current) {
                             MaterialTheme(colorScheme = paperColors, typography = typography) {
                                 Column(Modifier.fillMaxWidth().heightIn(min = (setup.heightTwips / 20f).dp)
-                                    .shadow(3.dp, RectangleShape).background(Color.White)
+                                    .shadow(3.dp, RectangleShape).background(paper)
                                     .absolutePadding(left = (setup.leftTwips / 20f).dp, right = (setup.rightTwips / 20f).dp,
                                         top = (setup.topTwips / 20f).dp, bottom = (setup.bottomTwips / 20f).dp)) {
                                     var previousAfter = 0

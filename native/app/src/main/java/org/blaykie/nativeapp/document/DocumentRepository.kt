@@ -39,6 +39,7 @@ internal data class DocumentState(
     val citationLanguage: String = "en-US",
     val position: DocumentPosition = DocumentPosition(),
     val view: DocumentView = DocumentView.Mobile,
+    val lightPrintPage: Boolean = false,
     val schemaVersion: Int = DOCUMENT_SCHEMA_VERSION,
     val citationLanguageExplicit: Boolean = !citationLanguage.equals("en-US", ignoreCase = true),
 )

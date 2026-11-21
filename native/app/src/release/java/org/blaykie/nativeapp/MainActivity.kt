@@ -200,7 +200,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations(), view = mobile.view)
+            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations(), view = mobile.view, lightPrintPage = mobile.lightPrintPage)
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
@@ -315,7 +315,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         activeStore = opened.store
         activeId = opened.id
         accept(loaded)
-        mobile = MobileDocumentState(opened.state.position, opened.state.view)
+        mobile = MobileDocumentState(opened.state.position, opened.state.view, opened.state.lightPrintPage)
         selectedCitation = null
         session?.let(::recordDocumentState)
         if (!restoring) navigate(Screen.DOCUMENT)

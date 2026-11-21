@@ -9,7 +9,8 @@ internal fun table(table: Element, readBlocks: (Element) -> List<RenderBlock>): 
     val widths = table.get("tblGrid")?.children()?.filter { it.word("gridCol") }?.take(MAX_COLUMNS)
         ?.map { it.attr("w")?.toIntOrNull()?.takeIf { width -> width > 0 } ?: DEFAULT_WIDTH_TWIPS }
         ?.toMutableList() ?: mutableListOf()
-    data class Cell(val row: Int, val column: Int, val span: Int, val blocks: List<RenderBlock>, var rows: Int = 1)
+    data class Cell(val row: Int, val column: Int, val span: Int, val blocks: List<RenderBlock>,
+                    val shading: Int?, val borderColors: List<Int?>, var rows: Int = 1)
     val allCells = mutableListOf<Cell>()
     var previous = emptyMap<Int, Cell>()
     var row = 0
@@ -28,7 +29,12 @@ internal fun table(table: Element, readBlocks: (Element) -> List<RenderBlock>): 
                 joined.rows++
                 merges[column] = joined
             } else {
-                val cell = Cell(row, column, span, readBlocks(tc))
+                val cellBorders = properties.get("tcBorders")
+                val tableBorders = table.get("tblPr").get("tblBorders")
+                val colors = listOf("top", "bottom", "left", "right").map { edge ->
+                    cellBorders.get(edge).rgbAttr("color") ?: tableBorders.get(edge).rgbAttr("color")
+                }
+                val cell = Cell(row, column, span, readBlocks(tc), properties.get("shd").rgbAttr("fill"), colors)
                 allCells.add(cell)
                 if (restart) merges[column] = cell
             }
@@ -40,7 +46,7 @@ internal fun table(table: Element, readBlocks: (Element) -> List<RenderBlock>): 
         previous = merges
         row++
     }
-    return RenderTable(widths, row, allCells.map { RenderCell(it.row, it.column, it.rows, it.span, it.blocks) })
+    return RenderTable(widths, row, allCells.map { RenderCell(it.row, it.column, it.rows, it.span, it.blocks, it.shading, it.borderColors) })
 }
 
 internal data class TableBand(val rows: Int, val cells: List<RenderCell>)

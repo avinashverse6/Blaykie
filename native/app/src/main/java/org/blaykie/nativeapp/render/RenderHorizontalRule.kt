@@ -60,6 +60,7 @@ private fun points(value: String): Float? = value.trim().let {
 
 @Composable
 internal fun MobileHorizontalRule(rule: RenderHorizontalRule) {
-    val color = rule.rgb?.let { Color(it or 0xff000000.toInt()) } ?: MaterialTheme.colorScheme.onSurface
+    val paper = LocalDarkPaper.current
+    val color = if (paper != null) printColor(rule.rgb, paper.onSurface, paper.background) else rule.rgb?.let { Color(it or 0xff000000.toInt()) } ?: MaterialTheme.colorScheme.onSurface
     HorizontalDivider(Modifier.fillMaxWidth().padding(vertical = 4.dp), thickness = rule.thicknessPoints.dp, color = color)
 }

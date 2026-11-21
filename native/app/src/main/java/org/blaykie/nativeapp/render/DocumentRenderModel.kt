@@ -10,7 +10,7 @@ internal data class RenderListItem(val kind: RenderListKind, val level: Int, val
 internal data class RenderRun(val text: String, val format: RunFormat, val citationNumber: Int? = null)
 internal data class RunFormat(
     val bold: Boolean? = null, val italic: Boolean? = null, val underline: Boolean? = null,
-    val font: String? = null, val sizePoints: Float? = null, val rgb: Int? = null,
+    val font: String? = null, val sizePoints: Float? = null, val rgb: Int? = null, val shadingRgb: Int? = null,
 )
 internal data class RenderBorder(val widthEighthPoints: Int, val rgb: Int?, val spacePoints: Int)
 internal data class RenderBorders(val top: RenderBorder? = null, val bottom: RenderBorder? = null,
@@ -24,7 +24,7 @@ internal data class RenderParagraph(
     val leftTwips: Int = 0, val hangingTwips: Int = 0, val firstLineTwips: Int = 0,
     val headingLevel: Int? = null, val list: RenderListItem? = null,
     val borders: RenderBorders = RenderBorders(),
-    val pageBreakBefore: Boolean = false, val pageBreaks: List<Int> = emptyList(),
+    val pageBreakBefore: Boolean = false, val pageBreaks: List<Int> = emptyList(), val shadingRgb: Int? = null,
 ) : RenderBlock
 
 internal data class RenderImage(val entryName: String?, val description: String?, val fallbackEntries: List<String> = emptyList(),
@@ -48,4 +48,5 @@ internal fun List<RenderBlock>.groupImageFailures(): List<RenderBlock> {
 internal data class RenderTable(val columnWidthsTwips: List<Int>, val rowCount: Int, val cells: List<RenderCell>) : RenderBlock
 internal data class RenderCell(
     val row: Int, val column: Int, val rowSpan: Int, val columnSpan: Int, val blocks: List<RenderBlock>,
+    val shadingRgb: Int? = null, val borderColors: List<Int?> = emptyList(),
 )
