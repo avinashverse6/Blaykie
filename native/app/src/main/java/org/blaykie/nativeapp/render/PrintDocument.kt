@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -40,7 +41,8 @@ internal data class PrintPage(val rows: List<PrintRow>)
 private data class PrintPagination(val revision: Int, val pages: List<PrintPage>)
 internal data class PrintRow(val blockIndex: Int, val top: Float, val item: MobilePageItem? = null,
                              val reference: EndPreviewParagraph? = null, val title: Boolean = false, val label: String? = null,
-                             val lines: PrintLines? = null, val lineCount: Int = 0, val input: Int = -1) {
+                             val lines: PrintLines? = null, val lineCount: Int = 0, val input: Int = -1,
+                             val firstLine: Int = 0, val paragraphHeight: Float = 0f) {
     // Compose hit-tests the scaled row, so the source target does not depend on zoom or pan.
     val editorBlock: Int? get() = (item as? MobilePageItem.Block)?.takeIf { it.editable }?.blockIndex
     fun printOffsetPx(topMargin: Float, pixelsPerPoint: Float): Int = ((topMargin + top) * pixelsPerPoint).roundToInt()
@@ -58,8 +60,9 @@ internal fun printBibliographyRows(block: Int, entries: List<EndPreviewParagraph
 /** Bounded per-document cache survives editor navigation. Unchanged paragraphs are not remeasured. */
 internal class PrintMeasurements {
     private data class Key(val paragraph: RenderParagraph, val width: Float, val size: Float, val fontScale: Float)
-    private val heights = object : LinkedHashMap<Key, PrintLines>(128, .75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, PrintLines>): Boolean = size > 4096
+    private data class LayoutKey(val geometry: Key, val ink: PrintInk)
+    private val heights = object : LinkedHashMap<LayoutKey, PrintLines>(128, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<LayoutKey, PrintLines>): Boolean = size > 4096
     }
     private val legacyHeights = object : LinkedHashMap<Key, Float>(128, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Key, Float>): Boolean = size > 4096
@@ -69,11 +72,11 @@ internal class PrintMeasurements {
         legacyHeights.getOrPut(Key(p, width, size, scale), measure)
 
     data class Snapshot(val items: List<MobilePageItem>, val setup: PageSetup, val size: Float, val scale: Float,
-                        val pages: List<PrintPage>, val tailHeight: Float, val tailAfter: Int)
+                        val pages: List<PrintPage>, val tailHeight: Float, val tailAfter: Int, val ink: PrintInk?)
     @Volatile var snapshot: Snapshot? = null
     @Synchronized
-    fun paragraph(p: RenderParagraph, width: Float, size: Float, scale: Float, measure: () -> PrintLines): PrintLines =
-        heights.getOrPut(Key(p, width, size, scale), measure)
+    fun paragraph(p: RenderParagraph, width: Float, size: Float, scale: Float, ink: PrintInk, measure: () -> PrintLines): PrintLines =
+        heights.getOrPut(LayoutKey(Key(p, width, size, scale), ink), measure)
 }
 
 @Composable
@@ -88,16 +91,18 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
     val paper = if (darkPaper) colors.surface else Color.White
     val paperColors = if (darkPaper) colors.copy(background = paper, onBackground = colors.onSurface) else lightColorScheme(primary = colors.primary, primaryContainer = colors.primaryContainer,
         onPrimaryContainer = colors.onPrimaryContainer, background = Color.White, surface = Color.White)
+    val ink = PrintInk(if (darkPaper) DarkPaper(paper, paperColors.onSurface) else null,
+        paperColors.background, paperColors.onBackground, paperColors.primaryContainer, paperColors.onPrimaryContainer)
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val fontScale = LocalDensity.current.fontScale
     val result = footer?.content
     val renderedRevision = state.renderedRevision
-    val pagination by produceState<PrintPagination?>(null, document, result, typography, measurer, fontScale, renderedRevision) {
+    val pagination by produceState<PrintPagination?>(null, document, result, typography, measurer, fontScale, renderedRevision, ink) {
         value = withContext(Dispatchers.Default) {
-            val estimate = PrintMeasure(measurer, typography.bodyLarge.fontSize.value, fontScale, state.printMeasurements)
+            val estimate = PrintMeasure(measurer, typography.bodyLarge.fontSize.value, fontScale, state.printMeasurements, ink)
             val size = typography.bodyLarge.fontSize.value
             val body = paginatePrintBody(document.items, setup, size, fontScale, state.printMeasurements.snapshot,
-                measureLines = { estimate.lines(it, setup.contentWidthPoints) },
+                ink = ink, measureLines = { estimate.lines(it, setup.contentWidthPoints) },
                 measureBlock = { estimate.height(it, setup.contentWidthPoints) }, checkActive = { ensureActive() })
             ensureActive()
             state.printMeasurements.snapshot = body
@@ -171,11 +176,11 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
                                                 val openCitation = target?.let { block -> { citation: Int -> onCitation(block, citation) } }
                                                 val part = item.paragraph()
                                                 if (row.lines != null && part != null) {
-                                                    MobileParagraph(part, fonts, openParagraph, openCitation, previousAfter,
-                                                        row.lines, row.lineCount)
+                                                    PrintParagraphFragment(part, row, previousAfter, openParagraph, openCitation)
                                                 } else DocumentBlock(document.source, item, fonts, tableScroll, previousAfter,
                                                     onParagraph = openParagraph, onCitation = openCitation)
-                                                previousAfter = ((item as? MobilePageItem.Block)?.content as? RenderParagraph)?.afterTwips ?: 0
+                                                previousAfter = if (row.lines != null && row.firstLine + row.lineCount < row.lines.count) 0
+                                                    else part?.afterTwips ?: 0
                                             }
                                             row.reference != null -> PreviewParagraph(row.reference, row.title)
                                             row.label != null -> Text(row.label)
@@ -220,9 +225,9 @@ internal fun RenderParagraph.printFragments(): List<RenderParagraph> {
 internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, size: Float, scale: Float,
                                previous: PrintMeasurements.Snapshot? = null,
                                measureLines: (RenderParagraph) -> PrintLines, measureBlock: (MobilePageItem) -> Float,
-                               checkActive: () -> Unit = {}): PrintMeasurements.Snapshot {
+                               checkActive: () -> Unit = {}, ink: PrintInk? = null): PrintMeasurements.Snapshot {
     val capacity = setup.contentHeightPoints
-    val snapshot = previous?.takeIf { it.setup == setup && it.size == size && it.scale == scale }
+    val snapshot = previous?.takeIf { it.setup == setup && it.size == size && it.scale == scale && it.ink == ink }
     val sheets = mutableListOf<PrintPage>()
     var start = 0
     var reuseTail = false
@@ -284,7 +289,7 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
             if (index > 0 || part.pageBreakBefore) nextPage()
             val lines = measureLines(part)
             if (index == fragments.lastIndex && part.print.keepNext && rows.isNotEmpty()) {
-                var chainHeight = part.printBefore(0) + lines.ends.size * lines.height + part.printAfter()
+                var chainHeight = part.printBefore(0) + lines.height(0, lines.count) + part.printAfter()
                 var after = part.afterTwips
                 for (successor in input + 1 until items.size) {
                     val next = items[successor].paragraph()
@@ -295,43 +300,43 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
                     }
                     val head = next.printFragments().first()
                     val nextLines = measureLines(head)
-                    val count = if (next.print.keepNext || next.print.keepLines) nextLines.ends.size
-                        else minOf(nextLines.ends.size, if (next.print.widowControl) { if (nextLines.ends.size == 3) 3 else 2 } else 1)
-                    chainHeight += head.printBefore(after) + count * nextLines.height +
-                        if (count == nextLines.ends.size) head.printAfter() else 0f
+                    val count = if (next.print.keepNext || next.print.keepLines) nextLines.count
+                        else minOf(nextLines.count, if (next.print.widowControl) { if (nextLines.count == 3) 3 else 2 } else 1)
+                    chainHeight += head.printBefore(after) + nextLines.height(0, count) +
+                        if (count == nextLines.count) head.printAfter() else 0f
                     after = head.afterTwips
                     if (!next.print.keepNext || next.pageBreaks.isNotEmpty()) break
                 }
                 if (movePrintKeepChain(chainHeight, cursor, capacity)) nextPage()
             }
             var from = 0
-            while (from < lines.ends.size) {
+            while (from < lines.count) {
                 checkActive()
                 val before = if (from == 0) part.printBefore(previousAfter) else 0f
-                val count = printFittingLines(lines.ends.size - from, capacity - cursor, lines.height, before,
+                val count = printFittingLines(lines, from, capacity - cursor, before,
                     part.printAfter(), rows.isNotEmpty(), part.print.keepLines, part.print.widowControl)
                 if (count == 0) {
                     nextPage()
                     continue
                 }
                 val until = from + count
-                val last = until == lines.ends.size
-                val slice = part.printLineSlice(from, until, lines)
-                add(PrintRow(item.blockIndex, 0f, fragment.copy(content = slice), lines = lines, lineCount = count,
-                    input = input), before + count * lines.height + if (last) part.printAfter() else 0f)
-                previousAfter = slice.afterTwips
+                val last = until == lines.count
+                val height = before + lines.height(from, until) + if (last) part.printAfter() else 0f
+                add(PrintRow(item.blockIndex, 0f, fragment, lines = lines, lineCount = count,
+                    input = input, firstLine = from, paragraphHeight = height), height)
+                previousAfter = if (last) part.afterTwips else 0
                 from = until
                 if (!last) nextPage()
             }
         }
     }
     if (rows.isNotEmpty()) sheets.add(PrintPage(rows))
-    return PrintMeasurements.Snapshot(items, setup, size, scale, sheets, cursor, previousAfter)
+    return PrintMeasurements.Snapshot(items, setup, size, scale, sheets, cursor, previousAfter, ink)
 }
 
 private fun MobilePageItem.paragraph(): RenderParagraph? = (this as? MobilePageItem.Block)?.content as? RenderParagraph
 
-private class PrintMeasure(private val measurer: TextMeasurer, private val bodySize: Float, private val fontScale: Float, private val cache: PrintMeasurements) {
+private class PrintMeasure(private val measurer: TextMeasurer, private val bodySize: Float, private val fontScale: Float, private val cache: PrintMeasurements, private val ink: PrintInk) {
     // Layout in paper points independent of zoom. Text measurement uses Android shaping and font fallback.
     private val density = Density(1f, fontScale)
     private val fonts = mutableMapOf<String, FontFamily>()
@@ -343,11 +348,11 @@ private class PrintMeasure(private val measurer: TextMeasurer, private val bodyS
     }
 
     fun lines(p: RenderParagraph, width: Float): PrintLines =
-        cache.paragraph(p, width, bodySize, fontScale) { measureLines(p, width) }
+        cache.paragraph(p, width, bodySize, fontScale, ink) { measureLines(p, width) }
 
     private data class FontMetric(val size: Float, val family: FontFamily, val bold: Boolean, val italic: Boolean)
     private val metrics = mutableMapOf<FontMetric, Float>()
-    private val paperDensity = Density(4f, fontScale)
+    private val paperDensity = Density(PRINT_LAYOUT_DENSITY, fontScale)
 
     private fun measureLines(p: RenderParagraph, width: Float): PrintLines {
         val empty = p.runs.all { it.text.isEmpty() } && p.list == null
@@ -367,7 +372,6 @@ private class PrintMeasure(private val measurer: TextMeasurer, private val bodyS
         val single = if (empty) natural(markFont) else p.runs.maxOfOrNull { natural(font(it.format)) } ?: natural(markFont)
         val scaledLine = printLineSpacing(single, p.lineSpacing, p.lineRule)
         val line = scaledLine / fontScale
-        if (empty) return PrintLines(listOf(0), scaledLine, size)
         val left = p.leftTwips.coerceIn(0, 2400) / 20f
         val hanging = p.hangingTwips.coerceIn(0, 1440) / 20f
         val indent = if (left == 0f) p.list?.let { 16f + 10 * it.level } ?: 0f else left
@@ -379,7 +383,9 @@ private class PrintMeasure(private val measurer: TextMeasurer, private val bodyS
             var pending: RenderRun? = null
             fun flush() {
                 val run = pending ?: return
-                withStyle(font(run.format).style().toSpanStyle()) { append(run.text) }
+                val start = length
+                withStyle(ink.span(p, run, font(run.format).style().toSpanStyle())) { append(run.text) }
+                run.citationNumber?.let { addStringAnnotation(PRINT_CITATION_TAG, it.toString(), start, length) }
             }
             for (run in p.runs) {
                 val previous = pending
@@ -392,14 +398,20 @@ private class PrintMeasure(private val measurer: TextMeasurer, private val bodyS
             }
             flush()
         }
-        val style = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = size.sp, lineHeight = line.sp,
+        val style = (if (empty) markFont.style() else TextStyle(fontFamily = FontFamily.SansSerif, fontSize = size.sp)).copy(
+            color = ink.foreground, lineHeight = line.sp,
+            textAlign = when (p.alignment) {
+                RenderAlignment.Start -> TextAlign.Start; RenderAlignment.End -> TextAlign.End
+                RenderAlignment.Left -> TextAlign.Left; RenderAlignment.Right -> TextAlign.Right
+                RenderAlignment.Center -> TextAlign.Center; RenderAlignment.Justify -> TextAlign.Justify
+            },
             lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Proportional, LineHeightStyle.Trim.None),
             textIndent = TextIndent(firstLine = first.sp, restLine = indent.sp))
         val widthPx = ((width - borderInset(p.borders.left) - borderInset(p.borders.right)) * paperDensity.density)
             .roundToInt().coerceIn(1, 30_000)
-        val layout = measurer.measure(text, style, constraints = Constraints(maxWidth = widthPx),
+        val layout = measurer.measure(text, style, constraints = Constraints(minWidth = widthPx, maxWidth = widthPx),
             density = paperDensity, skipCache = true)
-        return PrintLines(List(layout.lineCount) { layout.getLineEnd(it) }, scaledLine, size)
+        return PrintLines(layout)
     }
 
     private fun measureLegacyParagraph(p: RenderParagraph, width: Float): Float {

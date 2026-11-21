@@ -377,7 +377,7 @@ class DocumentRenderReaderTest {
     @Test fun letterThesisPaginationKeepsBlankMarksWidowsAndHeadingChains() {
         val styles = """<w:styles $ns><w:docDefaults>
             <w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
-            <w:pPrDefault><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+            <w:pPrDefault><w:pPr><w:jc w:val="both"/><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault>
             </w:docDefaults><w:style w:type="paragraph" w:styleId="Heading1"><w:pPr><w:keepNext/></w:pPr></w:style>
             </w:styles>"""
         val setup = """<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440"
@@ -395,12 +395,26 @@ class DocumentRenderReaderTest {
                 val size = checkNotNull(mark.sizePoints)
                 val text = paragraph.runs.joinToString("") { it.text }
                 val ends = text.mapIndexedNotNull { index, ch -> (index + 1).takeIf { ch == '\n' } } + text.length
-                PrintLines(ends, printLineSpacing(size * 1.15f, paragraph.lineSpacing, paragraph.lineRule), size)
+                PrintLines(List(ends.size + 1) { it * printLineSpacing(size * 1.15f, paragraph.lineSpacing, paragraph.lineRule) })
             }, measureBlock = { error("Only paragraphs expected") }).pages
         }
         val long = paginate(lines(28) + lines(10))
         assertEquals(3, long.first().rows.last().lineCount)
         assertEquals(7, long[1].rows.first().lineCount)
+        val head = long.first().rows.last()
+        val tail = long[1].rows.first()
+        assertSame(head.lines, tail.lines)
+        assertEquals(head.firstLine + head.lineCount, tail.firstLine)
+        assertEquals(10, head.lineCount + tail.lineCount)
+        assertEquals(RenderAlignment.Justify, ((head.item as MobilePageItem.Block).content as RenderParagraph).alignment)
+        for (page in long) {
+            for ((row, next) in page.rows.zipWithNext()) {
+                assertTrue(row.top < next.top)
+                assertTrue(row.top + row.paragraphHeight <= next.top + .001f)
+            }
+            val last = page.rows.last()
+            assertTrue(last.top + last.paragraphHeight <= 648f)
+        }
         val blankPages = paginate(blank.repeat(9) + heading + lines(1))
         assertEquals(11, blankPages.single().rows.size)
         assertEquals(0f, blankPages.single().rows.first().top, .001f)
