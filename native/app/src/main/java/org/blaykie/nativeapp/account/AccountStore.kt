@@ -23,9 +23,10 @@ private class AccountRecord(
     val personalNotes: Boolean,
     val personalWrite: Boolean,
     val groupAccess: Boolean,
+    val username: String? = null,
 )
 
-class AccountSecret(val key: String, val verified: VerifiedKey) {
+class AccountSecret(val key: String, val verified: VerifiedKey, val username: String? = null) {
     override fun toString() = "AccountSecret(redacted)"
 }
 
@@ -53,7 +54,8 @@ class AccountStore(private val root: File, private val cipher: SecretCipher) {
             val record = json.decodeFromString<AccountRecord>(decrypted.toString(Charsets.UTF_8))
             require(record.key.isNotBlank() && record.userId > 0)
             AccountRead.Present(AccountSecret(record.key, VerifiedKey(record.userId,
-                KeyPermissions(record.personalLibrary, record.personalFiles, record.personalNotes, record.personalWrite, record.groupAccess))))
+                KeyPermissions(record.personalLibrary, record.personalFiles, record.personalNotes, record.personalWrite, record.groupAccess)),
+                record.username))
         } catch (_: Exception) { needsKeyReset = true; AccountRead.Unavailable }
         finally { plaintext?.fill(0) }
     }
@@ -61,7 +63,7 @@ class AccountStore(private val root: File, private val cipher: SecretCipher) {
         var plaintext: ByteArray? = null
         return try {
             val p = account.verified.permissions
-            val record = AccountRecord(account.key, account.verified.userId, p.personalLibrary, p.personalFiles, p.personalNotes, p.personalWrite, p.groupAccess)
+            val record = AccountRecord(account.key, account.verified.userId, p.personalLibrary, p.personalFiles, p.personalNotes, p.personalWrite, p.groupAccess, account.username)
             val encoded = json.encodeToString(record).toByteArray(Charsets.UTF_8)
             plaintext = encoded
             if (needsKeyReset) cipher.removeKey()

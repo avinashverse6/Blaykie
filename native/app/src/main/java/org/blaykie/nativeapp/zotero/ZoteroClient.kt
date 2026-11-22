@@ -105,7 +105,8 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
             params.forEach { (key, value) -> addQueryParameter(key, value) }
         }.build()
         val request = try {
-            Request.Builder().url(url).header("Zotero-API-Key", apiKey).header("Zotero-API-Version", "3").build()
+            Request.Builder().url(url).header("Zotero-API-Key", apiKey).header("Zotero-API-Version", "3")
+                .header("User-Agent", blaykieUserAgent()).build()
         } catch (_: IllegalArgumentException) { return ZoteroResult.InvalidKey }
         for (attempt in 0..MAX_RETRIES) {
             if (cancelled) return ZoteroResult.Cancelled

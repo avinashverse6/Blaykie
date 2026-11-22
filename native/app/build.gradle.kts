@@ -21,6 +21,17 @@ android {
         versionCode = 5
         versionName = "1.3.0"
         manifestPlaceholders["appLabel"] = "Blaykie"
+        // OAuth client credentials come from CI secrets (environment or Gradle property),
+        // never from source. Empty values hide the sign-in button; the manual key still works.
+        fun oauthValue(envName: String, propertyName: String): String =
+            System.getenv(envName)?.takeIf { it.isNotBlank() }
+                ?: providers.gradleProperty(propertyName).orNull.orEmpty()
+        fun buildConfigString(value: String): String =
+            "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+        buildConfigField("String", "ZOTERO_OAUTH_CLIENT_KEY",
+            buildConfigString(oauthValue("ZOTERO_OAUTH_CLIENT_KEY", "zoteroOAuthClientKey")))
+        buildConfigField("String", "ZOTERO_OAUTH_CLIENT_SECRET",
+            buildConfigString(oauthValue("ZOTERO_OAUTH_CLIENT_SECRET", "zoteroOAuthClientSecret")))
     }
     signingConfigs {
         create("release") {

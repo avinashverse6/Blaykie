@@ -111,6 +111,8 @@ class MainActivity : ComponentActivity() {
         val sessions = SessionStore(filesDir)
         val accountStore = AccountStore(filesDir, AndroidKeyCipher())
         val account = ViewModelProvider(this, AccountController.Factory(accountStore))[AccountController::class.java]
+        accountController = account
+        account.handleOAuthCallback(intent.data)
         val citationSearch = ViewModelProvider(this, CitationSearchController.Factory(accountStore))[CitationSearchController::class.java]
         val exportController = ViewModelProvider(this, ExportController.Factory(applicationContext, sessions, accountStore))[ExportController::class.java]
         setContent {
@@ -156,6 +158,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private var accountController: AccountController? = null
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        accountController?.handleOAuthCallback(intent.data)
     }
 }
 
