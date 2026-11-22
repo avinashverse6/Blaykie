@@ -19,10 +19,21 @@ import org.blaykie.nativeapp.zotero.ZoteroOAuthClient
 import org.blaykie.nativeapp.zotero.parseOAuthCallback
 import org.blaykie.nativeapp.zotero.zoteroOAuthClientOrNull
 
-internal fun oauthFailureMessage(result: OAuthResult<*>): String = when (result) {
-    is OAuthResult.NetworkFailure -> "Network error. Check your internet connection and try again."
-    is OAuthResult.Rejected -> "Zotero did not complete the sign-in. Please try again."
-    else -> "Could not read Zotero's reply. Please try again."
+/** The five sign-in stages, each with its own friendly message and details label. */
+internal enum class OAuthStage(val step: String, val message: String) {
+    RequestToken("Step 1 (request token)", "Could not start the sign-in with Zotero. Please try again."),
+    Browser("Step 2 (opening Zotero)", "Could not open your browser. Please try again."),
+    Callback("Step 3 (callback)", "Sign-in did not finish. Please sign in again."),
+    AccessToken("Step 4 (access token)", "Zotero did not finish the sign-in. Please try again."),
+    KeyCheck("Step 5 (key check)", "Could not check the key with Zotero. Please try again."),
+}
+
+/** Secret-free one-line diagnosis: step, HTTP status or transport cause, redacted server text. */
+internal fun oauthStageDetails(stage: OAuthStage, result: OAuthResult<*>): String = when (result) {
+    is OAuthResult.HttpFailure -> "${stage.step}: HTTP ${result.status}" +
+        if (result.errorText.isNotBlank()) " — ${result.errorText}" else ""
+    is OAuthResult.NetworkFailure -> "${stage.step}: ${result.exceptionName}"
+    else -> "${stage.step}: unreadable reply"
 }
 
 internal enum class AccountRoute { LOADING, FIRST_RUN, APP, KEY }
@@ -36,6 +47,7 @@ internal data class AccountState(
     val checking: Boolean = false,
     val warning: Boolean = false,
     val message: String = "",
+    val details: String = "",
     val authorizeUrl: String? = null,
 ) {
     override fun toString() = "AccountState(route=$route, account=$account, checking=$checking, warning=$warning)"
@@ -76,7 +88,7 @@ internal class AccountController(private val store: AccountStore, private val lo
     fun startOAuth() {
         val client = oauth ?: return
         if (mutable.value.checking || !gate.begin()) return
-        mutable.value = mutable.value.copy(checking = true, message = "")
+        mutable.value = mutable.value.copy(checking = true, message = "", details = "")
         scope.launch {
             val result = try { withContext(Dispatchers.IO) { client.requestToken() } } finally { gate.end() }
             when (result) {
@@ -84,7 +96,9 @@ internal class AccountController(private val store: AccountStore, private val lo
                     pendingOAuth = result.value
                     mutable.value = mutable.value.copy(checking = false, authorizeUrl = client.authorizeUrl(result.value.token))
                 }
-                else -> mutable.value = mutable.value.copy(checking = false, message = oauthFailureMessage(result))
+                else -> mutable.value = mutable.value.copy(checking = false,
+                    message = OAuthStage.RequestToken.message,
+                    details = oauthStageDetails(OAuthStage.RequestToken, result))
             }
         }
     }
@@ -95,7 +109,8 @@ internal class AccountController(private val store: AccountStore, private val lo
 
     fun oauthBrowserFailed() {
         pendingOAuth = null
-        mutable.value = mutable.value.copy(authorizeUrl = null, message = "Could not open your browser. Please try again.")
+        mutable.value = mutable.value.copy(authorizeUrl = null, message = OAuthStage.Browser.message,
+            details = "${OAuthStage.Browser.step}: no browser")
     }
 
     fun handleOAuthCallback(data: android.net.Uri?) {
@@ -105,31 +120,36 @@ internal class AccountController(private val store: AccountStore, private val lo
         lastCallback = url
         val pendingToken = pendingOAuth
         if (pendingToken == null) {
-            mutable.value = mutable.value.copy(message = "That sign-in link has expired. Please sign in again.")
+            mutable.value = mutable.value.copy(message = "That sign-in link has expired. Please sign in again.",
+                details = "${OAuthStage.Callback.step}: no pending sign-in")
             return
         }
         if (callback.token == null || callback.token != pendingToken.token) {
             pendingOAuth = null
-            mutable.value = mutable.value.copy(message = "Sign-in did not match. Please sign in again.")
+            mutable.value = mutable.value.copy(message = "Sign-in did not match. Please sign in again.",
+                details = "${OAuthStage.Callback.step}: token mismatch")
             return
         }
         val verifier = callback.verifier
         if (verifier.isNullOrBlank()) {
             pendingOAuth = null
-            mutable.value = mutable.value.copy(message = "Sign-in was cancelled. You can try again whenever you are ready.")
+            mutable.value = mutable.value.copy(message = "Sign-in was cancelled. You can try again whenever you are ready.",
+                details = "${OAuthStage.Callback.step}: no oauth_verifier")
             return
         }
         val client = oauth ?: return
         if (mutable.value.checking || !gate.begin()) return
         pendingOAuth = null
-        mutable.value = mutable.value.copy(checking = true, message = "")
+        mutable.value = mutable.value.copy(checking = true, message = "", details = "")
         scope.launch {
             val exchanged = try { withContext(Dispatchers.IO) {
                 client.accessToken(pendingToken.token, pendingToken.secret, verifier)
             } } finally { gate.end() }
             when (exchanged) {
                 is OAuthResult.Success -> verifyOAuthKey(exchanged.value)
-                else -> mutable.value = mutable.value.copy(checking = false, message = oauthFailureMessage(exchanged))
+                else -> mutable.value = mutable.value.copy(checking = false,
+                    message = OAuthStage.AccessToken.message,
+                    details = oauthStageDetails(OAuthStage.AccessToken, exchanged))
             }
         }
     }
@@ -140,11 +160,14 @@ internal class AccountController(private val store: AccountStore, private val lo
         scope.launch {
             val result = try { withContext(Dispatchers.IO) { logic.verify(access.apiKey) } } finally { gate.end() }
             when (result) {
-                is Verification.Failure -> mutable.value = mutable.value.copy(checking = false, message = result.message)
+                is Verification.Failure -> mutable.value = mutable.value.copy(checking = false,
+                    message = result.message,
+                    details = result.details.ifBlank { "${OAuthStage.KeyCheck.step}: unreadable reply" })
                 is Verification.Verified -> {
                     if (result.secret.verified.userId != access.userId) {
                         mutable.value = mutable.value.copy(checking = false,
-                            message = "Sign-in returned a different account. Please sign in again.")
+                            message = "Sign-in returned a different account. Please sign in again.",
+                            details = "${OAuthStage.KeyCheck.step}: different user")
                         return@launch
                     }
                     // OAuth only ever grants the read-only scopes Blaykie requested, so the
@@ -179,7 +202,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         scope.launch {
             val result = try { withContext(Dispatchers.IO) { logic.verify(key) } } finally { gate.end() }
             when (result) {
-                is Verification.Failure -> mutable.value = mutable.value.copy(checking = false, message = result.message)
+                is Verification.Failure -> mutable.value = mutable.value.copy(checking = false, message = result.message, details = "")
                 is Verification.Verified -> {
                     pending = result.secret
                     if (result.needsWarning) mutable.value = mutable.value.copy(checking = false, warning = true)
@@ -196,7 +219,7 @@ internal class AccountController(private val store: AccountStore, private val lo
             val saved = withContext(Dispatchers.IO) { logic.save(secret) }
             pending = null
             mutable.value = if (saved) mutable.value.copy(checking = false, warning = false,
-                route = AccountRoute.APP, account = summary(secret), message = "")
+                route = AccountRoute.APP, account = summary(secret), message = "", details = "")
             else mutable.value.copy(checking = false, warning = false, message = "Could not save the key securely. Please try again.")
         }
     }

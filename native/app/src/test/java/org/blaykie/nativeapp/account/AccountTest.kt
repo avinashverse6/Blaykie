@@ -60,6 +60,22 @@ class AccountTest {
         assertEquals("researcher", restored.username)
         assertEquals(secret, restored.key)
     }
+    @Test fun oauthStagesHaveDistinctMessagesAndDetails() {
+        val http = org.blaykie.nativeapp.zotero.OAuthResult.HttpFailure(401, "Invalid consumer")
+        assertEquals("Step 1 (request token): HTTP 401 — Invalid consumer",
+            oauthStageDetails(OAuthStage.RequestToken, http))
+        assertEquals("Step 4 (access token): HTTP 400",
+            oauthStageDetails(OAuthStage.AccessToken, org.blaykie.nativeapp.zotero.OAuthResult.HttpFailure(400, "")))
+        assertEquals("Step 1 (request token): SocketTimeoutException",
+            oauthStageDetails(OAuthStage.RequestToken, org.blaykie.nativeapp.zotero.OAuthResult.NetworkFailure("SocketTimeoutException")))
+        assertEquals("Step 4 (access token): unreadable reply",
+            oauthStageDetails(OAuthStage.AccessToken, org.blaykie.nativeapp.zotero.OAuthResult.Malformed))
+        val messages = OAuthStage.entries.map { it.message }
+        assertEquals(messages.size, messages.toSet().size)
+        assertTrue(OAuthStage.RequestToken.message.contains("Could not start"))
+        assertTrue(OAuthStage.Browser.message.contains("browser"))
+        assertTrue(OAuthStage.KeyCheck.step.startsWith("Step 5"))
+    }
     @Test fun removeWipesCiphertextAndKeystoreEntry() {
         val cipher = FakeCipher(); val store = AccountStore(temp.root, cipher)
         assertTrue(store.save(AccountSecret(secret, verified))); assertTrue(store.remove())

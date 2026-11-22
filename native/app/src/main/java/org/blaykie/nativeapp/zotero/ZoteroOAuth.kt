@@ -20,10 +20,42 @@ internal data class OAuthAccessToken(val apiKey: String, val userId: Long, val u
 
 internal sealed class OAuthResult<out T> {
     class Success<T>(val value: T) : OAuthResult<T>()
-    object NetworkFailure : OAuthResult<Nothing>()
-    object Rejected : OAuthResult<Nothing>()
+
+    /** Non-2xx reply. [errorText] is already redacted and at most 120 characters. */
+    class HttpFailure(val status: Int, val errorText: String) : OAuthResult<Nothing>()
+
+    /** Transport failure; only the exception class name is kept, never its message. */
+    class NetworkFailure(val exceptionName: String) : OAuthResult<Nothing>()
+
     object Malformed : OAuthResult<Nothing>()
     final override fun toString() = "OAuthResult.${javaClass.simpleName}"
+}
+
+private val SENSITIVE_ASSIGNMENT = Regex(
+    "(?i)(oauth_token_secret|oauth_token|oauth_verifier|oauth_consumer_key|oauth_consumer_secret|" +
+        "oauth_signature|userID|username|api[-_ ]?key|client[-_ ]?secret|secret|key)(\\s*[=:]\\s*)[^\\s&,\"']+")
+private val URL_WITH_QUERY = Regex("https?://[^\\s\"']+")
+private val LONG_TOKEN_LIKE = Regex("[A-Za-z0-9_+\\-/=]{16,}")
+
+/**
+ * Makes a server reply safe to show: values of credential-like parameters and any
+ * long token-like run are replaced, URLs lose their query strings. The result is
+ * not truncated here.
+ */
+internal fun redactOAuthText(text: String): String {
+    var out = URL_WITH_QUERY.replace(text) { match ->
+        val url = match.value
+        if ('?' in url) url.substringBefore('?') + "?[redacted]" else url
+    }
+    out = SENSITIVE_ASSIGNMENT.replace(out) { match -> "${match.groupValues[1]}${match.groupValues[2]}[redacted]" }
+    return LONG_TOKEN_LIKE.replace(out, "[redacted]")
+}
+
+/** A short, safe one-line summary of an error body. HTML pages yield only the status. */
+internal fun oauthErrorText(body: String): String {
+    val trimmed = body.trim()
+    if (trimmed.isEmpty() || trimmed.startsWith("<")) return ""
+    return redactOAuthText(trimmed.replace(Regex("\\s+"), " ")).take(120)
 }
 
 internal data class OAuthCallback(val token: String?, val verifier: String?)
@@ -106,11 +138,11 @@ internal class ZoteroOAuthClient(
             .build()
         return try {
             calls.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) OAuthResult.Rejected
+                if (!response.isSuccessful) OAuthResult.HttpFailure(response.code, oauthErrorText(response.body?.string().orEmpty()))
                 else parse(response.body?.string().orEmpty())
             }
-        } catch (_: IOException) {
-            OAuthResult.NetworkFailure
+        } catch (failure: IOException) {
+            OAuthResult.NetworkFailure(failure.javaClass.simpleName)
         } catch (_: Exception) {
             OAuthResult.Malformed
         }

@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -79,6 +80,20 @@ internal fun AccountGate(activity: Activity, controller: AccountController, cont
     }
 }
 
+/** Secret-free diagnostics with an exact copy action, so a failure can be pasted into a bug report. */
+@Composable
+internal fun SignInDetails(details: String) {
+    if (details.isEmpty()) return
+    val context = LocalContext.current
+    Column {
+        Text(details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        TextButton(onClick = {
+            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Blaykie sign-in details", details))
+        }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Copy details") }
+    }
+}
+
 @Composable
 private fun SignInScreen(state: AccountState, onSignIn: () -> Unit, onAdvanced: () -> Unit, onSkip: () -> Unit) {
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
@@ -106,6 +121,7 @@ private fun SignInScreen(state: AccountState, onSignIn: () -> Unit, onAdvanced: 
         Text("Stored encrypted on this phone", modifier = Modifier.align(Alignment.CenterHorizontally),
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (state.message.isNotEmpty()) AppErrorState(state.message)
+        SignInDetails(state.details)
         TextButton(onClick = onAdvanced, enabled = !state.checking,
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Use an API key instead (Advanced)") }
         TextButton(onClick = onSkip, enabled = !state.checking,
@@ -214,5 +230,6 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
         Text("To revoke the key itself, use zotero.org.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (state.checking) CircularProgressIndicator()
         if (state.message.isNotEmpty()) Text(state.message, color = MaterialTheme.colorScheme.onSurface)
+        SignInDetails(state.details)
     }
 }

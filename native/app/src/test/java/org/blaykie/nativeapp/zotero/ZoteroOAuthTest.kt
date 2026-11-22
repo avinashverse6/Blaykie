@@ -79,10 +79,43 @@ class ZoteroOAuthTest {
         assertTrue(accessAuthorization.contains("oauth_verifier=\"ver456\""))
     }
 
-    @Test fun httpErrorIsRejectedNotParsed() {
-        server.enqueue(MockResponse().setResponseCode(401).setBody("oauth_token=req123"))
+    @Test fun httpErrorKeepsOnlyStatusAndRedactedText() {
+        server.enqueue(MockResponse().setResponseCode(401)
+            .setBody("oauth_token=req123&oauth_token_secret=sec456&error=Invalid consumer"))
         val client = ZoteroOAuthClient("client-key", "client-secret", OkHttpClient(),
             baseUrl = server.url("/oauth/").toString(), nonce = { "n" }, timestampSeconds = { 1 })
-        assertSame(OAuthResult.Rejected, client.requestToken())
+        val failure = client.requestToken() as OAuthResult.HttpFailure
+        assertEquals(401, failure.status)
+        assertFalse(failure.errorText.contains("req123"))
+        assertFalse(failure.errorText.contains("sec456"))
+        assertTrue(failure.errorText.contains("[redacted]"))
+    }
+
+    @Test fun errorTextRedactsTokensKeysAndUrls() {
+        val body = "Failed for oauth_token=tok_abcdefgh12345678 secret=hunter2hunter2 " +
+            "userID=12345 key=ABCDEF1234567890 see https://www.zotero.org/oauth/request?oauth_token=tok_abcdefgh12345678"
+        val shown = oauthErrorText(body)
+        assertFalse(shown.contains("tok_abcdefgh12345678"))
+        assertFalse(shown.contains("hunter2hunter2"))
+        assertFalse(shown.contains("12345"))
+        assertFalse(shown.contains("ABCDEF1234567890"))
+        assertFalse(shown.contains("oauth_token=tok"))
+        assertTrue(shown.length <= 120)
+    }
+
+    @Test fun errorTextHidesHtmlBodiesAndCapsLength() {
+        assertEquals("", oauthErrorText("<html><body>Unauthorized</body></html>"))
+        assertEquals("", oauthErrorText(""))
+        val long = oauthErrorText("word ".repeat(100))
+        assertTrue(long.length <= 120)
+    }
+
+    @Test fun networkFailureKeepsOnlyExceptionClassName() {
+        server.enqueue(MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AT_START))
+        val client = ZoteroOAuthClient("client-key", "client-secret", OkHttpClient(),
+            baseUrl = server.url("/oauth/").toString(), nonce = { "n" }, timestampSeconds = { 1 })
+        val failure = client.requestToken() as OAuthResult.NetworkFailure
+        assertTrue(failure.exceptionName.endsWith("Exception"))
+        assertFalse(failure.exceptionName.contains("client-secret"))
     }
 }

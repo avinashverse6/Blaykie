@@ -12,17 +12,26 @@ class AccountLogic(private val store: AccountStore, private val client: ZoteroCl
     fun verify(key: String): Verification = try {
         when (val result = client.verifyKey(key)) {
             is ZoteroResult.Success -> Verification.Verified(AccountSecret(key, result.value), needsPermissionWarning(result.value.permissions))
-            is ZoteroResult.InvalidKey -> Verification.Failure("Invalid key or no access to this library.")
-            is ZoteroResult.NetworkFailure -> Verification.Failure("Network error. Check your internet connection.")
-            is ZoteroResult.RateLimited -> Verification.Failure("Zotero rate limit reached. Please try again later.")
-            else -> Verification.Failure("Could not verify the key. Please try again.")
+            is ZoteroResult.InvalidKey -> Verification.Failure("Invalid key or no access to this library.",
+                "Step 5 (key check): HTTP 401 or 403")
+            is ZoteroResult.NetworkFailure -> Verification.Failure("Network error. Check your internet connection.",
+                "Step 5 (key check): network error")
+            is ZoteroResult.RateLimited -> Verification.Failure("Zotero rate limit reached. Please try again later.",
+                "Step 5 (key check): HTTP 429")
+            is ZoteroResult.HttpError -> Verification.Failure("Could not verify the key. Please try again.",
+                "Step 5 (key check): HTTP ${result.status}")
+            else -> Verification.Failure("Could not verify the key. Please try again.",
+                "Step 5 (key check): unreadable reply")
         }
-    } catch (_: Exception) { Verification.Failure("Could not verify the key. Please try again.") }
+    } catch (_: Exception) { Verification.Failure("Could not verify the key. Please try again.",
+        "Step 5 (key check): unreadable reply") }
     fun save(secret: AccountSecret) = store.save(secret)
 }
 sealed class Verification {
     class Verified(val secret: AccountSecret, val needsWarning: Boolean) : Verification()
-    class Failure(val message: String) : Verification()
+
+    /** [details] is a secret-free diagnostic line for the sign-in flow; manual entry ignores it. */
+    class Failure(val message: String, val details: String = "") : Verification()
     final override fun toString() = "Verification.${javaClass.simpleName}"
 }
 class VerificationGate {
