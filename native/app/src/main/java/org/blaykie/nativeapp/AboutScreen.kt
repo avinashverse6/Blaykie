@@ -24,6 +24,8 @@ internal object AboutInfo {
     const val privacy = "Your Zotero key is stored encrypted on this phone. Blaykie has no analytics and contacts only api.zotero.org."
     const val fontCredit = "Lora — SIL Open Font License 1.1"
     const val fontSource = "https://fonts.google.com/specimen/Lora"
+    const val timesFontCredit = "Tinos — SIL Open Font License 1.1"
+    const val timesFontSource = "https://github.com/googlefonts/tinos"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
     const val licenseAsset = "licenses/AGPL-3.0"
     const val apacheLicenseAsset = "licenses/Apache-2.0"

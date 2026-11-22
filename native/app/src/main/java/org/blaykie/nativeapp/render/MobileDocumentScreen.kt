@@ -294,24 +294,46 @@ internal fun MobileParagraph(paragraph: RenderParagraph, fonts: MutableMap<Strin
 internal fun borderInset(border: RenderBorder?): Float =
     border?.let { it.spacePoints + it.widthEighthPoints / 8f } ?: 0f
 
-private val documentSerif = FontFamily(
+internal val documentSerif = FontFamily(
     Font(R.font.lora_regular, FontWeight.Normal),
     Font(R.font.lora_bold, FontWeight.Bold),
 )
 
-internal fun availableFont(name: String): FontFamily {
-    val family = name.trim()
-    val fallback = when (documentFontCategory(family)) {
+internal val documentTinosFonts: List<Font> = listOf(
+    Font(R.font.tinos_regular, FontWeight.Normal, FontStyle.Normal),
+    Font(R.font.tinos_bold, FontWeight.Bold, FontStyle.Normal),
+    Font(R.font.tinos_italic, FontWeight.Normal, FontStyle.Italic),
+    Font(R.font.tinos_bold_italic, FontWeight.Bold, FontStyle.Italic),
+)
+
+// Tinos is metrically compatible with Times New Roman, so documents laid out for Times
+// keep their line breaks and page breaks when the real face is not installed.
+internal val documentTinos = FontFamily(documentTinosFonts)
+
+internal fun isTimesNewRomanFamily(name: String): Boolean =
+    name.trim().lowercase(java.util.Locale.ROOT).replace(" ", "").replace("-", "") in
+        setOf("times", "timesnewroman", "timesnewromanpsmt")
+
+/** [device] is the face Android resolved for the name, or null when it has none. */
+internal fun resolveDocumentFont(name: String, device: FontFamily?): FontFamily {
+    if (device != null) return device
+    if (isTimesNewRomanFamily(name)) return documentTinos
+    return when (documentFontCategory(name.trim())) {
         DocumentFontCategory.SansSerif -> FontFamily.SansSerif
         DocumentFontCategory.Serif -> documentSerif
         DocumentFontCategory.Monospace -> FontFamily.Monospace
         DocumentFontCategory.Cursive -> FontFamily.Cursive
     }
-    return runCatching {
+}
+
+internal fun availableFont(name: String): FontFamily {
+    val family = name.trim()
+    val device = runCatching {
         val typeface = Typeface.create(family, Typeface.NORMAL)
         // Android silently substitutes its default Typeface when a name is not installed.
-        if (typeface == Typeface.DEFAULT) fallback else FontFamily(typeface)
-    }.getOrDefault(fallback)
+        if (typeface == Typeface.DEFAULT) null else FontFamily(typeface)
+    }.getOrNull()
+    return resolveDocumentFont(family, device)
 }
 
 internal fun RenderParagraph.defaultFontSize(bodySize: Float): Float =
