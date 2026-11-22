@@ -73,7 +73,8 @@ class BibliographyMissingReferencesTest {
 
     @Test fun unreturnedItemShowsVisibleCitationAndPartialListMatchingExport() = runBlocking {
         val opened = legacyDocument(bookmark("ABCD1234", 1, "(Lovelace, 2020)") + bookmark("MISS1234", 2, "(Missing, 2021)"))
-        val ready = mockRecovery(opened, details) as PreviewReferences.Ready
+        // Personal lookup leaves one item missing, so recovery also asks for the group list (none here).
+        val ready = mockRecovery(opened, details, extraResponses = listOf("[]"), expectedRequests = 2) as PreviewReferences.Ready
         val preview = render(ready)
         assertEquals(setOf("MISS1234"), ready.missing)
         assertEquals(listOf("(Missing, 2021)"), preview.missingCitations)
@@ -89,17 +90,19 @@ class BibliographyMissingReferencesTest {
         project.buildXml(allowMissing = allowMissing)
     }
 
-    private suspend fun mockRecovery(opened: OpenDocument, response: String, progress: (Int) -> Unit = {}): PreviewReferences =
+    private suspend fun mockRecovery(opened: OpenDocument, response: String, progress: (Int) -> Unit = {},
+                                     extraResponses: List<String> = emptyList(), expectedRequests: Int = 1): PreviewReferences =
         MockWebServer().use { server ->
             server.start()
             server.enqueue(MockResponse().setBody(response))
+            extraResponses.forEach { server.enqueue(MockResponse().setBody(it)) }
             val transport = OkHttpClient.Builder().addInterceptor { chain ->
                 val request = chain.request()
                 chain.proceed(request.newBuilder().url(server.url(request.url.encodedPath + "?" + request.url.encodedQuery)).build())
             }.build()
             val result = preparePreviewReferences(opened.store, opened.ready.session.sourceName, true, ::fakeAccount, progress,
                 clientFactory = { ZoteroClient.forTesting(transport) })
-            assertEquals(1, server.requestCount)
+            assertEquals(expectedRequests, server.requestCount)
             result
         }
 
