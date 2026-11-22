@@ -24,6 +24,8 @@ internal object AboutInfo {
     const val privacy = "Your Zotero key is stored encrypted on this phone. Blaykie has no analytics and contacts only api.zotero.org."
     const val fontCredit = "Lora — SIL Open Font License 1.1"
     const val fontSource = "https://fonts.google.com/specimen/Lora"
+    const val timesFontCredit = "Tinos — SIL Open Font License 1.1"
+    const val timesFontSource = "https://github.com/googlefonts/tinos"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
     const val licenseAsset = "licenses/AGPL-3.0"
     const val apacheLicenseAsset = "licenses/Apache-2.0"
@@ -51,8 +53,10 @@ internal fun AboutScreen(onBack: () -> Unit) {
     val licenseRequester = remember { BringIntoViewRequester() }
     var showApache by rememberSaveable { mutableStateOf(false) }
     var showFontLicense by rememberSaveable { mutableStateOf(false) }
+    var showTimesFontLicense by rememberSaveable { mutableStateOf(false) }
     val apacheText = remember { runCatching { context.assets.open(AboutInfo.apacheLicenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Apache-2.0 license text could not be loaded." } }
     val fontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.lora_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
+    val timesFontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.tinos_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
     val licenseText = remember { runCatching { context.assets.open(AboutInfo.licenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "License text could not be loaded." } }
     Column(Modifier.fillMaxSize()) {
         SettingsTopBar("About", onBack)
@@ -83,6 +87,10 @@ internal fun AboutScreen(onBack: () -> Unit) {
             TextButton(onClick = { runCatching { uri.openUri(AboutInfo.fontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.fontSource, style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = { showFontLicense = !showFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showFontLicense) "Hide font license text" else "Read font license text") }
             if (showFontLicense) Text(fontLicenseText, style = MaterialTheme.typography.bodyMedium)
+            Text(AboutInfo.timesFontCredit, style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.timesFontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.timesFontSource, style = MaterialTheme.typography.bodyMedium) }
+            TextButton(onClick = { showTimesFontLicense = !showTimesFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showTimesFontLicense) "Hide Tinos license text" else "Read Tinos license text") }
+            if (showTimesFontLicense) Text(timesFontLicenseText, style = MaterialTheme.typography.bodyMedium)
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SettingsSectionTitle("Third-party libraries and artwork")
             AboutInfo.libraries.forEach { library ->

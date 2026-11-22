@@ -13,9 +13,9 @@ class AboutInfoTest {
         val root = root()
         val gradle = File(root, "native/app/build.gradle.kts").readText()
         val version = Regex("(?m)^\\s*versionName\\s*=\\s*\"([^\"]+)\"").find(gradle)!!.groupValues[1]
-        assertEquals("1.2.0", version)
+        assertEquals("1.3.0", version)
         assertEquals(version, BuildConfig.VERSION_NAME)
-        assertTrue(Regex("(?m)^\\s*versionCode\\s*=\\s*4\\s*$").containsMatchIn(gradle))
+        assertTrue(Regex("(?m)^\\s*versionCode\\s*=\\s*5\\s*$").containsMatchIn(gradle))
         assertEquals("Blaykie", AboutInfo.appName)
         assertEquals("Licensed under AGPL-3.0-or-later", AboutInfo.license)
         assertEquals("https://github.com/avinashverse6/Blaykie", AboutInfo.source)

@@ -8,6 +8,15 @@ private const val WORD = "http://schemas.openxmlformats.org/wordprocessingml/200
 private const val STRICT_WORD = "http://purl.oclc.org/ooxml/wordprocessingml/main"
 private const val MAX_RENDER_XML = 8 * 1024 * 1024
 private const val MAX_SUPPORT_XML = 2 * 1024 * 1024
+private const val REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+private const val STRICT_REL_NS = "http://purl.oclc.org/ooxml/officeDocument/relationships"
+
+private fun packageTarget(target: String): String? {
+    if (target.isBlank()) return null
+    val path = target.replace('\\', '/')
+    val entry = if (path.startsWith("/")) path.removePrefix("/") else "word/$path"
+    return entry.takeIf { it.split('/').none { part -> part.isEmpty() || part == ".." } }
+}
 
 internal class DocumentRenderInput(private val source: File, private val parts: List<String>) {
     fun read(hideBibliography: Boolean = false): DocumentRenderModel {
@@ -22,12 +31,32 @@ internal fun readDocumentRenderModel(source: File, workingXml: String, hideBibli
         zip.getInputStream(entry).use { SafeDocumentXml.parse(it, MAX_SUPPORT_XML, name).second.documentElement }
     }
     val document = SafeDocumentXml.parseSnapshot(workingXml, MAX_RENDER_XML).documentElement
+    fun partElement(entry: String): Element? = zip.getEntry(entry)?.let { zipEntry ->
+        zip.getInputStream(zipEntry).use { SafeDocumentXml.parse(it, MAX_SUPPORT_XML, entry).second.documentElement }
+    }
     val relationships = try {
         imageRelationships(part("_rels/document.xml.rels"), zip)
     } catch (_: Exception) {
         emptyMap() // Unreadable image relationships do not hide the document body.
     }
-    Renderer(part("styles.xml"), part("numbering.xml"), relationships).read(document, source, hideBibliography)
+    val relTargets = part("_rels/document.xml.rels")?.children().orEmpty()
+        .filter { it.localName == "Relationship" }
+        .mapNotNull { rel ->
+            if (rel.getAttribute("TargetMode").equals("External", ignoreCase = true)) return@mapNotNull null
+            val id = rel.getAttribute("Id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            packageTarget(rel.getAttribute("Target"))?.let { id to it }
+        }.toMap()
+    val evenAndOdd = part("settings.xml")?.get("evenAndOddHeaders")
+        ?.let { it.attr("val") !in setOf("0", "false", "off") } == true
+    Renderer(part("styles.xml"), part("numbering.xml"), relationships, relTargets,
+        partElement = ::partElement,
+        partImages = { entry ->
+            try {
+                val rels = entry.substringBeforeLast("/") + "/_rels/" + entry.substringAfterLast("/") + ".rels"
+                imageRelationships(partElement(rels), zip)
+            } catch (_: Exception) { emptyMap() }
+        },
+        evenAndOddHeaders = evenAndOdd).read(document, source, hideBibliography)
 }
 
 internal fun Element.word(name: String) = localName == name && (namespaceURI == WORD || namespaceURI == STRICT_WORD)
@@ -46,16 +75,27 @@ private fun Element?.value(name: String) = get(name).attr("val")
 private fun Element?.enabled(name: String) = get(name)?.let { it.attr("val") !in setOf("0", "false", "off", "none") }
 
 private fun RunFormat.overlay(other: RunFormat) = RunFormat(other.bold ?: bold, other.italic ?: italic,
-    other.underline ?: underline, other.font ?: font, other.sizePoints ?: sizePoints, other.rgb ?: rgb)
+    other.underline ?: underline, other.font ?: font, other.sizePoints ?: sizePoints, other.rgb ?: rgb, other.shadingRgb ?: shadingRgb)
+internal fun Element?.rgbAttr(name: String): Int? = attr(name)?.takeIf { it.length == 6 }?.toIntOrNull(16)
+private val highlightColors = mapOf("black" to 0x000000, "blue" to 0x0000ff, "cyan" to 0x00ffff,
+    "green" to 0x00ff00, "magenta" to 0xff00ff, "red" to 0xff0000, "yellow" to 0xffff00,
+    "white" to 0xffffff, "darkBlue" to 0x000080, "darkCyan" to 0x008080, "darkGreen" to 0x008000,
+    "darkMagenta" to 0x800080, "darkRed" to 0x800000, "darkYellow" to 0x808000, "darkGray" to 0x808080, "lightGray" to 0xc0c0c0)
+
 private fun runFormat(properties: Element?): RunFormat {
     val fonts = properties.get("rFonts")
     return RunFormat(properties.enabled("b"), properties.enabled("i"), properties.enabled("u"),
         fonts.attr("ascii") ?: fonts.attr("hAnsi") ?: fonts.attr("cs"),
         properties.value("sz")?.toIntOrNull()?.takeIf { it > 0 }?.div(2f),
-        properties.value("color")?.takeIf { it.length == 6 }?.toIntOrNull(16))
+        properties.get("color").rgbAttr("val"), highlightColors[properties.value("highlight")] ?: properties.get("shd").rgbAttr("fill"))
 }
 
-private class Renderer(stylePart: Element?, numberingPart: Element?, private val images: Map<String, String>) {
+private class Renderer(stylePart: Element?, numberingPart: Element?, private val images: Map<String, String>,
+                       private val relTargets: Map<String, String> = emptyMap(),
+                       private val partElement: (String) -> Element? = { null },
+                       private val partImages: (String) -> Map<String, String> = { emptyMap() },
+                       private val evenAndOddHeaders: Boolean = false) {
+    private var currentImages: Map<String, String> = images
     private val defaults = stylePart.get("docDefaults")
     private val styles = stylePart?.children().orEmpty().filter { it.word("style") }
         .mapNotNull { style -> style.attr("styleId")?.let { it to style } }.toMap()
@@ -94,10 +134,71 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             if (!hideBibliography || index !in bibliography) renderBlock(element).forEach { block -> result.add(block); indices.add(index) }
         }
         return DocumentRenderModel(result, source, indices, readPageSetup(body.get("sectPr")),
-            elements.indices.filterTo(mutableSetOf()) { elements[it].word("p") }, bibliography)
+            elements.indices.filterTo(mutableSetOf()) { elements[it].word("p") }, bibliography,
+            readSections(elements), evenAndOddHeaders)
     }
 
     private fun blocks(container: Element): List<RenderBlock> = container.children().flatMap { renderBlock(it).asSequence() }.toList()
+
+    private val headerFooterParts = mutableMapOf<String, List<RenderBlock>>()
+
+    private fun headerFooterPart(entry: String): List<RenderBlock> = headerFooterParts.getOrPut(entry) {
+        try {
+            val root = partElement(entry) ?: return@getOrPut emptyList()
+            val saved = currentImages
+            currentImages = partImages(entry)
+            try {
+                root.children().flatMap { renderBlock(it).asSequence() }.toList()
+            } finally {
+                currentImages = saved
+            }
+        } catch (_: Exception) {
+            emptyList() // A broken header or footer part must not hide the document body.
+        }
+    }
+
+    private fun readSections(elements: List<Element>): List<PrintSection> {
+        val ends = mutableListOf<Pair<Element?, Int>>()
+        elements.forEachIndexed { index, element ->
+            val sect = when {
+                element.word("p") -> element.get("pPr").get("sectPr")
+                element.word("sectPr") -> element
+                else -> null
+            }
+            if (sect != null) ends.add(sect to index)
+        }
+        if (ends.isEmpty() || ends.last().second != elements.lastIndex) ends.add(null to elements.lastIndex)
+        var inheritedHeaders = emptyMap<HeaderFooterKind, List<RenderBlock>>()
+        var inheritedFooters = emptyMap<HeaderFooterKind, List<RenderBlock>>()
+        return ends.map { (sect, endIndex) ->
+            fun references(tag: String): Map<HeaderFooterKind, List<RenderBlock>> {
+                val own = mutableMapOf<HeaderFooterKind, List<RenderBlock>>()
+                sect?.children()?.filter { it.word(tag) }?.forEach { ref ->
+                    val kind = when (ref.attr("type")) {
+                        "first" -> HeaderFooterKind.First
+                        "even" -> HeaderFooterKind.Even
+                        else -> HeaderFooterKind.Default
+                    }
+                    val id = ref.getAttributeNS(REL_NS, "id").ifEmpty { ref.getAttributeNS(STRICT_REL_NS, "id") }
+                    own[kind] = relTargets[id]?.let { headerFooterPart(it) } ?: emptyList()
+                }
+                return own
+            }
+            val headers = inheritedHeaders + references("headerReference")
+            val footers = inheritedFooters + references("footerReference")
+            inheritedHeaders = headers
+            inheritedFooters = footers
+            val numbering = sect.get("pgNumType")
+            PrintSection(endIndex, when (sect.get("type").attr("val")) {
+                "continuous" -> SectionBreak.Continuous
+                "evenPage" -> SectionBreak.EvenPage
+                "oddPage" -> SectionBreak.OddPage
+                else -> SectionBreak.NextPage
+            }, sect.enabled("titlePg") == true,
+                numbering.attr("start")?.toIntOrNull(), numbering.attr("fmt"),
+                readPageSetup(sect), headers, footers)
+        }
+    }
 
     private fun renderBlock(element: Element): List<RenderBlock> = when {
         element.word("p") -> paragraph(element)
@@ -134,7 +235,12 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
         val pageBreaks = mutableListOf<Int>()
         var textLength = 0
         val activeCitations = linkedMapOf<String, Int>()
-        fun collect(parent: Element) {
+        // Complex field state: begin -> instruction -> separate -> cached result -> end.
+        var fieldPhase = 0
+        var complexField: PageField? = null
+        var instruction = StringBuilder()
+        var fieldResultSeen = false
+        fun collect(parent: Element, fieldOverride: PageField? = null) {
             parent.children().forEach { child ->
                 when {
                     child.word("bookmarkStart") -> {
@@ -143,7 +249,7 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         if (number != null && id != null) activeCitations[id] = number
                     }
                     child.word("bookmarkEnd") -> child.attr("id")?.let(activeCitations::remove)
-                    child.isAlternateDrawing() -> pieces.add(horizontalRule(child) ?: alternateDrawingImage(child, images))
+                    child.isAlternateDrawing() -> pieces.add(horizontalRule(child) ?: alternateDrawingImage(child, currentImages))
                     child.word("r") -> {
                         val props = child.get("rPr")
                         val format = chain(props.value("rStyle")).fold(baseRun) { acc, style ->
@@ -151,12 +257,36 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                         }.overlay(runFormat(props))
                         val text = StringBuilder()
                         fun flush() {
-                            if (text.isNotEmpty()) pieces.add(RenderRun(text.toString(), format, activeCitations.values.lastOrNull()))
+                            val runField = fieldOverride ?: if (fieldPhase == 2) complexField else null
+                            if (text.isNotEmpty()) {
+                                pieces.add(RenderRun(text.toString(), format, activeCitations.values.lastOrNull(), runField))
+                                if (runField != null) fieldResultSeen = true
+                            }
                             textLength += text.length
                             text.setLength(0)
                         }
                         child.children().forEach {
                             when {
+                                it.word("instrText") -> if (fieldPhase == 1) instruction.append(it.textContent)
+                                it.word("fldChar") -> when (it.attr("fldCharType")) {
+                                    "begin" -> {
+                                        fieldPhase = 1
+                                        instruction = StringBuilder()
+                                        complexField = null
+                                        fieldResultSeen = false
+                                    }
+                                    "separate" -> {
+                                        complexField = parsePageField(instruction.toString())
+                                        fieldPhase = if (complexField != null) 2 else 0
+                                    }
+                                    "end" -> {
+                                        if (fieldPhase == 2 && complexField != null && !fieldResultSeen) {
+                                            pieces.add(RenderRun("", format, activeCitations.values.lastOrNull(), complexField))
+                                        }
+                                        fieldPhase = 0
+                                        complexField = null
+                                    }
+                                }
                                 it.word("t") -> text.append(it.textContent)
                                 it.word("tab") -> text.append('\t')
                                 it.word("br") || it.word("cr") -> {
@@ -166,19 +296,20 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
                                 it.word("noBreakHyphen") -> text.append('\u2011')
                                 it.isAlternateDrawing() -> {
                                     flush()
-                                    pieces.add(horizontalRule(it) ?: alternateDrawingImage(it, images))
+                                    pieces.add(horizontalRule(it) ?: alternateDrawingImage(it, currentImages))
                                 }
                                 it.word("drawing") || it.word("pict") || it.word("object") -> {
                                     flush()
                                     val rule = horizontalRule(it)
-                                    if (rule != null) pieces.add(rule) else pieces.addAll(drawingImages(it, images))
+                                    if (rule != null) pieces.add(rule) else pieces.addAll(drawingImages(it, currentImages))
                                 }
                             }
                         }
                         flush()
                     }
-                    child.word("hyperlink") || child.word("ins") || child.word("fldSimple") ||
-                        child.word("sdtContent") || child.word("sdt") || child.word("smartTag") -> collect(child)
+                    child.word("fldSimple") -> collect(child, parsePageField(child.attr("instr")) ?: fieldOverride)
+                    child.word("hyperlink") || child.word("ins") ||
+                        child.word("sdtContent") || child.word("sdt") || child.word("smartTag") -> collect(child, fieldOverride)
                 }
             }
         }
@@ -206,7 +337,14 @@ private class Renderer(stylePart: Element?, numberingPart: Element?, private val
             twips("ind", "start", "left"), indentSource.get("ind").attr("hanging")?.toIntOrNull() ?: 0,
             indentSource.get("ind").attr("firstLine")?.toIntOrNull() ?: 0, heading, item?.first,
             RenderBorders(border("top"), border("bottom"), border("left", "start"), border("right", "end")),
-            layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks)
+            layers.asReversed().firstNotNullOfOrNull { it.enabled("pageBreakBefore") } == true, pageBreaks,
+            layers.asReversed().firstNotNullOfOrNull { it.get("shd").rgbAttr("fill") },
+            PrintParagraphProperties(
+                layers.fold(baseRun) { mark, layer -> mark.overlay(runFormat(layer.get("rPr"))) },
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("keepNext") } == true,
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("keepLines") } == true,
+                layers.asReversed().firstNotNullOfOrNull { it.enabled("widowControl") } != false,
+            ))
         if (pieces.none { it is RenderBlock }) return listOf(paragraph.copy(runs = pieces.filterIsInstance<RenderRun>()))
         // Promote drawings to blocks at their run position, preserving text on both sides.
         return buildList {

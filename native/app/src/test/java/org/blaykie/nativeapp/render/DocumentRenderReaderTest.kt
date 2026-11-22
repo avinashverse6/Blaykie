@@ -374,6 +374,242 @@ class DocumentRenderReaderTest {
     }
 
     private fun document(body: String) = "<w:document $ns><w:body>$body</w:body></w:document>"
+    @Test fun letterThesisPaginationKeepsBlankMarksWidowsAndHeadingChains() {
+        val styles = """<w:styles $ns><w:docDefaults>
+            <w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault>
+            <w:pPrDefault><w:pPr><w:jc w:val="both"/><w:spacing w:line="360" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+            </w:docDefaults><w:style w:type="paragraph" w:styleId="Heading1"><w:pPr><w:keepNext/></w:pPr></w:style>
+            </w:styles>"""
+        val setup = """<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440"
+            w:left="1440" w:right="1440" w:bottom="1440"/></w:sectPr>"""
+        val blank = """<w:p><w:pPr><w:rPr><w:sz w:val="28"/><w:b/></w:rPr></w:pPr></w:p>"""
+        val heading = """<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Heading</w:t></w:r></w:p>"""
+        fun lines(count: Int) = "<w:p><w:r>" + List(count) { "<w:t>Thesis line</w:t>" }.joinToString("<w:br/>") + "</w:r></w:p>"
+        fun paginate(body: String): List<PrintPage> {
+            val model = render(body + setup, styles)
+            assertEquals(648f, model.pageSetup.contentHeightPoints, .001f)
+            val items = model.blocks.mapIndexed { index, block -> MobilePageItem.Block(index, block) }
+            return paginatePrintBody(items, model.pageSetup, 12f, 1f, measureLines = { paragraph ->
+                val mark = paragraph.print.mark
+                assertEquals("Times New Roman", mark.font)
+                val size = checkNotNull(mark.sizePoints)
+                val text = paragraph.runs.joinToString("") { it.text }
+                val ends = text.mapIndexedNotNull { index, ch -> (index + 1).takeIf { ch == '\n' } } + text.length
+                PrintLines(List(ends.size + 1) { it * printLineSpacing(size * 1.15f, paragraph.lineSpacing, paragraph.lineRule) })
+            }, measureBlock = { error("Only paragraphs expected") }).pages
+        }
+        val long = paginate(lines(28) + lines(10))
+        assertEquals(3, long.first().rows.last().lineCount)
+        assertEquals(7, long[1].rows.first().lineCount)
+        val head = long.first().rows.last()
+        val tail = long[1].rows.first()
+        assertSame(head.lines, tail.lines)
+        assertEquals(head.firstLine + head.lineCount, tail.firstLine)
+        assertEquals(10, head.lineCount + tail.lineCount)
+        assertEquals(RenderAlignment.Justify, ((head.item as MobilePageItem.Block).content as RenderParagraph).alignment)
+        for (page in long) {
+            for ((row, next) in page.rows.zipWithNext()) {
+                assertTrue(row.top < next.top)
+                assertTrue(row.top + row.paragraphHeight <= next.top + .001f)
+            }
+            val last = page.rows.last()
+            assertTrue(last.top + last.paragraphHeight <= 648f)
+        }
+        val blankPages = paginate(blank.repeat(9) + heading + lines(1))
+        assertEquals(11, blankPages.single().rows.size)
+        assertEquals(0f, blankPages.single().rows.first().top, .001f)
+        assertEquals(9 * 14 * 1.15f * 1.5f, blankPages.single().rows[9].top, .001f)
+        val kept = paginate(lines(30) + heading + lines(1))
+        assertEquals(1, kept.first().rows.size)
+        assertEquals(listOf(1, 2), kept[1].rows.map { it.blockIndex })
+        val orphan = paginate(lines(30) + lines(4))
+        assertEquals(1, orphan.first().rows.size)
+        assertEquals(4, orphan[1].rows.first().lineCount)
+        val withoutWidowControl = lines(4).replace("<w:p>", """<w:p><w:pPr><w:widowControl w:val="0"/></w:pPr>""")
+        assertEquals(1, paginate(lines(30) + withoutWidowControl).first().rows.last().lineCount)
+        val keepLines = lines(4).replace("<w:p>", "<w:p><w:pPr><w:keepLines/></w:pPr>")
+        assertEquals(1, paginate(lines(28) + keepLines).first().rows.size)
+        val forced = blank.replace("<w:pPr>", "<w:pPr><w:pageBreakBefore/>")
+        assertEquals(0f, paginate(lines(1) + forced + heading + lines(1))[1].rows.first().top, .001f)
+        val single = paginate(lines(30) + lines(1))
+        assertEquals(2, single.single().rows.size) // A complete one-line paragraph is not an orphan fragment.
+    }
+
+
+    // ---------- Headers, footers, sections and page fields ----------
+
+    private val nsR = "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\""
+    private val hfStyles = """<w:styles $ns><w:docDefaults><w:rPrDefault><w:rPr>
+        <w:rFonts w:ascii="Times New Roman"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>"""
+    private val relFooter = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
+    private val relHeader = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
+
+    private fun textRun(text: String) = "<w:r><w:t xml:space=\"preserve\">$text</w:t></w:r>"
+    private fun simpleField(instr: String, cached: String) =
+        "<w:fldSimple w:instr=\" $instr \"><w:r><w:t>$cached</w:t></w:r></w:fldSimple>"
+    private fun complexField(instr: String, cached: String) =
+        "<w:r><w:fldChar w:fldCharType=\"begin\"/></w:r>" +
+        "<w:r><w:instrText xml:space=\"preserve\"> $instr </w:instrText></w:r>" +
+        "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>$cached</w:t></w:r>" +
+        "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
+    private fun footerPart(inner: String) =
+        "<w:ftr $ns><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr>$inner</w:p></w:ftr>"
+    private fun headerPart(inner: String) =
+        "<w:hdr $ns><w:p><w:pPr><w:jc w:val=\"center\"/></w:pPr>$inner</w:p></w:hdr>"
+    private fun hfRels(vararg entries: Pair<Pair<String, String>, String>): Map<String, String> {
+        val rels = entries.joinToString("") { (head, _) ->
+            "<Relationship Id=\"${head.first}\" Type=\"${head.second}\" Target=\"${entries.first { it.first == head }.second}\"/>"
+        }
+        return mapOf("word/_rels/document.xml.rels" to
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">$rels</Relationships>")
+    }
+    private fun hfSect(refs: String = "", inner: String = "") = """<w:sectPr>$refs$inner
+        <w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:left="1440" w:right="1440" w:bottom="1440"
+        w:header="720" w:footer="720"/></w:sectPr>"""
+    private fun hfBody(lines: Int) =
+        "<w:p><w:r>" + List(lines) { "<w:t>Body line</w:t>" }.joinToString("<w:br/>") + "</w:r></w:p>"
+    private fun hfModel(body: String, extra: Map<String, String>): DocumentRenderModel {
+        val xml = "<w:document $ns $nsR><w:body>$body</w:body></w:document>"
+        return readDocumentRenderModel(docx(xml, hfStyles, extra = extra), xml)
+    }
+    private fun fakeLines(paragraph: RenderParagraph): PrintLines {
+        val size = paragraph.print.mark.sizePoints ?: 12f
+        val text = paragraph.runs.joinToString("") { it.text }
+        val ends = text.mapIndexedNotNull { index, ch -> (index + 1).takeIf { ch == '\n' } } + text.length
+        return PrintLines(List(ends.size + 1) { it * printLineSpacing(size * 1.15f, paragraph.lineSpacing, paragraph.lineRule) })
+    }
+    private fun hfPages(model: DocumentRenderModel, headerHeight: Float = 14f): List<PrintPage> {
+        val spans = buildPrintSectionSpans(model.sections, model.evenAndOddHeaders) { headerHeight }
+        val snapshot = paginatePrintBody(model.pageItems(), model.pageSetup, 12f, 1f,
+            measureLines = ::fakeLines, measureBlock = { error("Only paragraphs expected") }, spans = spans)
+        return assignPrintPageNumbers(snapshot.pages, spans, model.evenAndOddHeaders)
+    }
+    private fun pageFooterText(page: PrintPage): String =
+        page.footerBlocks.withPageFields(page.pageLabel, page.totalLabel, page.sectionTotalLabel)
+            .filterIsInstance<RenderParagraph>().joinToString("") { p -> p.runs.joinToString("") { it.text } }
+    private fun pageHeaderText(page: PrintPage): String =
+        page.headerBlocks.withPageFields(page.pageLabel, page.totalLabel, page.sectionTotalLabel)
+            .filterIsInstance<RenderParagraph>().joinToString("") { p -> p.runs.joinToString("") { it.text } }
+
+    @Test fun footerPageOfTotalShowsRealNumbersOnEveryPage() {
+        val footer = footerPart(textRun("Page ") + complexField("PAGE", "7") + textRun(" of ") + simpleField("NUMPAGES", "9"))
+        val model = hfModel(hfBody(100) + hfSect("""<w:footerReference w:type="default" r:id="rF1"/>"""),
+            hfRels(("rF1" to relFooter) to "footer1.xml") + ("word/footer1.xml" to footer))
+        val section = model.sections.single()
+        val runs = (section.footers.getValue(HeaderFooterKind.Default).single() as RenderParagraph).runs
+        assertEquals(listOf(PageField.Page, PageField.NumPages), runs.mapNotNull { it.field })
+        val pages = hfPages(model)
+        assertEquals(3, pages.size)
+        pages.forEachIndexed { index, page ->
+            assertEquals((index + 1).toString(), page.pageLabel)
+            assertEquals("3", page.totalLabel)
+            assertEquals("Page ${index + 1} of 3", pageFooterText(page))
+        }
+    }
+
+    @Test fun titlePageUsesFirstFooterOnlyOnFirstPage() {
+        val extra = hfRels(("rF1" to relFooter) to "footer1.xml", ("rF2" to relFooter) to "footer2.xml") +
+            ("word/footer1.xml" to footerPart(textRun("Default ") + simpleField("PAGE", "1"))) +
+            ("word/footer2.xml" to footerPart(textRun("First ") + simpleField("PAGE", "1")))
+        val refs = """<w:footerReference w:type="default" r:id="rF1"/><w:footerReference w:type="first" r:id="rF2"/><w:titlePg/>"""
+        val pages = hfPages(hfModel(hfBody(50) + hfSect(refs), extra))
+        assertEquals(2, pages.size)
+        assertEquals("First 1", pageFooterText(pages[0]))
+        assertEquals("Default 2", pageFooterText(pages[1]))
+    }
+
+    @Test fun evenFooterUsedOnEvenPagesWhenEnabled() {
+        val extra = hfRels(("rF1" to relFooter) to "footer1.xml", ("rF2" to relFooter) to "footer2.xml") +
+            ("word/footer1.xml" to footerPart(textRun("Odd ") + simpleField("PAGE", "1"))) +
+            ("word/footer2.xml" to footerPart(textRun("Even ") + simpleField("PAGE", "1"))) +
+            ("word/settings.xml" to "<w:settings $ns><w:evenAndOddHeaders/></w:settings>")
+        val refs = """<w:footerReference w:type="default" r:id="rF1"/><w:footerReference w:type="even" r:id="rF2"/>"""
+        val pages = hfPages(hfModel(hfBody(50) + hfSect(refs), extra))
+        assertEquals("Odd 1", pageFooterText(pages[0]))
+        assertEquals("Even 2", pageFooterText(pages[1]))
+    }
+
+    @Test fun secondSectionStartsNewPageWithItsOwnFooter() {
+        val extra = hfRels(("rF1" to relFooter) to "footer1.xml", ("rF2" to relFooter) to "footer2.xml") +
+            ("word/footer1.xml" to footerPart(textRun("One ") + simpleField("PAGE", "1"))) +
+            ("word/footer2.xml" to footerPart(textRun("Two ") + simpleField("PAGE", "1")))
+        val firstEnd = """<w:p><w:pPr>${hfSect("""<w:footerReference w:type="default" r:id="rF1"/>""")}</w:pPr></w:p>"""
+        val body = hfBody(50) + firstEnd + hfBody(10) + hfSect("""<w:footerReference w:type="default" r:id="rF2"/>""")
+        val model = hfModel(body, extra)
+        assertEquals(2, model.sections.size)
+        val pages = hfPages(model)
+        assertEquals(3, pages.size)
+        assertEquals(listOf(0, 0, 1), pages.map { it.sectionIndex })
+        assertEquals("One 2", pageFooterText(pages[1]))
+        assertEquals("Two 3", pageFooterText(pages[2]))
+    }
+
+    @Test fun sectionInheritsPreviousFooterWhenItHasNone() {
+        val extra = hfRels(("rF1" to relFooter) to "footer1.xml") +
+            ("word/footer1.xml" to footerPart(textRun("Shared ") + simpleField("PAGE", "1")))
+        val firstEnd = """<w:p><w:pPr>${hfSect("""<w:footerReference w:type="default" r:id="rF1"/>""")}</w:pPr></w:p>"""
+        val pages = hfPages(hfModel(hfBody(50) + firstEnd + hfBody(10) + hfSect(), extra))
+        assertEquals("Shared 3", pageFooterText(pages[2]))
+    }
+
+    @Test fun pgNumTypeStartRestartsAndLowerRomanFormats() {
+        val extra = hfRels(("rF1" to relFooter) to "footer1.xml") +
+            ("word/footer1.xml" to footerPart(textRun("Page ") + simpleField("PAGE", "1")))
+        val firstEnd = """<w:p><w:pPr>${hfSect("""<w:footerReference w:type="default" r:id="rF1"/>""")}</w:pPr></w:p>"""
+        val restarted = hfSect("""<w:footerReference w:type="default" r:id="rF1"/>""",
+            """<w:pgNumType w:start="1"/>""")
+        val pages = hfPages(hfModel(hfBody(50) + firstEnd + hfBody(10) + restarted, extra))
+        assertEquals(listOf("1", "2", "1"), pages.map { it.pageLabel })
+        assertEquals("Page 1", pageFooterText(pages[2]))
+
+        val roman = hfSect("""<w:footerReference w:type="default" r:id="rF1"/>""",
+            """<w:pgNumType w:start="1" w:fmt="lowerRoman"/>""")
+        val romanPages = hfPages(hfModel(hfBody(100) + roman, extra))
+        assertEquals(listOf("i", "ii", "iii"), romanPages.map { it.pageLabel })
+        assertEquals("Page ii", pageFooterText(romanPages[1]))
+        assertEquals("iv", formatPageNumber(4, "lowerRoman"))
+        assertEquals("B", formatPageNumber(2, "upperLetter"))
+    }
+
+    @Test fun tallHeaderPushesBodyDownAndShrinksPages() {
+        val extra = hfRels(("rH1" to relHeader) to "header1.xml", ("rF1" to relFooter) to "footer1.xml") +
+            ("word/header1.xml" to headerPart(textRun("Thesis header"))) +
+            ("word/footer1.xml" to footerPart(textRun("Page ") + simpleField("PAGE", "1")))
+        val model = hfModel(hfBody(130) + hfSect("""<w:headerReference w:type="default" r:id="rH1"/>""" +
+            """<w:footerReference w:type="default" r:id="rF1"/>"""), extra)
+        val headerBlocks = model.sections.single().headers.getValue(HeaderFooterKind.Default)
+        val span = buildPrintSectionSpans(model.sections, model.evenAndOddHeaders) { blocks ->
+            if (blocks == headerBlocks) 100f else 14f
+        }.single()
+        assertEquals(136f, span.effectiveTopPoints, .001f) // 36pt distance + 100pt header over a 72pt margin.
+        assertEquals(584f, span.capacityPoints, .001f)
+        val spans = buildPrintSectionSpans(model.sections, model.evenAndOddHeaders) { blocks ->
+            if (blocks == headerBlocks) 100f else 14f
+        }
+        val snapshot = paginatePrintBody(model.pageItems(), model.pageSetup, 12f, 1f,
+            measureLines = ::fakeLines, measureBlock = { error("Only paragraphs expected") }, spans = spans)
+        val pages = assignPrintPageNumbers(snapshot.pages, spans, model.evenAndOddHeaders)
+        assertEquals("Thesis header", pageHeaderText(pages.first()))
+        assertTrue(pages.first().rows.last().lineCount < 46)
+        val roomy = hfPages(model, headerHeight = 14f)
+        assertTrue(pages.size > roomy.size)
+    }
+
+    @Test fun documentWithoutHeadersIsUnchanged() {
+        val model = hfModel(hfBody(100) + hfSect(), emptyMap())
+        assertTrue(model.sections.single().headers.isEmpty())
+        assertTrue(model.sections.single().footers.isEmpty())
+        val span = buildPrintSectionSpans(model.sections, model.evenAndOddHeaders) { 14f }.single()
+        assertEquals(model.pageSetup.contentHeightPoints, span.capacityPoints, .001f)
+        assertEquals(72f, span.effectiveTopPoints, .001f)
+        val withSpans = hfPages(model)
+        val plain = paginatePrintBody(model.pageItems(), model.pageSetup, 12f, 1f,
+            measureLines = ::fakeLines, measureBlock = { error("Only paragraphs expected") }).pages
+        assertEquals(plain.map { page -> page.rows.map { it.lineCount } },
+            withSpans.map { page -> page.rows.map { it.lineCount } })
+        assertTrue(withSpans.all { it.headerBlocks.isEmpty() && it.footerBlocks.isEmpty() })
+    }
+
     private fun render(body: String, styles: String? = null, numbering: String? = null): DocumentRenderModel {
         val xml = document(body)
         return readDocumentRenderModel(docx(xml, styles, numbering), xml)

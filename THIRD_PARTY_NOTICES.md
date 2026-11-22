@@ -39,6 +39,12 @@ Blaykie's own code remains AGPL-3.0-or-later. Styles imported by users stay on t
   - `lora_regular.ttf`: 133888 bytes; SHA-256 `7ed00e7c9cdf16ab7e2fd2361fe45d4f0b61263cd60aae398b27b7ee08108827`.
   - `lora_bold.ttf`: 133828 bytes; SHA-256 `7d74015e950c2fb66519c7295b8155621d22200ae2ca2a4c6b43ce3c490cac87`.
   - `Lora-OFL.txt` / `lora_ofl.txt`: 4516 bytes each; SHA-256 `41cf75bf229a1435b7df209ac7419622516eff7e8cab79260fb0fb9b1cc8ced2`.
+- The native app uses unmodified static **Tinos** Regular, Bold, Italic and Bold Italic as the metric-compatible fallback for Times New Roman in document views. Tinos is distributed under the SIL Open Font License 1.1 (https://openfontlicense.org). The font files' name table (copyright, nameID 0) states: `Copyright 2026 The Tinos Project Authors (https://github.com/googlefonts/tinos)`. The unmodified license is in `docs/licenses/tinos_license.txt`, copied to `native/LICENSES/Tinos-OFL.txt` and shipped as the `tinos_ofl` raw resource and shown in About.
+  - `tinos_regular.ttf`: 508752 bytes; SHA-256 `924ef269e73da94c1803ff68877f5d998dd16605c5ffad82ee181034f8a1fffe`.
+  - `tinos_bold.ttf`: 583484 bytes; SHA-256 `576a19b5dc026cafe6ae8fde4c849588dae6475cf5d912cebdf2827388c43ad9`.
+  - `tinos_italic.ttf`: 549824 bytes; SHA-256 `4a52de5bcf70e37bd71949f8a85302b75795a1943aedffbbee4f2db7744e1c81`.
+  - `tinos_bold_italic.ttf`: 563688 bytes; SHA-256 `10c90ef7896d758923c06a1485d7824cdb457466da0bf7d42f81c5228931281b`.
+  - `Tinos-OFL.txt` / `tinos_ofl.txt`: 4394 bytes each; SHA-256 `07424db4089211e77dd8a0bca14fbf46e8801045d6db9061fbd6ce08e582594e`.
 - The native app does not bundle Poppins or Liberation Serif. The repository-root Poppins files remain for the Kivy app; see its inventory below.
 
 ### Native test-only dependencies

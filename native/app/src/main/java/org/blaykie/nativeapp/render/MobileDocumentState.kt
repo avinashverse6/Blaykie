@@ -15,11 +15,13 @@ import org.blaykie.nativeapp.document.DocumentView
 import org.blaykie.nativeapp.docx.DocxProject
 
 internal data class MobilePage(val source: File, val items: List<MobilePageItem>, val setup: PageSetup,
-                               val bibliographyBlocks: Set<Int> = emptySet())
+                               val bibliographyBlocks: Set<Int> = emptySet(),
+                               val sections: List<PrintSection> = emptyList(), val evenAndOddHeaders: Boolean = false)
 
 /** The page survives trips into the editor. Only changed paragraphs are parsed on return. */
-internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile) {
+internal class MobileDocumentState(position: DocumentPosition = DocumentPosition(), initialView: DocumentView = DocumentView.Mobile, initialLightPrintPage: Boolean = false) {
     val scroll = LazyListState()
+    var lightPrintPage by mutableStateOf(initialLightPrintPage)
     val printScroll = LazyListState()
     val printPan = ScrollState(0)
     var printZoom by mutableFloatStateOf(1f)
@@ -92,7 +94,7 @@ internal class MobileDocumentState(position: DocumentPosition = DocumentPosition
         val inputs = if (full == null) dirty.associateWith { project.renderInput(it) } else emptyMap()
         if (full == null && inputs.isEmpty() && hideBibliography == hiddenBibliography) return
         val next = withContext(Dispatchers.Default) {
-            if (full != null) full.read().let { MobilePage(it.source, it.pageItems(), it.pageSetup, it.bibliographyBlocks) }
+            if (full != null) full.read().let { MobilePage(it.source, it.pageItems(), it.pageSetup, it.bibliographyBlocks, it.sections, it.evenAndOddHeaders) }
             else {
                 checkNotNull(previous)
                 if (inputs.isEmpty()) return@withContext previous
