@@ -90,8 +90,9 @@ class BibliographyMissingReferencesTest {
         project.buildXml(allowMissing = allowMissing)
     }
 
-    private suspend fun mockRecovery(opened: OpenDocument, response: String, progress: (Int) -> Unit = {},
-                                     extraResponses: List<String> = emptyList(), expectedRequests: Int = 1): PreviewReferences =
+    private suspend fun mockRecovery(opened: OpenDocument, response: String,
+                                     extraResponses: List<String> = emptyList(), expectedRequests: Int = 1,
+                                     progress: (Int) -> Unit = {}): PreviewReferences =
         MockWebServer().use { server ->
             server.start()
             server.enqueue(MockResponse().setBody(response))
