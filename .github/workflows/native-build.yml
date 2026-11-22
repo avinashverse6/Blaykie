@@ -50,6 +50,8 @@ jobs:
       - name: Run unit tests and build debug APK
         env:
           BLAYKIE_SAMPLE_DIR: ${{ github.workspace }}/native/app/build/sample-docx-csl
+          ZOTERO_OAUTH_CLIENT_KEY: ${{ secrets.ZOTERO_OAUTH_CLIENT_KEY }}
+          ZOTERO_OAUTH_CLIENT_SECRET: ${{ secrets.ZOTERO_OAUTH_CLIENT_SECRET }}
         working-directory: native
         run: |
           set +e
@@ -98,6 +100,9 @@ jobs:
                   print('::notice::Manifest merger: ' + excerpt.replace('%', '%25').replace('\n', '%0A'))
           PYCODE
       - name: Verify release isolation and compare APK sizes
+        env:
+          ZOTERO_OAUTH_CLIENT_KEY: ${{ secrets.ZOTERO_OAUTH_CLIENT_KEY }}
+          ZOTERO_OAUTH_CLIENT_SECRET: ${{ secrets.ZOTERO_OAUTH_CLIENT_SECRET }}
         working-directory: native
         run: |
           ./gradlew assembleRelease testReleaseUnitTest
@@ -186,6 +191,9 @@ jobs:
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35"
           fi
       - name: Compile optional release and run release unit tests
+        env:
+          ZOTERO_OAUTH_CLIENT_KEY: ${{ secrets.ZOTERO_OAUTH_CLIENT_KEY }}
+          ZOTERO_OAUTH_CLIENT_SECRET: ${{ secrets.ZOTERO_OAUTH_CLIENT_SECRET }}
         working-directory: native
         run: |
           set +e

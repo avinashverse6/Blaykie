@@ -51,6 +51,15 @@ class AccountTest {
         assertFalse(AccountState(account = summary).toString().contains(secret))
         assertEquals(secret, restored.key); assertEquals(123L, restored.verified.userId); assertEquals(permissions, restored.verified.permissions)
     }
+    @Test fun oauthUsernameRoundTripsInsideTheEncryptedRecord() {
+        val cipher = FakeCipher(); val store = AccountStore(temp.root, cipher)
+        assertTrue(store.save(AccountSecret(secret, verified, "researcher")))
+        val fileText = File(temp.root, "account.enc").readBytes().toString(Charsets.ISO_8859_1)
+        assertFalse(fileText.contains("researcher"))
+        val restored = (store.read() as AccountRead.Present).account
+        assertEquals("researcher", restored.username)
+        assertEquals(secret, restored.key)
+    }
     @Test fun removeWipesCiphertextAndKeystoreEntry() {
         val cipher = FakeCipher(); val store = AccountStore(temp.root, cipher)
         assertTrue(store.save(AccountSecret(secret, verified))); assertTrue(store.remove())

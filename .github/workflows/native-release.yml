@@ -42,6 +42,9 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Run unit tests and check debug identity
+        env:
+          ZOTERO_OAUTH_CLIENT_KEY: ${{ secrets.ZOTERO_OAUTH_CLIENT_KEY }}
+          ZOTERO_OAUTH_CLIENT_SECRET: ${{ secrets.ZOTERO_OAUTH_CLIENT_SECRET }}
         working-directory: native
         run: |
           set -eu
@@ -59,6 +62,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/blaykie-release.p12
+          ZOTERO_OAUTH_CLIENT_KEY: ${{ secrets.ZOTERO_OAUTH_CLIENT_KEY }}
+          ZOTERO_OAUTH_CLIENT_SECRET: ${{ secrets.ZOTERO_OAUTH_CLIENT_SECRET }}
         run: |
           set -eu
           : "${ANDROID_KEYSTORE_BASE64:?Missing keystore secret}"

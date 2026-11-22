@@ -48,20 +48,70 @@ internal fun AccountGate(activity: Activity, controller: AccountController, cont
     val openBrowser = {
         try { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.zotero.org/settings/keys/new"))) } catch (_: Exception) { }
     }
+    LaunchedEffect(state.authorizeUrl) {
+        val url = state.authorizeUrl ?: return@LaunchedEffect
+        try {
+            activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            controller.oauthBrowserOpened()
+        } catch (_: Exception) {
+            controller.oauthBrowserFailed()
+        }
+    }
     when (state.route) {
         AccountRoute.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         AccountRoute.APP -> holder.SaveableStateProvider("application") { content() }
         AccountRoute.FIRST_RUN -> {
             BackHandler { }
-            KeyScreen(state, firstRun = true, onOpenBrowser = openBrowser, onSave = { controller.verify(it) },
-                onCancel = { controller.openKey(true); controller.cancelKey() },
-                onSkip = { controller.skip() }, onUseAnyway = { controller.useAnyway() })
+            if (controller.oauthAvailable) {
+                SignInScreen(state, onSignIn = { controller.startOAuth() },
+                    onAdvanced = { controller.openKey(true) }, onSkip = { controller.skip() })
+            } else {
+                KeyScreen(state, firstRun = true, onOpenBrowser = openBrowser, onSave = { controller.verify(it) },
+                    onCancel = { controller.openKey(true); controller.cancelKey() },
+                    onSkip = { controller.skip() }, onUseAnyway = { controller.useAnyway() })
+            }
         }
         AccountRoute.KEY -> {
             BackHandler { controller.cancelKey() }
             KeyScreen(state, firstRun = false, onOpenBrowser = openBrowser, onSave = { controller.verify(it) },
                 onCancel = { controller.cancelKey() }, onSkip = {}, onUseAnyway = { controller.useAnyway() })
         }
+    }
+}
+
+@Composable
+private fun SignInScreen(state: AccountState, onSignIn: () -> Unit, onAdvanced: () -> Unit, onSkip: () -> Unit) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
+        .padding(horizontal = Space.large, vertical = Space.large), verticalArrangement = Arrangement.spacedBy(Space.medium)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BrandLogo(size = 40)
+            Spacer(Modifier.width(Space.medium))
+            Text("Blaykie", style = MaterialTheme.typography.headlineSmall)
+        }
+        Spacer(Modifier.height(Space.medium))
+        Text("Connect your Zotero library", style = MaterialTheme.typography.headlineMedium)
+        Text("Sign in with Zotero to insert citations from your library.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(Space.small))
+        Button(onClick = onSignIn, enabled = !state.checking,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = CircleShape) {
+            if (state.checking) {
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(Space.small))
+            }
+            Text("Sign in with Zotero")
+        }
+        Text("Blaykie asks for read-only access to your library and your groups.",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Stored encrypted on this phone", modifier = Modifier.align(Alignment.CenterHorizontally),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.message.isNotEmpty()) AppErrorState(state.message)
+        TextButton(onClick = onAdvanced, enabled = !state.checking,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Use an API key instead (Advanced)") }
+        TextButton(onClick = onSkip, enabled = !state.checking,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Skip for now") }
+        Text("You can add a key later in Settings → Account.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -151,7 +201,10 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
                 else -> "No personal-library access"
             }
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text("User ID: ${account.userId}", style = MaterialTheme.typography.bodyLarge)
+                Text(if (account.username.isNullOrBlank()) "Using an API key" else "Signed in as ${account.username}",
+                    style = MaterialTheme.typography.bodyLarge)
+                Text("User ID: ${account.userId}", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Permissions: $level", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Text(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}", modifier = Modifier.padding(vertical = 12.dp))

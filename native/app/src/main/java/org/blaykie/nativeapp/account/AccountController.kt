@@ -11,10 +11,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.zotero.KeyPermissions
+import org.blaykie.nativeapp.zotero.OAuthAccessToken
+import org.blaykie.nativeapp.zotero.OAuthRequestToken
+import org.blaykie.nativeapp.zotero.OAuthResult
 import org.blaykie.nativeapp.zotero.ZoteroClient
+import org.blaykie.nativeapp.zotero.ZoteroOAuthClient
+import org.blaykie.nativeapp.zotero.parseOAuthCallback
+import org.blaykie.nativeapp.zotero.zoteroOAuthClientOrNull
+
+internal fun oauthFailureMessage(result: OAuthResult<*>): String = when (result) {
+    is OAuthResult.NetworkFailure -> "Network error. Check your internet connection and try again."
+    is OAuthResult.Rejected -> "Zotero did not complete the sign-in. Please try again."
+    else -> "Could not read Zotero's reply. Please try again."
+}
 
 internal enum class AccountRoute { LOADING, FIRST_RUN, APP, KEY }
-internal data class AccountSummary(val userId: Long, val lastFour: String, val permissions: KeyPermissions) {
+internal data class AccountSummary(val userId: Long, val lastFour: String, val permissions: KeyPermissions,
+                                   val username: String? = null) {
     override fun toString() = "AccountSummary(redacted)"
 }
 internal data class AccountState(
@@ -23,20 +36,29 @@ internal data class AccountState(
     val checking: Boolean = false,
     val warning: Boolean = false,
     val message: String = "",
-)
+    val authorizeUrl: String? = null,
+) {
+    override fun toString() = "AccountState(route=$route, account=$account, checking=$checking, warning=$warning)"
+}
 internal fun redactedKeySuffix(key: String): String = if (key.length > 4) key.takeLast(4) else ""
 
 internal fun removalResult(state: AccountState, removed: Boolean): AccountState =
     if (removed) state.copy(route = AccountRoute.FIRST_RUN, checking = false, account = null, message = "")
     else state.copy(checking = false, message = "Could not remove the key. Please try again.")
 
-internal class AccountController(private val store: AccountStore, private val logic: AccountLogic) : ViewModel() {
+internal class AccountController(private val store: AccountStore, private val logic: AccountLogic,
+                                 private val oauth: ZoteroOAuthClient? = null) : ViewModel() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val gate = VerificationGate()
     private val mutable = MutableStateFlow(AccountState())
     val state: StateFlow<AccountState> = mutable
     private var pending: AccountSecret? = null
     private var fromFirstRun = false
+    // Kept in memory only: a process death simply means the user signs in again.
+    private var pendingOAuth: OAuthRequestToken? = null
+    private var lastCallback: String? = null
+
+    val oauthAvailable: Boolean get() = oauth != null
 
     init {
         scope.launch {
@@ -49,7 +71,90 @@ internal class AccountController(private val store: AccountStore, private val lo
         }
     }
     private fun summary(secret: AccountSecret): AccountSummary = AccountSummary(secret.verified.userId,
-        redactedKeySuffix(secret.key), secret.verified.permissions)
+        redactedKeySuffix(secret.key), secret.verified.permissions, secret.username)
+
+    fun startOAuth() {
+        val client = oauth ?: return
+        if (mutable.value.checking || !gate.begin()) return
+        mutable.value = mutable.value.copy(checking = true, message = "")
+        scope.launch {
+            val result = try { withContext(Dispatchers.IO) { client.requestToken() } } finally { gate.end() }
+            when (result) {
+                is OAuthResult.Success -> {
+                    pendingOAuth = result.value
+                    mutable.value = mutable.value.copy(checking = false, authorizeUrl = client.authorizeUrl(result.value.token))
+                }
+                else -> mutable.value = mutable.value.copy(checking = false, message = oauthFailureMessage(result))
+            }
+        }
+    }
+
+    fun oauthBrowserOpened() {
+        mutable.value = mutable.value.copy(authorizeUrl = null)
+    }
+
+    fun oauthBrowserFailed() {
+        pendingOAuth = null
+        mutable.value = mutable.value.copy(authorizeUrl = null, message = "Could not open your browser. Please try again.")
+    }
+
+    fun handleOAuthCallback(data: android.net.Uri?) {
+        val url = data?.toString() ?: return
+        if (url == lastCallback) return // Activity recreation redelivers the same intent.
+        val callback = parseOAuthCallback(url) ?: return
+        lastCallback = url
+        val pendingToken = pendingOAuth
+        if (pendingToken == null) {
+            mutable.value = mutable.value.copy(message = "That sign-in link has expired. Please sign in again.")
+            return
+        }
+        if (callback.token == null || callback.token != pendingToken.token) {
+            pendingOAuth = null
+            mutable.value = mutable.value.copy(message = "Sign-in did not match. Please sign in again.")
+            return
+        }
+        val verifier = callback.verifier
+        if (verifier.isNullOrBlank()) {
+            pendingOAuth = null
+            mutable.value = mutable.value.copy(message = "Sign-in was cancelled. You can try again whenever you are ready.")
+            return
+        }
+        val client = oauth ?: return
+        if (mutable.value.checking || !gate.begin()) return
+        pendingOAuth = null
+        mutable.value = mutable.value.copy(checking = true, message = "")
+        scope.launch {
+            val exchanged = try { withContext(Dispatchers.IO) {
+                client.accessToken(pendingToken.token, pendingToken.secret, verifier)
+            } } finally { gate.end() }
+            when (exchanged) {
+                is OAuthResult.Success -> verifyOAuthKey(exchanged.value)
+                else -> mutable.value = mutable.value.copy(checking = false, message = oauthFailureMessage(exchanged))
+            }
+        }
+    }
+
+    private fun verifyOAuthKey(access: OAuthAccessToken) {
+        if (!gate.begin()) return
+        mutable.value = mutable.value.copy(checking = true)
+        scope.launch {
+            val result = try { withContext(Dispatchers.IO) { logic.verify(access.apiKey) } } finally { gate.end() }
+            when (result) {
+                is Verification.Failure -> mutable.value = mutable.value.copy(checking = false, message = result.message)
+                is Verification.Verified -> {
+                    if (result.secret.verified.userId != access.userId) {
+                        mutable.value = mutable.value.copy(checking = false,
+                            message = "Sign-in returned a different account. Please sign in again.")
+                        return@launch
+                    }
+                    // OAuth only ever grants the read-only scopes Blaykie requested, so the
+                    // broader-access warning used for manually pasted keys does not apply here.
+                    pending = AccountSecret(access.apiKey, result.secret.verified, access.username)
+                    savePending()
+                }
+            }
+        }
+    }
     fun openKey(fromFirst: Boolean) {
         fromFirstRun = fromFirst; pending = null
         mutable.value = mutable.value.copy(route = AccountRoute.KEY, warning = false, message = "")
@@ -103,9 +208,10 @@ internal class AccountController(private val store: AccountStore, private val lo
             mutable.value = removalResult(mutable.value, removed)
         }
     }
-    override fun onCleared() { pending = null; scope.cancel() }
+    override fun onCleared() { pending = null; pendingOAuth = null; scope.cancel() }
     class Factory(private val store: AccountStore) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = AccountController(store, AccountLogic(store, ZoteroClient())) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            AccountController(store, AccountLogic(store, ZoteroClient()), zoteroOAuthClientOrNull()) as T
     }
 }
