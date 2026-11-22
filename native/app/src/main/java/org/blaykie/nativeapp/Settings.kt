@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -22,6 +23,8 @@ data class Settings(
     val languageTag: String? = null,
     val styleMessage: String? = null,
     val languageMessage: String? = null,
+    /** Last library chosen on the Library tab: 0 = My Library, otherwise a Zotero group id. */
+    val libraryGroupId: Long = 0,
 )
 
 private val styleIdKey = stringPreferencesKey("selected_style_id")
@@ -75,7 +78,7 @@ internal fun readSelections(preferences: Preferences): Pair<String?, String?> =
 
 internal fun parseSettings(theme: String?, textSize: String?, customCitationStyles: Boolean? = null,
                            defaultCustomStyles: Boolean = false, styleId: String? = null, languageTag: String? = null,
-                           styleMessage: String? = null, languageMessage: String? = null): Settings = Settings(
+                           styleMessage: String? = null, languageMessage: String? = null, libraryGroupId: Long = 0): Settings = Settings(
     theme = ThemeMode.entries.firstOrNull { it.name == theme } ?: ThemeMode.System,
     textSize = TextSize.entries.firstOrNull { it.name == textSize } ?: TextSize.Normal,
     customCitationStyles = customCitationStyles ?: defaultCustomStyles,
@@ -83,16 +86,19 @@ internal fun parseSettings(theme: String?, textSize: String?, customCitationStyl
     languageTag = languageTag,
     styleMessage = styleMessage,
     languageMessage = languageMessage,
+    libraryGroupId = libraryGroupId,
 )
 
 class SettingsStore(private val context: Context) {
     private val themeKey = stringPreferencesKey("theme")
     private val textSizeKey = stringPreferencesKey("text_size")
     private val customCitationStylesKey = booleanPreferencesKey("custom_citation_styles")
+    private val libraryGroupIdKey = longPreferencesKey("library_group_id")
     val settings = context.settingsStore.data.map {
         val selection = readOptionalSelection(it)
         parseSettings(it[themeKey], it[textSizeKey], it[customCitationStylesKey], BuildConfig.CUSTOM_STYLES_DEFAULT,
-            selection.styleId, selection.languageTag, selection.styleMessage, selection.languageMessage)
+            selection.styleId, selection.languageTag, selection.styleMessage, selection.languageMessage,
+            it[libraryGroupIdKey] ?: 0)
     }
 
     suspend fun setTheme(theme: ThemeMode) {
@@ -116,6 +122,10 @@ class SettingsStore(private val context: Context) {
             preferences.putOptionalSelection(transform(readOptionalSelection(preferences)))
         }
         return readOptionalSelection(result)
+    }
+
+    suspend fun setLibraryGroupId(id: Long) {
+        context.settingsStore.edit { it[libraryGroupIdKey] = id }
     }
 
     suspend fun setCustomCitationStyles(enabled: Boolean) {

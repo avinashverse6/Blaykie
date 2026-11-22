@@ -40,10 +40,12 @@ sealed class ZoteroLibrary {
         is Personal -> "user"
         is Group -> "group:${group.id}"
     }
-    internal fun itemsPath(userId: Long, top: Boolean): List<String> = when (this) {
-        is Personal -> listOfNotNull("users", userId.toString(), "items", if (top) "top" else null)
-        is Group -> listOfNotNull("groups", group.id.toString(), "items", if (top) "top" else null)
+    internal fun basePath(userId: Long): List<String> = when (this) {
+        is Personal -> listOf("users", userId.toString())
+        is Group -> listOf("groups", group.id.toString())
     }
+    internal fun itemsPath(userId: Long, top: Boolean): List<String> =
+        basePath(userId) + listOfNotNull("items", if (top) "top" else null)
     companion object {
         fun fromJournal(value: String?): ZoteroLibrary =
             value?.removePrefix("group:")?.toLongOrNull()?.takeIf { value.startsWith("group:") && it > 0 }
@@ -55,7 +57,7 @@ data class KeyPermissions(val personalLibrary: Boolean, val personalFiles: Boole
     val broaderThanPersonalReadOnly: Boolean get() = personalFiles || personalWrite || groupAccess
 }
 data class VerifiedKey(val userId: Long, val permissions: KeyPermissions)
-data class ZoteroItem(val key: String, val data: JsonObject) {
+data class ZoteroItem(val key: String, val data: JsonObject, val numChildren: Int? = null) {
     fun citationItem(): CitationItem {
         fun string(name: String): String = (data[name] as? JsonPrimitive)?.contentOrNull.orEmpty()
         fun creators(kind: String): List<CitationAuthor> = (data["creators"] as? JsonArray).orEmpty().mapNotNull { element ->
@@ -122,7 +124,19 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         } catch (_: java.text.ParseException) { null }
     }.maxOrNull()?.coerceIn(0, MAX_WAIT_SECONDS) ?: 0L
 
-    private fun request(path: List<String>, params: Map<String, String>, apiKey: String): ZoteroResult<String> {
+    internal data class PagedBody(val body: String, val totalResults: Int?)
+    private fun request(path: List<String>, params: Map<String, String>, apiKey: String): ZoteroResult<String> =
+        when (val paged = requestPaged(path, params, apiKey)) {
+            is ZoteroResult.Success -> ZoteroResult.Success(paged.value.body)
+            is ZoteroResult.EmptyLibrary -> paged
+            is ZoteroResult.InvalidKey -> paged
+            is ZoteroResult.NetworkFailure -> paged
+            is ZoteroResult.Cancelled -> paged
+            is ZoteroResult.MalformedJson -> paged
+            is ZoteroResult.RateLimited -> paged
+            is ZoteroResult.HttpError -> paged
+        }
+    private fun requestPaged(path: List<String>, params: Map<String, String>, apiKey: String): ZoteroResult<PagedBody> {
         val url = BASE.newBuilder().apply {
             path.forEach { addPathSegment(it) }
             params.forEach { (key, value) -> addQueryParameter(key, value) }
@@ -164,7 +178,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
                     if (it.code == 401 || it.code == 403) return ZoteroResult.InvalidKey
                     if (!it.isSuccessful) return ZoteroResult.HttpError(it.code)
                     pendingWaitSeconds = delay
-                    return try { ZoteroResult.Success(it.body?.string() ?: "") } catch (_: IOException) {
+                    return try { ZoteroResult.Success(PagedBody(it.body?.string() ?: "", it.header("Total-Results")?.toIntOrNull())) } catch (_: IOException) {
                         if (cancelled) ZoteroResult.Cancelled else ZoteroResult.NetworkFailure
                     }
                 }
@@ -195,7 +209,8 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
     }
     private fun parseItems(raw: String): List<ZoteroItem> = (json.parseToJsonElement(raw) as JsonArray).map { value ->
         val obj = value as JsonObject
-        ZoteroItem((obj["key"] as JsonPrimitive).content, obj["data"] as JsonObject)
+        val children = ((obj["meta"] as? JsonObject)?.get("numChildren") as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+        ZoteroItem((obj["key"] as JsonPrimitive).content, obj["data"] as JsonObject, children)
     }
     /** Groups this key can read. Callers treat any failure quietly as "no groups". */
     fun groups(userId: Long, apiKey: String): ZoteroResult<List<ZoteroGroup>> =
@@ -236,6 +251,65 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         }
         return if (collected.isEmpty()) ZoteroResult.EmptyLibrary else ZoteroResult.Success(collected.take(maximum))
     }
+    /** All collections of a library, following limit/start paging. Read-only. */
+    fun collections(library: ZoteroLibrary, userId: Long, apiKey: String): ZoteroResult<List<ZoteroCollection>> {
+        val collected = mutableListOf<ZoteroCollection>()
+        var start = 0
+        while (true) {
+            val params = mapOf("limit" to "100", "start" to start.toString(), "format" to "json")
+            when (val page = parse(requestPaged(library.basePath(userId) + "collections", params, apiKey)) { raw ->
+                (json.parseToJsonElement(raw.body) as JsonArray).mapNotNull { value ->
+                    val obj = value as? JsonObject ?: return@mapNotNull null
+                    val data = obj["data"] as? JsonObject ?: return@mapNotNull null
+                    val key = (data["key"] as? JsonPrimitive)?.contentOrNull ?: (obj["key"] as? JsonPrimitive)?.contentOrNull
+                    val name = (data["name"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+                    if (key.isNullOrBlank()) null else ZoteroCollection(key, name.ifEmpty { "Untitled collection" },
+                        (data["parentCollection"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() && it != "false" },
+                        ((obj["meta"] as? JsonObject)?.get("numItems") as? JsonPrimitive)?.contentOrNull?.toIntOrNull())
+                } to raw.totalResults
+            }) {
+                is ZoteroResult.Success -> {
+                    collected += page.value.first
+                    val total = page.value.second
+                    if (page.value.first.size < 100 || (total != null && collected.size >= total)) break
+                    start += 100
+                }
+                is ZoteroResult.EmptyLibrary -> return page
+                is ZoteroResult.InvalidKey -> return page
+                is ZoteroResult.NetworkFailure -> return page
+                is ZoteroResult.Cancelled -> return page
+                is ZoteroResult.MalformedJson -> return page
+                is ZoteroResult.RateLimited -> return page
+                is ZoteroResult.HttpError -> return page
+            }
+        }
+        return ZoteroResult.Success(collected)
+    }
+
+    /** One page of a library's tags. Read-only. */
+    fun tagsPage(library: ZoteroLibrary, userId: Long, apiKey: String, query: String, start: Int, limit: Int = 50): ZoteroResult<TagPage> =
+        parse(requestPaged(library.basePath(userId) + "tags",
+            buildMap {
+                put("limit", limit.coerceIn(1, 100).toString()); put("start", start.coerceAtLeast(0).toString()); put("format", "json")
+                if (query.isNotBlank()) put("q", query.trim())
+            }, apiKey)) { raw ->
+            val tags = (json.parseToJsonElement(raw.body) as JsonArray).mapNotNull { value ->
+                val obj = value as? JsonObject ?: return@mapNotNull null
+                val name = (obj["tag"] as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+                if (name.isEmpty()) null else ZoteroTag(name,
+                    ((obj["meta"] as? JsonObject)?.get("numItems") as? JsonPrimitive)?.contentOrNull?.toIntOrNull())
+            }
+            TagPage(tags, raw.totalResults)
+        }
+
+    /** One page of browsable items (attachments, notes and annotations filtered out). Read-only. */
+    fun browsePage(library: ZoteroLibrary, userId: Long, apiKey: String, query: BrowseQuery): ZoteroResult<ItemsPage> =
+        parse(requestPaged(browsePath(library, userId, query.collectionKey), browseParams(query), apiKey)) { raw ->
+            val all = parseItems(raw.body)
+            ItemsPage(all.filter { (it.data["itemType"] as? JsonPrimitive)?.contentOrNull !in setOf("attachment", "note", "annotation") },
+                raw.totalResults, all.size)
+        }
+
     fun fetchItems(userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> =
         fetchItems(ZoteroLibrary.Personal, userId, apiKey, keys)
     fun fetchItems(library: ZoteroLibrary, userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> {
