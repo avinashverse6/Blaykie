@@ -16,6 +16,8 @@ import org.blaykie.nativeapp.docx.CitationOptions
     val items: List<CitationItem> = emptyList(), val style: String = "parenthetical",
     val page: String = "", val prefix: String = "", val previewText: String? = null,
     val citationOptions: CitationOptions = CitationOptions(),
+    /** Per-item library ("user" or "group:<id>"), aligned with items; empty in old journals. */
+    val itemLibraries: List<String> = emptyList(),
 )
 @Serializable data class Draft(val block: Int, val text: String)
 @Serializable data class Session(val uri: String, val fileName: String, val sourceName: String, val edits: List<EditOperation> = emptyList(), val draft: Draft? = null, val version: Int = 1, val debugCitationStyleId: String? = null, val debugCitationLanguage: String = "en-US", val debugCitationLanguageExplicit: Boolean = !debugCitationLanguage.equals("en-US", ignoreCase = true), val bibliography: BibliographyOptions = BibliographyOptions())

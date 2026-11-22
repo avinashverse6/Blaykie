@@ -72,7 +72,7 @@ internal class ExportController(private val context: Context, private val sessio
                             ?: return@withContext Pair(null, "Some earlier citations need their references. Add your Zotero details first.")
                         val lookup = ZoteroClient(); client = lookup
                         if (cancelled) lookup.cancel()
-                        when (val response = recoverReferences(project, lookup, account.account.verified.userId, account.account.key)) {
+                        when (val response = recoverReferencesWithGroups(project, lookup, account.account.verified.userId, account.account.key)) {
                             is ZoteroResult.Success -> omitted = response.value
                             is ZoteroResult.Cancelled -> return@withContext Pair(null, "Lookup cancelled.")
                             else -> return@withContext Pair(null, searchMessage(response))

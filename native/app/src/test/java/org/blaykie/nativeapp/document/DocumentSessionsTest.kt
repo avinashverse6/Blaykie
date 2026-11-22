@@ -88,6 +88,7 @@ class DocumentSessionsTest {
         assertEquals("en-US", restored.state.citationLanguage)
         assertFalse(restored.state.citationLanguageExplicit)
         assertTrue(restored.state.citations.isEmpty())
+        assertEquals(0L, restored.state.citationLibraryGroupId)
         assertEquals(1, restored.state.schemaVersion)
     }
 

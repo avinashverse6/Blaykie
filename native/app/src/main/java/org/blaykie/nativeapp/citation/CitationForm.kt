@@ -100,6 +100,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                                 item { Text("Add a Zotero key before searching.") }
                                 item { AppPrimaryButton(onClick = onAddKey) { Text("Add key") } }
                             } else {
+                                if (!editing) item { LibrarySelector(state, controller) }
                                 if (!editing) item {
                                     OutlinedTextField(value = state.query, onValueChange = controller::query,
                                         placeholder = { Text("Search Zotero") }, singleLine = true, shape = CircleShape,
@@ -165,7 +166,12 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                                                     contentAlignment = Alignment.Center) {
                                                     if (checked) Text("✓", color = colors.onPrimary, style = typography.labelLarge)
                                                 }
-                                                Column(Modifier.padding(start = 8.dp)) { ReferenceText(item.citationItem()) }
+                                                Column(Modifier.padding(start = 8.dp)) {
+                                                    ReferenceText(item.citationItem())
+                                                    (state.library as? org.blaykie.nativeapp.zotero.ZoteroLibrary.Group)?.let { group ->
+                                                        Text(group.group.name, style = typography.labelSmall, color = colors.onSurfaceVariant)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -227,6 +233,31 @@ private fun CitationPreview(state: SearchState, cslNote: String?, restriction: S
             if (preview.isNotEmpty()) Text(if (cslNote != null && !fallback) cslNote else preview, style = MaterialTheme.typography.bodyLarge)
             if (fallback) Text("Options apply to the built-in APA style only", style = MaterialTheme.typography.bodySmall)
             if (restriction != null) Text(restriction, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun LibrarySelector(state: SearchState, controller: CitationSearchController) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Library", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = state.library is org.blaykie.nativeapp.zotero.ZoteroLibrary.Personal,
+                onClick = { controller.selectLibrary(org.blaykie.nativeapp.zotero.ZoteroLibrary.Personal) },
+                label = { Text("My Library") }, shape = CircleShape)
+            state.groups.forEach { group ->
+                FilterChip(selected = (state.library as? org.blaykie.nativeapp.zotero.ZoteroLibrary.Group)?.group?.id == group.id,
+                    onClick = { controller.selectLibrary(org.blaykie.nativeapp.zotero.ZoteroLibrary.Group(group)) },
+                    label = { Text(group.name) }, shape = CircleShape)
+            }
+        }
+        groupsMessage(state.groupsLoaded, state.groups, state.groupsError)?.let { message ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(message, Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (state.groupsError != null) TextButton(onClick = controller::retryGroups) { Text("Retry") }
+            }
         }
     }
 }

@@ -40,6 +40,8 @@ internal data class DocumentState(
     val position: DocumentPosition = DocumentPosition(),
     val view: DocumentView = DocumentView.Mobile,
     val lightPrintPage: Boolean = false,
+    /** Last library chosen in Insert citation: 0 = My Library, otherwise a Zotero group id. */
+    val citationLibraryGroupId: Long = 0,
     val schemaVersion: Int = DOCUMENT_SCHEMA_VERSION,
     val citationLanguageExplicit: Boolean = !citationLanguage.equals("en-US", ignoreCase = true),
 )
@@ -136,7 +138,7 @@ internal class DocumentRepository(filesDir: File, private val now: () -> Long = 
     private fun valid(state: DocumentState): Boolean = state.schemaVersion == DOCUMENT_SCHEMA_VERSION &&
         state.displayName.isNotBlank() && state.createdAtMillis >= 0 && state.lastEditedAtMillis >= state.createdAtMillis &&
         state.position.paragraphIndex >= 0 && state.position.scrollOffset >= 0 &&
-        state.citationStyle.isNotBlank() && state.citationLanguage.isNotBlank() &&
+        state.citationStyle.isNotBlank() && state.citationLanguage.isNotBlank() && state.citationLibraryGroupId >= 0 &&
         state.citations.all { it.paragraphIndex >= 0 && it.characterOffset >= 0 &&
             it.zoteroItemIds.isNotEmpty() && it.zoteroItemIds.all(zoteroItemId::matches) }
 

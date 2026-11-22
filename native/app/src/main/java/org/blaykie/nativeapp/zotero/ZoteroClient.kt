@@ -28,6 +28,29 @@ sealed class ZoteroResult<out T> {
     final override fun toString(): String = "ZoteroResult.${javaClass.simpleName}"
 }
 
+data class ZoteroGroup(val id: Long, val name: String)
+
+/** A readable Zotero library: the personal library or one group library. */
+sealed class ZoteroLibrary {
+    object Personal : ZoteroLibrary()
+    data class Group(val group: ZoteroGroup) : ZoteroLibrary()
+
+    /** Compact session-journal encoding; group names are re-read from the API, never stored. */
+    val journalValue: String get() = when (this) {
+        is Personal -> "user"
+        is Group -> "group:${group.id}"
+    }
+    internal fun itemsPath(userId: Long, top: Boolean): List<String> = when (this) {
+        is Personal -> listOfNotNull("users", userId.toString(), "items", if (top) "top" else null)
+        is Group -> listOfNotNull("groups", group.id.toString(), "items", if (top) "top" else null)
+    }
+    companion object {
+        fun fromJournal(value: String?): ZoteroLibrary =
+            value?.removePrefix("group:")?.toLongOrNull()?.takeIf { value.startsWith("group:") && it > 0 }
+                ?.let { Group(ZoteroGroup(it, "")) } ?: Personal
+    }
+}
+
 data class KeyPermissions(val personalLibrary: Boolean, val personalFiles: Boolean, val personalNotes: Boolean, val personalWrite: Boolean, val groupAccess: Boolean) {
     val broaderThanPersonalReadOnly: Boolean get() = personalFiles || personalWrite || groupAccess
 }
@@ -174,7 +197,21 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         val obj = value as JsonObject
         ZoteroItem((obj["key"] as JsonPrimitive).content, obj["data"] as JsonObject)
     }
-    fun search(userId: Long, apiKey: String, query: String, limit: Int = MAX_ITEMS): ZoteroResult<List<ZoteroItem>> {
+    /** Groups this key can read. Callers treat any failure quietly as "no groups". */
+    fun groups(userId: Long, apiKey: String): ZoteroResult<List<ZoteroGroup>> =
+        parse(request(listOf("users", userId.toString(), "groups"), emptyMap(), apiKey)) { raw ->
+            (json.parseToJsonElement(raw) as JsonArray).mapNotNull { value ->
+                val obj = value as? JsonObject ?: return@mapNotNull null
+                val data = obj["data"] as? JsonObject
+                val id = listOf(data?.get("id"), obj["id"]).mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.toLongOrNull() }.firstOrNull()
+                val name = ((data?.get("name") as? JsonPrimitive)?.contentOrNull
+                    ?: (obj["name"] as? JsonPrimitive)?.contentOrNull)?.trim().orEmpty()
+                if (id == null || id <= 0) null else ZoteroGroup(id, name.ifEmpty { "Group $id" })
+            }
+        }
+    fun search(userId: Long, apiKey: String, query: String, limit: Int = MAX_ITEMS): ZoteroResult<List<ZoteroItem>> =
+        search(ZoteroLibrary.Personal, userId, apiKey, query, limit)
+    fun search(library: ZoteroLibrary, userId: Long, apiKey: String, query: String, limit: Int = MAX_ITEMS): ZoteroResult<List<ZoteroItem>> {
         val maximum = limit.coerceIn(1, MAX_ITEMS)
         val pageSize = minOf(PAGE_SIZE, maximum)
         val collected = mutableListOf<ZoteroItem>()
@@ -182,7 +219,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         var start = 0
         while (start < MAX_ITEMS && collected.size < maximum) {
             val params = mapOf("q" to query, "limit" to pageSize.toString(), "start" to start.toString(), "format" to "json")
-            when (val page = parse(request(listOf("users", userId.toString(), "items", "top"), params, apiKey), ::parseItems)) {
+            when (val page = parse(request(library.itemsPath(userId, top = true), params, apiKey), ::parseItems)) {
                 is ZoteroResult.Success -> {
                     collected += page.value.filter { (it.data["itemType"] as? JsonPrimitive)?.contentOrNull !in setOf("attachment", "note", "annotation") }
                     if (page.value.size < pageSize) break
@@ -199,12 +236,14 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         }
         return if (collected.isEmpty()) ZoteroResult.EmptyLibrary else ZoteroResult.Success(collected.take(maximum))
     }
-    fun fetchItems(userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> {
+    fun fetchItems(userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> =
+        fetchItems(ZoteroLibrary.Personal, userId, apiKey, keys)
+    fun fetchItems(library: ZoteroLibrary, userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> {
         if (keys.isEmpty()) return ZoteroResult.Success(emptyList())
         val items = mutableListOf<ZoteroItem>()
         for (group in keys.take(MAX_ITEMS).chunked(50)) {
             val params = mapOf("itemKey" to group.joinToString(","), "limit" to "100", "format" to "json")
-            when (val page = parse(request(listOf("users", userId.toString(), "items"), params, apiKey), ::parseItems)) {
+            when (val page = parse(request(library.itemsPath(userId, top = false), params, apiKey), ::parseItems)) {
                 is ZoteroResult.Success -> items += page.value
                 is ZoteroResult.EmptyLibrary -> return page
                 is ZoteroResult.InvalidKey -> return page

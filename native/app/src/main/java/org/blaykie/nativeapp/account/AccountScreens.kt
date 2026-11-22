@@ -222,6 +222,12 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
                 Text("User ID: ${account.userId}", style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Permissions: $level", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                state.groupsCount?.let { count ->
+                    Text(if (count > 0) "Groups available: $count" else "Groups available: None",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (count == 0) Text("Groups need read access on your Zotero key.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             Text(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}", modifier = Modifier.padding(vertical = 12.dp))
         }
