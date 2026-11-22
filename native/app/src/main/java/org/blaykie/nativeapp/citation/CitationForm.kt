@@ -252,9 +252,12 @@ private fun LibrarySelector(state: SearchState, controller: CitationSearchContro
                     label = { Text(group.name) }, shape = CircleShape)
             }
         }
-        if (state.groupsLoaded && state.groups.isEmpty()) {
-            Text("No groups found. Groups need read access on your Zotero key.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        groupsMessage(state.groupsLoaded, state.groups, state.groupsError)?.let { message ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(message, Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (state.groupsError != null) TextButton(onClick = controller::retryGroups) { Text("Retry") }
+            }
         }
     }
 }

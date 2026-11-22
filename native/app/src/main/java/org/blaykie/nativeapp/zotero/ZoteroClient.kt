@@ -204,7 +204,8 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
                 val obj = value as? JsonObject ?: return@mapNotNull null
                 val data = obj["data"] as? JsonObject
                 val id = listOf(data?.get("id"), obj["id"]).mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.toLongOrNull() }.firstOrNull()
-                val name = (data?.get("name") as? JsonPrimitive)?.contentOrNull?.trim().orEmpty()
+                val name = ((data?.get("name") as? JsonPrimitive)?.contentOrNull
+                    ?: (obj["name"] as? JsonPrimitive)?.contentOrNull)?.trim().orEmpty()
                 if (id == null || id <= 0) null else ZoteroGroup(id, name.ifEmpty { "Group $id" })
             }
         }

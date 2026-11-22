@@ -89,7 +89,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         redactedKeySuffix(secret.key), secret.verified.permissions, secret.username)
 
     private var groupsLoadedForUserId: Long = -1
-    /** Quiet, cached group-count load for Settings; any failure simply shows none. */
+    /** Cached group-count load for Settings; a failed load leaves the line hidden rather than claiming none. */
     private fun loadgroups() {
         val userId = mutable.value.account?.userId ?: return
         if (groupsLoadedForUserId == userId && mutable.value.groupsCount != null) return
@@ -97,13 +97,19 @@ internal class AccountController(private val store: AccountStore, private val lo
         scope.launch {
             val count = withContext(Dispatchers.IO) {
                 when (val read = store.read()) {
-                    is AccountRead.Present -> org.blaykie.nativeapp.zotero.ZoteroGroupsCache.fetch(
-                        ZoteroClient(), read.account.verified.userId, read.account.key).size
-                    else -> 0
+                    is AccountRead.Present -> (org.blaykie.nativeapp.zotero.ZoteroGroupsCache.fetch(
+                        ZoteroClient(), read.account.verified.userId, read.account.key) as? org.blaykie.nativeapp.zotero.GroupsLoad.Loaded)?.groups?.size
+                    else -> null
                 }
             }
-            if (mutable.value.account?.userId == userId) mutable.value = mutable.value.copy(groupsCount = count)
+            if (count == null) groupsLoadedForUserId = -1
+            if (count != null && mutable.value.account?.userId == userId) mutable.value = mutable.value.copy(groupsCount = count)
         }
+    }
+    /** A new or removed key invalidates every cached group result. */
+    private fun resetGroupsCache() {
+        org.blaykie.nativeapp.zotero.ZoteroGroupsCache.clear()
+        groupsLoadedForUserId = -1
     }
 
     fun startOAuth() {
@@ -239,10 +245,10 @@ internal class AccountController(private val store: AccountStore, private val lo
         scope.launch {
             val saved = withContext(Dispatchers.IO) { logic.save(secret) }
             pending = null
-            if (saved) loadgroups()
             mutable.value = if (saved) mutable.value.copy(checking = false, warning = false,
                 route = AccountRoute.APP, account = summary(secret), message = "", details = "")
             else mutable.value.copy(checking = false, warning = false, message = "Could not save the key securely. Please try again.")
+            if (saved) { resetGroupsCache(); loadgroups() }
         }
     }
     fun remove() {
@@ -250,6 +256,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         mutable.value = mutable.value.copy(checking = true, message = "")
         scope.launch {
             val removed = withContext(Dispatchers.IO) { store.remove() }
+            if (removed) resetGroupsCache()
             mutable.value = removalResult(mutable.value, removed)
         }
     }

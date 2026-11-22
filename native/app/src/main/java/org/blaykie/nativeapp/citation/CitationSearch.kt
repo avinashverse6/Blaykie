@@ -30,6 +30,12 @@ internal fun hasUsableKey(read: AccountRead): Boolean = read is AccountRead.Pres
 internal fun insertionPoint(start: Int, end: Int, length: Int): Int = maxOf(start, end).coerceIn(0, length)
 internal fun chosenItems(results: List<ZoteroItem>, selected: Set<Int>): List<CitationItem> =
     selected.sorted().mapNotNull { results.getOrNull(it) }.distinctBy { it.key }.map { it.citationItem() }
+/** The library hint: a load failure (with Retry) or, only after a successful load, the "no groups" note. */
+internal fun groupsMessage(groupsLoaded: Boolean, groups: List<ZoteroGroup>, groupsError: String?): String? = when {
+    groupsError != null -> groupsError
+    groupsLoaded && groups.isEmpty() -> "No groups found. Groups need read access on your Zotero key."
+    else -> null
+}
 internal fun searchMessage(result: ZoteroResult<*>): String = when (result) {
     is ZoteroResult.InvalidKey -> "Invalid key or no access to this library."
     is ZoteroResult.RateLimited -> "Zotero rate limit reached. Please try again later."
@@ -48,7 +54,7 @@ internal data class SearchState(
     val existingItems: List<CitationItem> = emptyList(),
     val loading: Boolean = false, val hasKey: Boolean = true, val message: String = "", val shown: Int = 20,
     val library: ZoteroLibrary = ZoteroLibrary.Personal, val groups: List<ZoteroGroup> = emptyList(),
-    val groupsLoaded: Boolean = false,
+    val groupsLoaded: Boolean = false, val groupsError: String? = null,
 ) {
     override fun toString() = "SearchState(redacted)"
     fun selectedItems(): List<CitationItem> = if (editNumber != null) existingItems else chosenItems(results, selected)
@@ -78,24 +84,31 @@ internal class CitationSearchController(private val accounts: AccountStore) : Vi
         refreshAccount()
         loadGroups()
     }
-    private fun loadGroups() {
+    private fun loadGroups(force: Boolean = false) {
         val current = generation
         scope.launch {
-            val groups = withContext(Dispatchers.IO) {
+            val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
-                    is AccountRead.Present -> ZoteroGroupsCache.fetch(ZoteroClient(), read.account.verified.userId, read.account.key)
-                    else -> emptyList()
+                    is AccountRead.Present -> ZoteroGroupsCache.fetch(ZoteroClient(), read.account.verified.userId, read.account.key, force)
+                    else -> org.blaykie.nativeapp.zotero.GroupsLoad.Loaded(emptyList())
                 }
             }
             if (current != generation || !mutable.value.open) return@launch
             val state = mutable.value
-            // Resolve the restored group's display name once the list arrives.
-            val library = (state.library as? ZoteroLibrary.Group)?.let { chosen ->
-                groups.firstOrNull { it.id == chosen.group.id }?.let { ZoteroLibrary.Group(it) } ?: chosen
-            } ?: state.library
-            mutable.value = state.copy(groups = groups, groupsLoaded = true, library = library)
+            when (result) {
+                is org.blaykie.nativeapp.zotero.GroupsLoad.Loaded -> {
+                    // Resolve the restored group's display name once the list arrives.
+                    val library = (state.library as? ZoteroLibrary.Group)?.let { chosen ->
+                        result.groups.firstOrNull { it.id == chosen.group.id }?.let { ZoteroLibrary.Group(it) } ?: chosen
+                    } ?: state.library
+                    mutable.value = state.copy(groups = result.groups, groupsLoaded = true, groupsError = null, library = library)
+                }
+                is org.blaykie.nativeapp.zotero.GroupsLoad.Failed ->
+                    mutable.value = state.copy(groupsLoaded = false, groupsError = result.message)
+            }
         }
     }
+    fun retryGroups() = loadGroups(force = true)
     fun selectLibrary(library: ZoteroLibrary) {
         val state = mutable.value
         if (state.library == library) return

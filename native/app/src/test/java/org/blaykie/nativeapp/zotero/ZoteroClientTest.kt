@@ -106,7 +106,8 @@ class ZoteroClientTest {
         assertFalse(failure.toString().contains(key))
     }
     @Test fun groupsListParsesNamesAndIds() {
-        server.enqueue(response("""[{"id":555,"data":{"id":555,"name":"Team Library"}},{"id":777,"data":{"name":"Lab"}}]"""))
+        // Real API shape: version/links/meta wrappers, fields inside "data", id also at top level.
+        server.enqueue(response("""[{"id":555,"version":0,"links":{"self":{"href":"https://api.zotero.org/groups/555"}},"meta":{"numItems":12},"data":{"id":555,"name":"Team Library","owner":42,"type":"Private","libraryReading":"all","libraryEditing":"admins"}},{"id":777,"version":3,"links":{},"meta":{},"data":{"id":777,"name":"Lab","owner":99,"type":"PublicOpen"}}]"""))
         val groups = success(client.groups(42, key))
         assertEquals(listOf(ZoteroGroup(555, "Team Library"), ZoteroGroup(777, "Lab")), groups)
         assertEquals("/users/42/groups", server.takeRequest().path)
