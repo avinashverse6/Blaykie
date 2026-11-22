@@ -1,0 +1,1 @@
+Print layout now follows the dark theme, with a switch if you prefer a light page. Long paragraphs flow across pages like in Word, text is justified and no longer clipped, and headers, footers and page numbers such as “Page 3 of 26” now appear. Documents in Times New Roman look closer to the original.
