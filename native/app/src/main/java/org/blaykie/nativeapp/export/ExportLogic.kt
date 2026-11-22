@@ -51,6 +51,11 @@ internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userI
             is ZoteroResult.HttpError -> return response
         }
     }
+    return recoverFromGroups(project, client, userId, key, groups)
+}
+
+private fun recoverFromGroups(project: DocxProject, client: ZoteroClient, userId: Long, key: String,
+                              groups: List<org.blaykie.nativeapp.zotero.ZoteroGroup>): ZoteroResult<Int> {
     for (group in groups) {
         val remaining = project.missingKeys().sorted()
         if (remaining.isEmpty()) break
@@ -67,11 +72,18 @@ internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userI
     return ZoteroResult.Success(project.missingKeys().size)
 }
 
-/** Recovery including group libraries; the group list itself is loaded quietly and only when needed. */
+/**
+ * Recovery including group libraries: the personal library is tried first (exactly as before,
+ * with no extra request when it finds everything); the group list is loaded quietly and only
+ * when items are still missing.
+ */
 internal fun recoverReferencesWithGroups(project: DocxProject, client: ZoteroClient, userId: Long, key: String): ZoteroResult<Int> {
     if (project.missingKeys().isEmpty()) return ZoteroResult.Success(0)
+    val personal = recoverReferences(project, client, userId, key)
+    if (personal !is ZoteroResult.Success || project.missingKeys().isEmpty()) return personal
     val groups = (client.groups(userId, key) as? ZoteroResult.Success)?.value ?: emptyList()
-    return recoverReferences(project, client, userId, key, groups)
+    if (groups.isEmpty()) return personal
+    return recoverFromGroups(project, client, userId, key, groups)
 }
 
 internal fun mayStartExport(phase: ExportPhase): Boolean = phase == ExportPhase.IDLE || phase == ExportPhase.DONE

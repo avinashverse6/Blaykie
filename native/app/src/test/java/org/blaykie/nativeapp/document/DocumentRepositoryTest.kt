@@ -145,6 +145,6 @@ class DocumentRepositoryTest {
         assertEquals(before, stateFile.readText())
         assertFalse(before.contains(secret))
         assertEquals(setOf("displayName", "createdAtMillis", "lastEditedAtMillis", "citations", "bibliography",
-            "citationStyle", "citationLanguage", "position", "view", "lightPrintPage", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
+            "citationStyle", "citationLanguage", "position", "view", "lightPrintPage", "citationLibraryGroupId", "schemaVersion", "citationLanguageExplicit"), Json.parseToJsonElement(before).jsonObject.keys)
     }
 }
