@@ -2,7 +2,9 @@ package org.blaykie.nativeapp.render
 
 internal data class DocumentRenderModel(val blocks: List<RenderBlock>, val source: java.io.File, val blockIndices: List<Int>,
                                         val pageSetup: PageSetup = PageSetup(), val editableBlocks: Set<Int> = emptySet(),
-                                        val bibliographyBlocks: Set<Int> = emptySet())
+                                        val bibliographyBlocks: Set<Int> = emptySet(),
+                                        val sections: List<PrintSection> = emptyList(),
+                                        val evenAndOddHeaders: Boolean = false)
 internal sealed interface RenderBlock
 internal enum class RenderAlignment { Start, End, Left, Right, Center, Justify }
 internal enum class RenderListKind { Bullet, Numbered }

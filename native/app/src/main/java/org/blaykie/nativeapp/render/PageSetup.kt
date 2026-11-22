@@ -24,5 +24,7 @@ internal fun readPageSetup(section: Element?): PageSetup {
     val left = edge("left", width - 720)
     val top = edge("top", height - 720)
     return PageSetup(width, height, landscape, top, edge("right", width - left - 720),
-        edge("bottom", height - top - 720), left)
+        edge("bottom", height - top - 720), left,
+        (margin.attr("header")?.toIntOrNull() ?: 720).coerceIn(0, height),
+        (margin.attr("footer")?.toIntOrNull() ?: 720).coerceIn(0, height))
 }

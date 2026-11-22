@@ -6,11 +6,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -37,7 +39,13 @@ import org.blaykie.nativeapp.PreviewParagraph
 import org.blaykie.nativeapp.docx.EndPreviewParagraph
 import kotlin.math.roundToInt
 
-internal data class PrintPage(val rows: List<PrintRow>)
+internal data class PrintPage(val rows: List<PrintRow>, val sectionIndex: Int = 0,
+                              val pageLabel: String = "", val totalLabel: String = "", val sectionTotalLabel: String = "",
+                              val firstOfSection: Boolean = false,
+                              val headerBlocks: List<RenderBlock> = emptyList(), val footerBlocks: List<RenderBlock> = emptyList(),
+                              val headerDistancePoints: Float = 36f, val footerDistancePoints: Float = 36f,
+                              val bodyTopPoints: Float? = null, val bodyBottomPoints: Float? = null,
+                              val blank: Boolean = false)
 private data class PrintPagination(val revision: Int, val pages: List<PrintPage>)
 internal data class PrintRow(val blockIndex: Int, val top: Float, val item: MobilePageItem? = null,
                              val reference: EndPreviewParagraph? = null, val title: Boolean = false, val label: String? = null,
@@ -72,7 +80,8 @@ internal class PrintMeasurements {
         legacyHeights.getOrPut(Key(p, width, size, scale), measure)
 
     data class Snapshot(val items: List<MobilePageItem>, val setup: PageSetup, val size: Float, val scale: Float,
-                        val pages: List<PrintPage>, val tailHeight: Float, val tailAfter: Int, val ink: PrintInk?)
+                        val pages: List<PrintPage>, val tailHeight: Float, val tailAfter: Int, val ink: PrintInk?,
+                        val spans: List<PrintSectionSpan> = emptyList())
     @Volatile var snapshot: Snapshot? = null
     @Synchronized
     fun paragraph(p: RenderParagraph, width: Float, size: Float, scale: Float, ink: PrintInk, measure: () -> PrintLines): PrintLines =
@@ -95,28 +104,37 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
         paperColors.background, paperColors.onBackground, paperColors.primaryContainer, paperColors.onPrimaryContainer)
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val fontScale = LocalDensity.current.fontScale
+    val drawMeasure = remember(measurer, fontScale, ink, state.printMeasurements) {
+        PrintMeasure(measurer, typography.bodyLarge.fontSize.value, fontScale, state.printMeasurements, ink)
+    }
     val result = footer?.content
     val renderedRevision = state.renderedRevision
     val pagination by produceState<PrintPagination?>(null, document, result, typography, measurer, fontScale, renderedRevision, ink) {
         value = withContext(Dispatchers.Default) {
             val estimate = PrintMeasure(measurer, typography.bodyLarge.fontSize.value, fontScale, state.printMeasurements, ink)
             val size = typography.bodyLarge.fontSize.value
+            val spans = buildPrintSectionSpans(document.sections, document.evenAndOddHeaders) { blocks ->
+                estimate.headerFooterHeight(blocks.withPageFields("1", "1", "1"), setup.contentWidthPoints)
+            }
             val body = paginatePrintBody(document.items, setup, size, fontScale, state.printMeasurements.snapshot,
                 ink = ink, measureLines = { estimate.lines(it, setup.contentWidthPoints) },
-                measureBlock = { estimate.height(it, setup.contentWidthPoints) }, checkActive = { ensureActive() })
+                measureBlock = { estimate.height(it, setup.contentWidthPoints) }, checkActive = { ensureActive() },
+                spans = spans)
             ensureActive()
             state.printMeasurements.snapshot = body
             val sheets = body.pages.dropLast(1).toMutableList()
             var rows = body.pages.lastOrNull()?.rows?.toMutableList() ?: mutableListOf()
             var cursor = body.tailHeight
+            val tailCapacity = spans.lastOrNull()?.capacityPoints ?: setup.contentHeightPoints
+            val tailSection = spans.lastIndex.coerceAtLeast(0)
             fun nextPage() {
                 if (rows.isEmpty()) return
-                sheets.add(PrintPage(rows))
+                sheets.add(PrintPage(rows, sectionIndex = tailSection))
                 rows = mutableListOf()
                 cursor = 0f
             }
             fun atomic(row: PrintRow, height: Float, pageBreak: Boolean = false) {
-                if (pageBreak || cursor + height > setup.contentHeightPoints) nextPage()
+                if (pageBreak || cursor + height > tailCapacity) nextPage()
                 rows.add(row.copy(top = cursor))
                 cursor += height
             }
@@ -129,7 +147,8 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
             result?.missingNote?.let { atomic(PrintRow(end, 0f, label = it), 24f) }
             result?.missingCitations?.forEach { atomic(PrintRow(end, 0f, label = it), 24f) }
             nextPage()
-            PrintPagination(renderedRevision, sheets.ifEmpty { listOf(PrintPage(emptyList())) })
+            val numbered = assignPrintPageNumbers(sheets, spans, document.evenAndOddHeaders)
+            PrintPagination(renderedRevision, numbered.ifEmpty { listOf(PrintPage(emptyList())) })
         }
     }
     val zoom = state.printZoom
@@ -162,10 +181,12 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
                             LocalDarkPaper provides if (darkPaper) DarkPaper(paper, paperColors.onSurface) else null,
                             LocalContentColor provides if (darkPaper) paperColors.onSurface else LocalContentColor.current) {
                             MaterialTheme(colorScheme = paperColors, typography = typography) {
-                                Column(Modifier.fillMaxWidth().heightIn(min = (setup.heightTwips / 20f).dp)
-                                    .shadow(3.dp, RectangleShape).background(paper)
+                                Box(Modifier.fillMaxWidth().height((setup.heightTwips / 20f).dp)
+                                    .shadow(3.dp, RectangleShape).background(paper)) {
+                                Column(Modifier.fillMaxWidth()
                                     .absolutePadding(left = (setup.leftTwips / 20f).dp, right = (setup.rightTwips / 20f).dp,
-                                        top = (setup.topTwips / 20f).dp, bottom = (setup.bottomTwips / 20f).dp)) {
+                                        top = (page.bodyTopPoints ?: (setup.topTwips / 20f)).dp,
+                                        bottom = (page.bodyBottomPoints ?: (setup.bottomTwips / 20f)).dp)) {
                                     var previousAfter = 0
                                     for (row in page.rows) {
                                         val item = row.item
@@ -190,6 +211,16 @@ internal fun PrintDocument(document: MobilePage, state: MobileDocumentState, foo
                                         if (result == null) BibliographyStatus(footer)
                                         else if (footer.lookupAttempted) TextButton(onClick = footer.retry) { Text("Retry") }
                                     }
+                                }
+                                if (page.headerBlocks.isNotEmpty()) PrintHeaderFooter(page.headerBlocks, page,
+                                    document.source, drawMeasure, setup.contentWidthPoints, fonts, tableScroll,
+                                    Modifier.fillMaxWidth().absolutePadding(left = (setup.leftTwips / 20f).dp,
+                                        right = (setup.rightTwips / 20f).dp, top = page.headerDistancePoints.dp))
+                                if (page.footerBlocks.isNotEmpty()) PrintHeaderFooter(page.footerBlocks, page,
+                                    document.source, drawMeasure, setup.contentWidthPoints, fonts, tableScroll,
+                                    Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                                        .absolutePadding(left = (setup.leftTwips / 20f).dp,
+                                            right = (setup.rightTwips / 20f).dp, bottom = page.footerDistancePoints.dp))
                                 }
                             }
                         }
@@ -225,9 +256,15 @@ internal fun RenderParagraph.printFragments(): List<RenderParagraph> {
 internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, size: Float, scale: Float,
                                previous: PrintMeasurements.Snapshot? = null,
                                measureLines: (RenderParagraph) -> PrintLines, measureBlock: (MobilePageItem) -> Float,
-                               checkActive: () -> Unit = {}, ink: PrintInk? = null): PrintMeasurements.Snapshot {
-    val capacity = setup.contentHeightPoints
-    val snapshot = previous?.takeIf { it.setup == setup && it.size == size && it.scale == scale && it.ink == ink }
+                               checkActive: () -> Unit = {}, ink: PrintInk? = null,
+                               spans: List<PrintSectionSpan> = emptyList()): PrintMeasurements.Snapshot {
+    fun spanIndexOf(blockIndex: Int): Int {
+        if (spans.isEmpty()) return 0
+        val found = spans.indexOfFirst { blockIndex <= it.endBlockIndex }
+        return if (found >= 0) found else spans.lastIndex
+    }
+    fun spanCapacity(index: Int): Float = spans.getOrNull(index)?.capacityPoints ?: setup.contentHeightPoints
+    val snapshot = previous?.takeIf { it.setup == setup && it.size == size && it.scale == scale && it.ink == ink && it.spans == spans }
     val sheets = mutableListOf<PrintPage>()
     var start = 0
     var reuseTail = false
@@ -259,24 +296,54 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
     var rows = if (reuseTail) checkNotNull(snapshot).pages.last().rows.toMutableList() else mutableListOf()
     var cursor = if (reuseTail) checkNotNull(snapshot).tailHeight else 0f
     var previousAfter = if (reuseTail) checkNotNull(snapshot).tailAfter else 0
+    var spanIndex = when {
+        spans.isEmpty() -> 0
+        start > 0 -> spanIndexOf(items[start - 1].blockIndex)
+        else -> 0
+    }
+    var pageSection = if (reuseTail && rows.isNotEmpty() && items.isNotEmpty())
+        spanIndexOf(items[rows.first().input.coerceIn(0, items.lastIndex)].blockIndex) else spanIndex
+    var pageCapacity = spanCapacity(pageSection)
+    if (reuseTail) spanIndex = spanIndexOf(items.lastOrNull()?.blockIndex ?: 0)
     fun nextPage() {
         if (rows.isEmpty()) return
-        sheets.add(PrintPage(rows))
+        sheets.add(PrintPage(rows, sectionIndex = pageSection))
         rows = mutableListOf()
         cursor = 0f
         previousAfter = 0
+        pageSection = spanIndex
+        pageCapacity = spanCapacity(spanIndex)
     }
     fun add(row: PrintRow, height: Float) {
         rows.add(row.copy(top = cursor))
         cursor += height
     }
     fun atomic(row: PrintRow, height: Float, pageBreak: Boolean = false) {
-        if (pageBreak || cursor + height > capacity) nextPage()
+        if (pageBreak || cursor + height > pageCapacity) nextPage()
         add(row, height)
     }
     for (input in start until items.size) {
         checkActive()
         val item = items[input]
+        while (spanIndex < spans.lastIndex && item.blockIndex > spans[spanIndex].endBlockIndex) {
+            spanIndex++
+            when (spans[spanIndex].breakType) {
+                SectionBreak.NextPage -> nextPage()
+                SectionBreak.EvenPage, SectionBreak.OddPage -> {
+                    nextPage()
+                    val wantOdd = spans[spanIndex].breakType == SectionBreak.OddPage
+                    // sheets.size closed sheets means the fresh sheet is physical page sheets.size + 1.
+                    if ((sheets.size + 1) % 2 == 1 != wantOdd) {
+                        sheets.add(PrintPage(emptyList(), sectionIndex = spanIndex, blank = true))
+                        pageSection = spanIndex
+                        pageCapacity = spanCapacity(spanIndex)
+                    }
+                }
+                SectionBreak.Continuous -> Unit
+            }
+            pageSection = spanIndex
+            pageCapacity = spanCapacity(spanIndex)
+        }
         val paragraph = item.paragraph()
         if (paragraph == null) {
             atomic(PrintRow(item.blockIndex, 0f, item, input = input), measureBlock(item))
@@ -293,7 +360,7 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
                 var after = part.afterTwips
                 for (successor in input + 1 until items.size) {
                     val next = items[successor].paragraph()
-                    if (next?.pageBreakBefore == true || chainHeight > capacity) break
+                    if (next?.pageBreakBefore == true || chainHeight > pageCapacity) break
                     if (next == null) {
                         chainHeight += measureBlock(items[successor])
                         break
@@ -307,13 +374,13 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
                     after = head.afterTwips
                     if (!next.print.keepNext || next.pageBreaks.isNotEmpty()) break
                 }
-                if (movePrintKeepChain(chainHeight, cursor, capacity)) nextPage()
+                if (movePrintKeepChain(chainHeight, cursor, pageCapacity)) nextPage()
             }
             var from = 0
             while (from < lines.count) {
                 checkActive()
                 val before = if (from == 0) part.printBefore(previousAfter) else 0f
-                val count = printFittingLines(lines, from, capacity - cursor, before,
+                val count = printFittingLines(lines, from, pageCapacity - cursor, before,
                     part.printAfter(), rows.isNotEmpty(), part.print.keepLines, part.print.widowControl)
                 if (count == 0) {
                     nextPage()
@@ -330,8 +397,8 @@ internal fun paginatePrintBody(items: List<MobilePageItem>, setup: PageSetup, si
             }
         }
     }
-    if (rows.isNotEmpty()) sheets.add(PrintPage(rows))
-    return PrintMeasurements.Snapshot(items, setup, size, scale, sheets, cursor, previousAfter, ink)
+    if (rows.isNotEmpty()) sheets.add(PrintPage(rows, sectionIndex = pageSection))
+    return PrintMeasurements.Snapshot(items, setup, size, scale, sheets, cursor, previousAfter, ink, spans)
 }
 
 private fun MobilePageItem.paragraph(): RenderParagraph? = (this as? MobilePageItem.Block)?.content as? RenderParagraph
@@ -432,6 +499,23 @@ internal class PrintMeasure(private val measurer: TextMeasurer, private val body
         return measure(text, style, width - borderInset(p.borders.left) - borderInset(p.borders.right))
     }
 
+    /** Height of header/footer blocks measured with the body's own text layout path. */
+    fun headerFooterHeight(blocks: List<RenderBlock>, width: Float): Float {
+        var total = 0f
+        var previousAfter = 0
+        for (block in blocks) {
+            if (block is RenderParagraph) {
+                val lines = lines(block, width)
+                total += block.printBefore(previousAfter) + lines.height(0, lines.count) + block.printAfter()
+                previousAfter = block.afterTwips
+            } else {
+                total += height(MobilePageItem.Block(0, block), width)
+                previousAfter = 0
+            }
+        }
+        return total
+    }
+
     fun reference(entry: EndPreviewParagraph, width: Float): Float = measure(
         AnnotatedString(entry.runs.joinToString("") { it.text }),
         TextStyle(fontSize = bodySize.sp, lineHeight = (bodySize * 1.45f).sp,
@@ -463,4 +547,34 @@ internal class PrintMeasure(private val measurer: TextMeasurer, private val body
 
     private fun measure(text: AnnotatedString, style: TextStyle, width: Float): Float = measurer.measure(text, style,
         constraints = Constraints(maxWidth = width.roundToInt().coerceAtLeast(1)), density = density, skipCache = true).size.height.toFloat()
+}
+
+/** Read-only header/footer rendering: same measured layouts and fonts as the body, no tap targets. */
+@Composable
+internal fun PrintHeaderFooter(blocks: List<RenderBlock>, page: PrintPage, source: java.io.File,
+                               measure: PrintMeasure, width: Float,
+                               fonts: MutableMap<String, FontFamily?>,
+                               tableScroll: MutableMap<Int, ScrollState>, modifier: Modifier = Modifier) {
+    val substituted = remember(blocks, page.pageLabel, page.totalLabel, page.sectionTotalLabel) {
+        blocks.withPageFields(page.pageLabel, page.totalLabel, page.sectionTotalLabel)
+    }
+    Column(modifier) {
+        var previousAfter = 0
+        for (block in substituted) {
+            when (block) {
+                is RenderParagraph -> {
+                    val lines = measure.lines(block, width)
+                    val height = block.printBefore(previousAfter) + lines.height(0, lines.count) + block.printAfter()
+                    PrintParagraphFragment(block, PrintRow(0, 0f, lines = lines, lineCount = lines.count,
+                        paragraphHeight = height), previousAfter, null, null)
+                    previousAfter = block.afterTwips
+                }
+                is RenderTable -> block.bands().forEach { band ->
+                    MobileTableBand(source, block.columnWidthsTwips, band, rememberScrollState(), fonts)
+                }
+                else -> DocumentBlock(source, MobilePageItem.Block(0, block), fonts, tableScroll, previousAfter)
+            }
+            if (block !is RenderParagraph) previousAfter = 0
+        }
+    }
 }
