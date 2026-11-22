@@ -9,7 +9,8 @@ internal sealed interface RenderBlock
 internal enum class RenderAlignment { Start, End, Left, Right, Center, Justify }
 internal enum class RenderListKind { Bullet, Numbered }
 internal data class RenderListItem(val kind: RenderListKind, val level: Int, val label: String)
-internal data class RenderRun(val text: String, val format: RunFormat, val citationNumber: Int? = null)
+internal data class RenderRun(val text: String, val format: RunFormat, val citationNumber: Int? = null,
+                              val field: PageField? = null)
 internal data class RunFormat(
     val bold: Boolean? = null, val italic: Boolean? = null, val underline: Boolean? = null,
     val font: String? = null, val sizePoints: Float? = null, val rgb: Int? = null, val shadingRgb: Int? = null,

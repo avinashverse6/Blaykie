@@ -6,6 +6,7 @@ internal data class PageSetup(
     val widthTwips: Int = 11906, val heightTwips: Int = 16838,
     val landscape: Boolean = false,
     val topTwips: Int = 1440, val rightTwips: Int = 1440, val bottomTwips: Int = 1440, val leftTwips: Int = 1440,
+    val headerTwips: Int = 720, val footerTwips: Int = 720,
 ) {
     val contentWidthPoints get() = (widthTwips - leftTwips - rightTwips) / 20f
     val contentHeightPoints get() = (heightTwips - topTwips - bottomTwips) / 20f
