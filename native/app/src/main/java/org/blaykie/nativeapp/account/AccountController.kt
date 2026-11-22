@@ -49,13 +49,15 @@ internal data class AccountState(
     val message: String = "",
     val details: String = "",
     val authorizeUrl: String? = null,
+    /** Readable group count for the signed-in key; null until loaded (quietly, failures count as none). */
+    val groupsCount: Int? = null,
 ) {
     override fun toString() = "AccountState(route=$route, account=$account, checking=$checking, warning=$warning)"
 }
 internal fun redactedKeySuffix(key: String): String = if (key.length > 4) key.takeLast(4) else ""
 
 internal fun removalResult(state: AccountState, removed: Boolean): AccountState =
-    if (removed) state.copy(route = AccountRoute.FIRST_RUN, checking = false, account = null, message = "")
+    if (removed) state.copy(route = AccountRoute.FIRST_RUN, checking = false, account = null, message = "", groupsCount = null)
     else state.copy(checking = false, message = "Could not remove the key. Please try again.")
 
 internal class AccountController(private val store: AccountStore, private val logic: AccountLogic,
@@ -80,10 +82,29 @@ internal class AccountController(private val store: AccountStore, private val lo
                 is AccountRead.Unavailable -> AccountState(route = AccountRoute.FIRST_RUN, message = "Your saved key is unavailable. Please add it again.")
                 is AccountRead.Missing -> AccountState(route = if (result.second) AccountRoute.APP else AccountRoute.FIRST_RUN)
             }
+            if (mutable.value.account != null) loadgroups()
         }
     }
     private fun summary(secret: AccountSecret): AccountSummary = AccountSummary(secret.verified.userId,
         redactedKeySuffix(secret.key), secret.verified.permissions, secret.username)
+
+    private var groupsLoadedForUserId: Long = -1
+    /** Quiet, cached group-count load for Settings; any failure simply shows none. */
+    private fun loadgroups() {
+        val userId = mutable.value.account?.userId ?: return
+        if (groupsLoadedForUserId == userId && mutable.value.groupsCount != null) return
+        groupsLoadedForUserId = userId
+        scope.launch {
+            val count = withContext(Dispatchers.IO) {
+                when (val read = store.read()) {
+                    is AccountRead.Present -> org.blaykie.nativeapp.zotero.ZoteroGroupsCache.fetch(
+                        ZoteroClient(), read.account.verified.userId, read.account.key).size
+                    else -> 0
+                }
+            }
+            if (mutable.value.account?.userId == userId) mutable.value = mutable.value.copy(groupsCount = count)
+        }
+    }
 
     fun startOAuth() {
         val client = oauth ?: return
@@ -218,6 +239,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         scope.launch {
             val saved = withContext(Dispatchers.IO) { logic.save(secret) }
             pending = null
+            if (saved) loadgroups()
             mutable.value = if (saved) mutable.value.copy(checking = false, warning = false,
                 route = AccountRoute.APP, account = summary(secret), message = "", details = "")
             else mutable.value.copy(checking = false, warning = false, message = "Could not save the key securely. Please try again.")

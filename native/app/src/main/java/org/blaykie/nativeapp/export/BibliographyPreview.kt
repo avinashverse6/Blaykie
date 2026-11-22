@@ -61,7 +61,7 @@ internal suspend fun preparePreviewReferences(
     val recovered = suspendCancellableCoroutine<ZoteroResult<Int>> { continuation ->
         continuation.invokeOnCancellation { client.cancel() }
         CoroutineScope(continuation.context).launch(Dispatchers.IO) {
-            continuation.resumeWith(runCatching { recoverReferences(project, client, account.verified.userId, account.key) })
+            continuation.resumeWith(runCatching { recoverReferencesWithGroups(project, client, account.verified.userId, account.key) })
         }
     }
     return if (recovered is ZoteroResult.Success) {

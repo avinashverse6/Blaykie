@@ -105,6 +105,38 @@ class ZoteroClientTest {
         assertSame(ZoteroResult.NetworkFailure, failure)
         assertFalse(failure.toString().contains(key))
     }
+    @Test fun groupsListParsesNamesAndIds() {
+        server.enqueue(response("""[{"id":555,"data":{"id":555,"name":"Team Library"}},{"id":777,"data":{"name":"Lab"}}]"""))
+        val groups = success(client.groups(42, key))
+        assertEquals(listOf(ZoteroGroup(555, "Team Library"), ZoteroGroup(777, "Lab")), groups)
+        assertEquals("/users/42/groups", server.takeRequest().path)
+    }
+    @Test fun groupsEmptyAndForbiddenAreQuiet() {
+        server.enqueue(response("[]"))
+        assertEquals(emptyList<ZoteroGroup>(), success(client.groups(42, key)))
+        server.enqueue(MockResponse().setResponseCode(403))
+        assertSame(ZoteroResult.InvalidKey, client.groups(42, key))
+        server.enqueue(MockResponse().setResponseCode(403))
+        assertEquals(emptyList<ZoteroGroup>(), quietGroups(client, 42, key))
+    }
+    @Test fun groupSearchAndFetchUseGroupEndpoints() {
+        server.enqueue(response("[${item(7)}]"))
+        val found = success(client.search(ZoteroLibrary.Group(ZoteroGroup(555, "Team")), 42, key, "test"))
+        assertEquals(listOf("K7"), found.map { it.key })
+        val searchRequest = server.takeRequest()
+        assertTrue(searchRequest.path!!.startsWith("/groups/555/items/top"))
+        assertEquals("test", searchRequest.requestUrl!!.queryParameter("q"))
+        server.enqueue(response("[${item(8)}]"))
+        assertEquals(listOf("K8"), success(client.fetchItems(ZoteroLibrary.Group(ZoteroGroup(555, "Team")), 42, key, listOf("K8"))).map { it.key })
+        assertTrue(server.takeRequest().path!!.startsWith("/groups/555/items?"))
+    }
+    @Test fun libraryJournalEncodingRoundTrips() {
+        assertEquals("user", ZoteroLibrary.Personal.journalValue)
+        assertEquals("group:555", ZoteroLibrary.Group(ZoteroGroup(555, "Team")).journalValue)
+        assertEquals(ZoteroLibrary.Personal, ZoteroLibrary.fromJournal("user"))
+        assertEquals(ZoteroLibrary.Personal, ZoteroLibrary.fromJournal(null))
+        assertEquals(555L, (ZoteroLibrary.fromJournal("group:555") as ZoteroLibrary.Group).group.id)
+    }
     @Test fun pythonGoldenFormattingParity() {
         val text = javaClass.classLoader!!.getResourceAsStream("zotero-golden.json")!!.bufferedReader(Charsets.UTF_8).use { it.readText() }
         val golden = Json.parseToJsonElement(text) as JsonObject

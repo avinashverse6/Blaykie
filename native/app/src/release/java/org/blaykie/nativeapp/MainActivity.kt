@@ -210,7 +210,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     fun recordDocumentState(value: Session) {
         val id = activeId ?: return
         try {
-            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations(), view = mobile.view, lightPrintPage = mobile.lightPrintPage)
+            documents.recordSession(id, value, null, null, mobile.position(), activeCitations = project?.citations(), view = mobile.view, lightPrintPage = mobile.lightPrintPage, citationLibraryGroupId = citationSearch.lastLibraryGroupId)
         } catch (_: Exception) {
             // The session journal has already been committed; do not roll back the edit.
         }
@@ -499,7 +499,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                                 p.citations().last().text
                             }
                         val operation = EditOperation(block = searchState.block, type = if (edit == null) "citation" else "editCitation",
-                            position = edit ?: searchState.position, items = if (edit == null) chosen else emptyList(),
+                            position = edit ?: searchState.position, items = if (edit == null) chosen else emptyList(), itemLibraries = if (edit == null) searchState.itemLibraries() else emptyList(),
                             style = searchState.style, page = page, prefix = prefix, citationOptions = options)
                         if (!persist(s.copy(edits = s.edits + operation, draft = null))) p.undo()
                         else {
@@ -529,7 +529,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             ParagraphEditorActions(onInsert = {
                 val draft = session?.draft
                 val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
-                if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position)
+                if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position, activeId?.let { documents.load(it)?.state?.citationLibraryGroupId } ?: 0L)
             }, onUndo = {
                 val currentBlock = session?.draft?.block
                 if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)

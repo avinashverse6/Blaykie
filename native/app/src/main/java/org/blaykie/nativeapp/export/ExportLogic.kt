@@ -34,9 +34,11 @@ internal fun exportError(error: Throwable, stage: FailureStage): String {
 }
 internal fun sameDocument(source: String, target: String, sourceId: Pair<String, String>?, targetId: Pair<String, String>?): Boolean =
     source == target || (sourceId != null && targetId != null && sourceId == targetId)
-internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userId: Long, key: String): ZoteroResult<Int> {
+internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userId: Long, key: String,
+                               groups: List<org.blaykie.nativeapp.zotero.ZoteroGroup> = emptyList()): ZoteroResult<Int> {
     val missing = project.missingKeys().sorted()
     if (missing.isEmpty()) return ZoteroResult.Success(0)
+    // Item keys are only unique inside a library: personal library first, then each group.
     for (group in missing.chunked(200)) {
         when (val response = client.fetchItems(userId, key, group)) {
             is ZoteroResult.Success -> project.registerItems(response.value.map { it.citationItem() })
@@ -49,7 +51,27 @@ internal fun recoverReferences(project: DocxProject, client: ZoteroClient, userI
             is ZoteroResult.HttpError -> return response
         }
     }
+    for (group in groups) {
+        val remaining = project.missingKeys().sorted()
+        if (remaining.isEmpty()) break
+        for (chunk in remaining.chunked(200)) {
+            // A group this key cannot read (403) is skipped quietly, never an error.
+            when (val response = client.fetchItems(org.blaykie.nativeapp.zotero.ZoteroLibrary.Group(group), userId, key, chunk)) {
+                is ZoteroResult.Success -> project.registerItems(response.value.map { it.citationItem() })
+                is ZoteroResult.Cancelled -> return response
+                is ZoteroResult.RateLimited -> return response
+                else -> Unit
+            }
+        }
+    }
     return ZoteroResult.Success(project.missingKeys().size)
+}
+
+/** Recovery including group libraries; the group list itself is loaded quietly and only when needed. */
+internal fun recoverReferencesWithGroups(project: DocxProject, client: ZoteroClient, userId: Long, key: String): ZoteroResult<Int> {
+    if (project.missingKeys().isEmpty()) return ZoteroResult.Success(0)
+    val groups = (client.groups(userId, key) as? ZoteroResult.Success)?.value ?: emptyList()
+    return recoverReferences(project, client, userId, key, groups)
 }
 
 internal fun mayStartExport(phase: ExportPhase): Boolean = phase == ExportPhase.IDLE || phase == ExportPhase.DONE

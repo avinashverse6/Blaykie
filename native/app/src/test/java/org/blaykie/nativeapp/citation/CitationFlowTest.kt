@@ -89,6 +89,36 @@ class CitationFlowTest {
         assertTrue(replay.project.undo()); assertEquals("First paragraph about citations.", replay.project.blockText(1))
         assertFalse(replay.project.undo())
     }
+    @Test fun journalSnapshotStoresEachItemsLibrary() {
+        val store = SessionStore(temp.root); val ready = open(store); val p = ready.project
+        val chosen = listOf(
+            CitationItem(key = "ONE1", title = "Personal paper", authors = listOf(org.blaykie.nativeapp.docx.CitationAuthor("Ada", "Lovelace")), date = "2020"),
+            CitationItem(key = "TWO2", title = "Group paper", authors = listOf(org.blaykie.nativeapp.docx.CitationAuthor("Alan", "Turing")), date = "2021"))
+        val position = p.blockText(1).length
+        p.insertCitation(1, position, position, chosen)
+        val op = EditOperation(block = 1, type = "citation", position = position, items = chosen,
+            itemLibraries = listOf("user", "group:555"))
+        store.save(ready.session.copy(edits = listOf(op)))
+        val replay = store.read() as SessionRead.Ready
+        assertEquals(listOf("user", "group:555"), replay.session.edits.single().itemLibraries)
+        assertEquals(listOf("ONE1", "TWO2"), replay.session.edits.single().items.map { it.key })
+        assertEquals(setOf("ONE1", "TWO2"), replay.project.presentKeys())
+    }
+    @Test fun citationsFromTwoLibrariesBuildOneBibliography() {
+        val store = SessionStore(temp.root); val project = open(store).project
+        val personal = CitationItem(key = "ONE1", title = "Personal paper",
+            authors = listOf(org.blaykie.nativeapp.docx.CitationAuthor("Ada", "Lovelace")), date = "2020")
+        val group = CitationItem(key = "TWO2", title = "Group paper",
+            authors = listOf(org.blaykie.nativeapp.docx.CitationAuthor("Alan", "Turing")), date = "2021")
+        project.insertCitation(1, project.blockText(1).length, project.blockText(1).length, listOf(personal))
+        project.insertCitation(2, project.blockText(2).length, project.blockText(2).length, listOf(group))
+        assertEquals(setOf("ONE1", "TWO2"), project.presentKeys())
+        assertTrue(project.missingKeys().isEmpty())
+        val references = CitationFormatting.referenceList(listOf(personal, group))
+        assertTrue(references.contains("Lovelace, A. (2020). Personal paper."))
+        assertTrue(references.contains("Turing, A. (2021). Group paper."))
+        assertEquals(2, references.split("\n\n").size)
+    }
     @Test fun alreadyCitedItemDoesNotDuplicatePresentKeys() {
         val store = SessionStore(temp.root); val project = open(store).project
         val item = items((golden()["cases"] as JsonArray)[0] as JsonObject).single()

@@ -136,6 +136,40 @@ class ExportTest {
             assertArrayEquals(before, source.readBytes())
         } finally { server.shutdown() }
     }
+    @Test fun recoveryTriesPersonalLibraryThenGroups() {
+        val project = DocxProject(file("golden-match.docx"))
+        assertEquals(setOf("ONE1"), project.missingKeys())
+        val server = MockWebServer(); server.start()
+        try {
+            server.enqueue(MockResponse().setBody("[]"))
+            server.enqueue(MockResponse().setBody("[${expect()["item"]}]"))
+            val transport = OkHttpClient.Builder().addInterceptor { chain ->
+                val request = chain.request()
+                chain.proceed(request.newBuilder().url(server.url(request.url.encodedPath + "?" + request.url.encodedQuery)).build())
+            }.build()
+            val result = recoverReferences(project, ZoteroClient.forTesting(transport), 123, "private-key",
+                listOf(org.blaykie.nativeapp.zotero.ZoteroGroup(555, "Team Library")))
+            assertTrue(result is ZoteroResult.Success); assertEquals(0, (result as ZoteroResult.Success).value)
+            assertTrue(project.missingKeys().isEmpty())
+            assertTrue(server.takeRequest().path!!.startsWith("/users/123/items"))
+            assertTrue(server.takeRequest().path!!.startsWith("/groups/555/items"))
+        } finally { server.shutdown() }
+    }
+    @Test fun recoveryReportsItemsStillMissingAfterGroups() {
+        val project = DocxProject(file("golden-match.docx"))
+        val server = MockWebServer(); server.start()
+        try {
+            server.enqueue(MockResponse().setBody("[]"))
+            server.enqueue(MockResponse().setResponseCode(403))
+            val transport = OkHttpClient.Builder().addInterceptor { chain ->
+                val request = chain.request()
+                chain.proceed(request.newBuilder().url(server.url(request.url.encodedPath + "?" + request.url.encodedQuery)).build())
+            }.build()
+            val result = recoverReferences(project, ZoteroClient.forTesting(transport), 123, "private-key",
+                listOf(org.blaykie.nativeapp.zotero.ZoteroGroup(555, "Team Library"))) as ZoteroResult.Success
+            assertEquals(1, result.value)
+        } finally { server.shutdown() }
+    }
     @Test fun missingReferencesMayBeOmittedAndCounted() {
         val project = DocxProject(file("golden-match.docx")); val server = MockWebServer(); server.start()
         try {
