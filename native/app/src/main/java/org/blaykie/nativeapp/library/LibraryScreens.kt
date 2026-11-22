@@ -125,7 +125,7 @@ internal fun LibraryScreen(state: LibraryState, controller: LibraryController, o
             state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             state.error != null -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center) {
-                Text(state.error, style = typography.bodyLarge)
+                Text(state.error ?: "", style = typography.bodyLarge)
                 Spacer(Modifier.height(Space.medium))
                 AppPrimaryButton(onClick = controller::retry) { Text("Retry") }
             }
@@ -146,7 +146,7 @@ internal fun LibraryScreen(state: LibraryState, controller: LibraryController, o
                 }
                 if (state.error != null) item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(state.error, Modifier.weight(1f), style = typography.bodySmall)
+                        Text(state.error ?: "", Modifier.weight(1f), style = typography.bodySmall)
                         TextButton(onClick = controller::loadMore) { Text("Retry") }
                     }
                 }
@@ -177,7 +177,7 @@ private fun CollectionsSheet(state: LibraryState, controller: LibraryController,
             Spacer(Modifier.height(Space.medium))
             when {
                 state.collectionsError != null -> Column {
-                    Text(state.collectionsError, style = MaterialTheme.typography.bodyMedium)
+                    Text(state.collectionsError ?: "", style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { controller.loadCollections(force = true) }) { Text("Retry") }
                 }
                 !state.collectionsLoaded -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
@@ -222,7 +222,7 @@ private fun TagsSheet(state: LibraryState, controller: LibraryController, onDism
             Spacer(Modifier.height(Space.small))
             when {
                 state.tagsError != null -> Column {
-                    Text(state.tagsError, style = MaterialTheme.typography.bodyMedium)
+                    Text(state.tagsError ?: "", style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = { controller.loadTags(tagQuery) }) { Text("Retry") }
                 }
                 state.tagsLoading && state.tags.isEmpty() -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
