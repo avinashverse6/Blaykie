@@ -62,6 +62,8 @@ class ZoteroOAuthTest {
         val sent = server.takeRequest()
         assertEquals("POST", sent.method)
         assertEquals("/oauth/request", sent.path)
+        assertEquals(blaykieUserAgent(), sent.getHeader("User-Agent"))
+        assertEquals("*/*", sent.getHeader("Accept"))
         val authorization = sent.getHeader("Authorization")!!
         assertTrue(authorization.startsWith("OAuth "))
         assertTrue(authorization.contains("oauth_callback=\"blaykie%3A%2F%2Foauth-callback\""))
@@ -74,9 +76,21 @@ class ZoteroOAuthTest {
         assertEquals(42L, (access as OAuthResult.Success).value.userId)
         val sentAccess = server.takeRequest()
         assertEquals("/oauth/access", sentAccess.path)
+        assertEquals(blaykieUserAgent(), sentAccess.getHeader("User-Agent"))
+        assertEquals("*/*", sentAccess.getHeader("Accept"))
         val accessAuthorization = sentAccess.getHeader("Authorization")!!
         assertTrue(accessAuthorization.contains("oauth_token=\"req123\""))
         assertTrue(accessAuthorization.contains("oauth_verifier=\"ver456\""))
+    }
+
+    @Test fun userAgentCarriesVersionAndNoSecrets() {
+        val agent = blaykieUserAgent()
+        assertEquals("Blaykie/${org.blaykie.nativeapp.BuildConfig.VERSION_NAME} (Android; Zotero sign-in)", agent)
+        assertTrue(agent.contains(org.blaykie.nativeapp.BuildConfig.VERSION_NAME))
+        val key = org.blaykie.nativeapp.BuildConfig.ZOTERO_OAUTH_CLIENT_KEY
+        val secret = org.blaykie.nativeapp.BuildConfig.ZOTERO_OAUTH_CLIENT_SECRET
+        if (key.isNotEmpty()) assertFalse(agent.contains(key))
+        if (secret.isNotEmpty()) assertFalse(agent.contains(secret))
     }
 
     @Test fun httpErrorKeepsOnlyStatusAndRedactedText() {

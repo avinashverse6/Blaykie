@@ -96,6 +96,12 @@ internal fun parseOAuthCallback(url: String): OAuthCallback? {
     return OAuthCallback(values["oauth_token"], values["oauth_verifier"])
 }
 
+/**
+ * The CDN in front of www.zotero.org rejects requests without an explicit
+ * User-Agent (diagnostics variant E), so every Zotero request carries this one.
+ */
+internal fun blaykieUserAgent(): String = "Blaykie/${BuildConfig.VERSION_NAME} (Android; Zotero sign-in)"
+
 internal class ZoteroOAuthClient(
     private val consumerKey: String,
     private val consumerSecret: String,
@@ -134,6 +140,8 @@ internal class ZoteroOAuthClient(
     private fun <T> post(url: String, authorization: String, parse: (String) -> OAuthResult<T>): OAuthResult<T> {
         val request = Request.Builder().url(url)
             .header("Authorization", authorization)
+            .header("User-Agent", blaykieUserAgent())
+            .header("Accept", "*/*")
             .post(ByteArray(0).toRequestBody(null))
             .build()
         return try {
