@@ -93,6 +93,7 @@ internal data class AddState(
     val draft: ItemDraft? = null,
     val error: String? = null,
     val duplicateTitle: String? = null,
+    val duplicateViaIsbn: Boolean = false,
     val saving: Boolean = false,
     val savedKey: String? = null,
     val savedItem: ZoteroItem? = null,
@@ -707,7 +708,7 @@ internal class LibraryController(private val accounts: AccountStore,
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
                 is SchemaResult.Success<*> -> manual.copy(typesLoading = false,
-                    types = result.value, usingBasicTypes = result.basic)
+                    types = result.value as List<ItemTypeInfo>, usingBasicTypes = result.basic)
                 // The client already falls back to the basic list; reaching here means
                 // even that failed, which cannot happen — keep the flags consistent.
                 else -> manual.copy(typesLoading = false)
@@ -726,7 +727,7 @@ internal class LibraryController(private val accounts: AccountStore,
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
                 is SchemaResult.Success<*> -> manual.copy(schemaLoadingType = null,
-                    schemas = manual.schemas + (type to result.value))
+                    schemas = manual.schemas + (type to result.value as TypeSchema))
                 is SchemaResult.HttpError -> manual.copy(schemaLoadingType = null,
                     schemaError = "Could not load the fields for this type: HTTP ${result.status}",
                     schemaErrorType = type)

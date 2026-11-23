@@ -21,6 +21,7 @@ import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.crossref.ItemDraft
 import org.blaykie.nativeapp.zotero.ItemTypeInfo
 import org.blaykie.nativeapp.zotero.SchemaField
+import org.blaykie.nativeapp.zotero.SchemaResult
 import org.blaykie.nativeapp.zotero.TypeSchema
 import org.blaykie.nativeapp.zotero.knownBaseFields
 
@@ -123,7 +124,8 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
     val form = rememberSaveable(saver = manualFormSaver) { ManualFormState() }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var discardForChangeType by remember { mutableStateOf(false) }
-    val schema = form.itemType?.let { (manual.schemas[it] as? SchemaResult.Success)?.value }
+    val schemaEntry = form.itemType?.let { manual.schemas[it] }
+    val schema = (schemaEntry as? SchemaResult.Success)?.value
 
     LaunchedEffect(manual.open) { if (manual.open) controller.loadManualTypes() }
     LaunchedEffect(form.itemType) { form.itemType?.let { controller.loadManualSchema(it) } }
