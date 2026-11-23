@@ -28,7 +28,7 @@ sealed class ZoteroResult<out T> {
     final override fun toString(): String = "ZoteroResult.${javaClass.simpleName}"
 }
 
-data class ZoteroGroup(val id: Long, val name: String)
+data class ZoteroGroup(val id: Long, val name: String, val numItems: Int? = null)
 
 /** A readable Zotero library: the personal library or one group library. */
 sealed class ZoteroLibrary {
@@ -231,7 +231,8 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
                 val id = listOf(data?.get("id"), obj["id"]).mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.toLongOrNull() }.firstOrNull()
                 val name = ((data?.get("name") as? JsonPrimitive)?.contentOrNull
                     ?: (obj["name"] as? JsonPrimitive)?.contentOrNull)?.trim().orEmpty()
-                if (id == null || id <= 0) null else ZoteroGroup(id, name.ifEmpty { "Group $id" })
+                val count = ((obj["meta"] as? JsonObject)?.get("numItems") as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+                if (id == null || id <= 0) null else ZoteroGroup(id, name.ifEmpty { "Group $id" }, count)
             }
         }
     fun search(userId: Long, apiKey: String, query: String, limit: Int = MAX_ITEMS): ZoteroResult<List<ZoteroItem>> =
@@ -314,11 +315,15 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
 
     /** One page of browsable items (attachments, notes and annotations filtered out). Read-only. */
     fun browsePage(library: ZoteroLibrary, userId: Long, apiKey: String, query: BrowseQuery): ZoteroResult<ItemsPage> =
-        parsePaged(requestPaged(browsePath(library, userId, query.collectionKey), browseParams(query), apiKey)) { raw ->
+        parsePaged(requestPaged(browsePath(library, userId, query.node), browseParams(query), apiKey)) { raw ->
             val all = parseItems(raw.body)
             ItemsPage(all.filter { (it.data["itemType"] as? JsonPrimitive)?.contentOrNull !in setOf("attachment", "note", "annotation") },
                 raw.totalResults, all.size)
         }
+
+    /** "My Publications" exists only when the publications endpoint answers successfully (never for groups). */
+    fun publicationsAvailable(userId: Long, apiKey: String): Boolean =
+        browsePage(ZoteroLibrary.Personal, userId, apiKey, BrowseQuery(BrowseNode.Publications, limit = 1)) is ZoteroResult.Success
 
     fun fetchItems(userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> =
         fetchItems(ZoteroLibrary.Personal, userId, apiKey, keys)

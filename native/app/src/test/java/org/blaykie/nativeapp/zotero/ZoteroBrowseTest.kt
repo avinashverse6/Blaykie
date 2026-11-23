@@ -67,7 +67,7 @@ class ZoteroBrowseTest {
     @Test fun browseSendsSearchSortAndTagParameters() {
         server.enqueue(ok("[]", total = 0))
         success(client.browsePage(ZoteroLibrary.Group(ZoteroGroup(555, "Team")), 42, key,
-            BrowseQuery(collectionKey = "C1", text = "climate", everything = false, tag = "energy",
+            BrowseQuery(node = BrowseNode.Collection("C1"), text = "climate", everything = false, tag = "energy",
                 sort = BrowseSort.Title, descending = false, start = 0)))
         val url = server.takeRequest().requestUrl!!
         assertTrue(url.encodedPath.startsWith("/groups/555/collections/C1/items/top"))
@@ -80,6 +80,25 @@ class ZoteroBrowseTest {
         server.enqueue(ok("[]", total = 0))
         success(client.browsePage(ZoteroLibrary.Personal, 42, key, BrowseQuery(text = "climate", everything = true)))
         assertEquals("everything", server.takeRequest().requestUrl!!.queryParameter("qmode"))
+    }
+
+    @Test fun trashAndPublicationsEndpointsAreUsed() {
+        server.enqueue(ok("[${item("T1", "Trashed")}]", total = 1))
+        val trash = success(client.browsePage(ZoteroLibrary.Group(ZoteroGroup(555, "Team")), 42, key, BrowseQuery(BrowseNode.Trash)))
+        assertEquals(listOf("T1"), trash.items.map { it.key })
+        assertEquals("/groups/555/items/trash", server.takeRequest().path!!.substringBefore('?'))
+        server.enqueue(ok("[${item("P1", "Published")}]", total = 1))
+        val publications = success(client.browsePage(ZoteroLibrary.Personal, 42, key, BrowseQuery(BrowseNode.Publications)))
+        assertEquals(listOf("P1"), publications.items.map { it.key })
+        assertEquals("/users/42/publications/items", server.takeRequest().path!!.substringBefore('?'))
+    }
+    @Test fun collectionTreeHandlesThreeLevels() {
+        val collections = listOf(
+            ZoteroCollection("C3", "Level three", "C2", null),
+            ZoteroCollection("C1", "Level one", null, null),
+            ZoteroCollection("C2", "Level two", "C1", null))
+        val flat = flattenTree(collectionTree(collections))
+        assertEquals(listOf("Level one" to 0, "Level two" to 1, "Level three" to 2), flat.map { it.first.name to it.second })
     }
 
     @Test fun tagsPageParsesNamesCountsAndTotal() {

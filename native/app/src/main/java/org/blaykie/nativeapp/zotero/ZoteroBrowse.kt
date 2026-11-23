@@ -12,8 +12,23 @@ enum class BrowseSort(val param: String, val label: String) {
     Year("date", "Year"),
 }
 
+/** A browsable node inside a library: all top items, one collection, publications, or trash. */
+sealed class BrowseNode {
+    object All : BrowseNode()
+    data class Collection(val key: String) : BrowseNode()
+    object Publications : BrowseNode()
+    object Trash : BrowseNode()
+
+    val cacheKey: String get() = when (this) {
+        is All -> "all"
+        is Collection -> "collection:$key"
+        is Publications -> "publications"
+        is Trash -> "trash"
+    }
+}
+
 data class BrowseQuery(
-    val collectionKey: String? = null,
+    val node: BrowseNode = BrowseNode.All,
     val text: String = "",
     val everything: Boolean = false,
     val tag: String? = null,
@@ -23,10 +38,13 @@ data class BrowseQuery(
     val limit: Int = 25,
 )
 
-/** Request path for a browse page: a collection's top items, or the library's top items. */
-internal fun browsePath(library: ZoteroLibrary, userId: Long, collectionKey: String?): List<String> =
-    if (collectionKey.isNullOrBlank()) library.itemsPath(userId, top = true)
-    else library.basePath(userId) + listOf("collections", collectionKey, "items", "top")
+/** Request path for a browse page inside a library. Publications exist only for the personal library. */
+internal fun browsePath(library: ZoteroLibrary, userId: Long, node: BrowseNode): List<String> = when (node) {
+    is BrowseNode.All -> library.itemsPath(userId, top = true)
+    is BrowseNode.Collection -> library.basePath(userId) + listOf("collections", node.key, "items", "top")
+    is BrowseNode.Publications -> listOf("users", userId.toString(), "publications", "items")
+    is BrowseNode.Trash -> library.basePath(userId) + listOf("items", "trash")
+}
 
 /** Query parameters for a browse page; paging is 25 at a time, driven by start. */
 internal fun browseParams(query: BrowseQuery): Map<String, String> = buildMap {

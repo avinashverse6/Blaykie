@@ -11,9 +11,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.blaykie.nativeapp.account.AccountRead
 import org.blaykie.nativeapp.account.AccountStore
+import org.blaykie.nativeapp.zotero.BrowseNode
 import org.blaykie.nativeapp.zotero.BrowseQuery
 import org.blaykie.nativeapp.zotero.BrowseSort
 import org.blaykie.nativeapp.zotero.GroupsLoad
+import org.blaykie.nativeapp.zotero.ItemsPage
+import org.blaykie.nativeapp.zotero.TagPage
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroCollection
 import org.blaykie.nativeapp.zotero.ZoteroGroup
@@ -44,17 +47,34 @@ internal class LibraryCache(private val ttlMillis: Long = 120_000) {
     @Synchronized fun size(): Int = entries.size
 }
 
+/** Navigation inside the Library tab; the stack lives only in memory for this session. */
+internal sealed interface LibraryRoute {
+    object Libraries : LibraryRoute
+    data class Root(val library: ZoteroLibrary) : LibraryRoute
+    data class Node(val library: ZoteroLibrary, val node: BrowseNode, val title: String) : LibraryRoute
+    data class Detail(val library: ZoteroLibrary, val node: BrowseNode, val title: String, val item: ZoteroItem) : LibraryRoute
+}
+
+internal fun LibraryRoute.libraryOrNull(): ZoteroLibrary? = when (this) {
+    is LibraryRoute.Root -> library
+    is LibraryRoute.Node -> library
+    is LibraryRoute.Detail -> library
+    is LibraryRoute.Libraries -> null
+}
+
 internal data class LibraryState(
     val started: Boolean = false,
     val signedIn: Boolean = true,
-    val library: ZoteroLibrary = ZoteroLibrary.Personal,
+    val route: LibraryRoute = LibraryRoute.Libraries,
     val groups: List<ZoteroGroup> = emptyList(),
     val groupsLoaded: Boolean = false,
     val groupsError: String? = null,
     val collections: List<ZoteroCollection> = emptyList(),
     val collectionsLoaded: Boolean = false,
     val collectionsError: String? = null,
-    val collectionKey: String? = null,
+    val collectionsLibrary: ZoteroLibrary? = null,
+    val expandedCollections: Set<String> = emptySet(),
+    val publicationsAvailable: Boolean = false,
     val query: String = "",
     val everything: Boolean = false,
     val tag: String? = null,
@@ -70,37 +90,52 @@ internal data class LibraryState(
     val tagsLoading: Boolean = false,
     val tagsError: String? = null,
     val tagsEnd: Boolean = true,
-    val selectedItem: ZoteroItem? = null,
+    val openTagsRequested: Int = 0,
 ) {
     override fun toString() = "LibraryState(redacted)"
+    val library: ZoteroLibrary? get() = route.libraryOrNull()
+    val node: BrowseNode? get() = when (route) {
+        is LibraryRoute.Node -> route.node
+        is LibraryRoute.Detail -> route.node
+        else -> null
+    }
 }
 
-/** Read-only browsing state. Library data lives only in memory; credentials are read per request. */
+/**
+ * Read-only browsing state. The back stack, caches and last node live only in memory.
+ * Each load type has its own generation counter, so a fast item load can never
+ * invalidate a slower groups or collections result (and vice versa).
+ */
 internal class LibraryController(private val accounts: AccountStore,
-                                 private val clientFactory: () -> ZoteroClient = ::ZoteroClient) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+                                 private val clientFactory: () -> ZoteroClient = ::ZoteroClient,
+                                 private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
     private val mutable = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = mutable
     private val cache = LibraryCache()
-    private var generation = 0
-    private var job: Job? = null
+    private val stack = mutableListOf<LibraryRoute>(LibraryRoute.Libraries)
+    private var groupsGeneration = 0
+    private var collectionsGeneration = 0
+    private var listGeneration = 0
+    private var tagsGeneration = 0
+    private var listJob: Job? = null
     private var fetchedRaw = 0
     /** Set by the UI to persist the last chosen library in app settings. */
     var onLibraryChosen: (Long) -> Unit = {}
 
     fun start(initialGroupId: Long) {
         if (mutable.value.started) return
-        mutable.value = mutable.value.copy(started = true,
-            library = if (initialGroupId > 0) ZoteroLibrary.Group(ZoteroGroup(initialGroupId, "")) else ZoteroLibrary.Personal)
+        mutable.value = mutable.value.copy(started = true)
         scope.launch {
             val present = withContext(Dispatchers.IO) { accounts.read() is AccountRead.Present }
             mutable.value = mutable.value.copy(signedIn = present)
-            if (present) { loadGroups(); reloadAll() }
+            if (present) loadGroups()
         }
     }
 
+    // --- Groups: the same loader, cache, error text and Retry as the citation sheet. ---
+
     private fun loadGroups(force: Boolean = false) {
-        val current = generation
+        val current = ++groupsGeneration
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
@@ -108,34 +143,68 @@ internal class LibraryController(private val accounts: AccountStore,
                     else -> GroupsLoad.Loaded(emptyList())
                 }
             }
-            if (current != generation) return@launch
+            if (current != groupsGeneration) return@launch
             when (result) {
-                is GroupsLoad.Loaded -> {
-                    val library = (mutable.value.library as? ZoteroLibrary.Group)?.let { chosen ->
-                        result.groups.firstOrNull { it.id == chosen.group.id }?.let { ZoteroLibrary.Group(it) } ?: chosen
-                    } ?: mutable.value.library
-                    mutable.value = mutable.value.copy(groups = result.groups, groupsLoaded = true, groupsError = null, library = library)
-                }
+                is GroupsLoad.Loaded -> mutable.value = mutable.value.copy(groups = result.groups, groupsLoaded = true, groupsError = null)
                 is GroupsLoad.Failed -> mutable.value = mutable.value.copy(groupsLoaded = false, groupsError = result.message)
             }
         }
     }
     fun retryGroups() = loadGroups(force = true)
 
-    fun selectLibrary(library: ZoteroLibrary) {
-        if (mutable.value.library == library) return
-        onLibraryChosen((library as? ZoteroLibrary.Group)?.group?.id ?: 0)
-        generation++
-        mutable.value = mutable.value.copy(library = library, collectionKey = null, tag = null,
-            collections = emptyList(), collectionsLoaded = false, collectionsError = null, selectedItem = null)
-        reloadAll()
+    // --- Navigation ---
+
+    private fun publish(route: LibraryRoute) {
+        mutable.value = mutable.value.copy(route = route)
     }
 
-    private fun reloadAll() { loadCollections(); loadFirstPage() }
+    fun openLibrary(library: ZoteroLibrary) {
+        onLibraryChosen((library as? ZoteroLibrary.Group)?.group?.id ?: 0)
+        stack.clear(); stack += LibraryRoute.Libraries; stack += LibraryRoute.Root(library)
+        publish(stack.last())
+        mutable.value = resetList(mutable.value.copy(collections = emptyList(), collectionsLoaded = false,
+            collectionsError = null, collectionsLibrary = null, expandedCollections = emptySet(),
+            publicationsAvailable = false, tag = null))
+        loadCollections(library)
+        if (library is ZoteroLibrary.Personal) probePublications()
+    }
 
-    fun loadCollections(force: Boolean = false) {
-        val current = generation
-        val library = mutable.value.library
+    fun openNode(node: BrowseNode, title: String) {
+        val library = mutable.value.library ?: return
+        stack += LibraryRoute.Node(library, node, title)
+        publish(stack.last())
+        mutable.value = resetList(mutable.value)
+        loadFirstPage()
+    }
+
+    fun openCollection(collection: ZoteroCollection) = openNode(BrowseNode.Collection(collection.key), collection.name)
+
+    fun selectItem(item: ZoteroItem) {
+        val route = mutable.value.route as? LibraryRoute.Node ?: return
+        stack += LibraryRoute.Detail(route.library, route.node, route.title, item)
+        publish(stack.last())
+    }
+
+    /** Returns false when already at the Libraries screen (the caller may then leave the tab). */
+    fun back(): Boolean {
+        if (stack.size <= 1) return false
+        stack.removeAt(stack.lastIndex)
+        publish(stack.last())
+        return true
+    }
+
+    fun toggleExpanded(key: String) {
+        val expanded = mutable.value.expandedCollections
+        mutable.value = mutable.value.copy(expandedCollections = if (key in expanded) expanded - key else expanded + key)
+    }
+
+    private fun resetList(state: LibraryState): LibraryState = state.copy(items = emptyList(), error = null,
+        loading = false, loadingMore = false, endReached = true, totalResults = null)
+
+    // --- Collections and publications ---
+
+    private fun loadCollections(library: ZoteroLibrary, force: Boolean = false) {
+        val current = ++collectionsGeneration
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
@@ -143,20 +212,36 @@ internal class LibraryController(private val accounts: AccountStore,
                     else -> ZoteroResult.Success(emptyList<ZoteroCollection>())
                 }
             }
-            if (current != generation) return@launch
+            if (current != collectionsGeneration || mutable.value.library != library) return@launch
             when (result) {
-                is ZoteroResult.Success -> mutable.value = mutable.value.copy(collections = result.value, collectionsLoaded = true, collectionsError = null)
-                else -> mutable.value = mutable.value.copy(collectionsLoaded = false,
+                is ZoteroResult.Success -> mutable.value = mutable.value.copy(collections = result.value,
+                    collectionsLoaded = true, collectionsError = null, collectionsLibrary = library)
+                else -> mutable.value = mutable.value.copy(collectionsLoaded = false, collectionsLibrary = library,
                     collectionsError = libraryError("Could not load collections", result))
             }
         }
     }
-
-    fun chooseCollection(key: String?) {
-        if (mutable.value.collectionKey == key) return
-        mutable.value = mutable.value.copy(collectionKey = key, selectedItem = null)
-        loadFirstPage()
+    fun retryCollections() {
+        mutable.value.library?.let { loadCollections(it, force = true) }
     }
+
+    private fun probePublications() {
+        val current = collectionsGeneration
+        scope.launch {
+            val available = withContext(Dispatchers.IO) {
+                when (val read = accounts.read()) {
+                    is AccountRead.Present -> clientFactory().publicationsAvailable(read.account.verified.userId, read.account.key)
+                    else -> false
+                }
+            }
+            if (current != collectionsGeneration) return@launch
+            if (mutable.value.library is ZoteroLibrary.Personal) {
+                mutable.value = mutable.value.copy(publicationsAvailable = available)
+            }
+        }
+    }
+
+    // --- Item lists, scoped to the current node ---
 
     fun query(value: String) { mutable.value = mutable.value.copy(query = value) }
     fun search() = loadFirstPage()
@@ -166,15 +251,16 @@ internal class LibraryController(private val accounts: AccountStore,
     }
     fun setTag(tag: String?) { mutable.value = mutable.value.copy(tag = tag); loadFirstPage() }
 
-    private fun queryKey(state: LibraryState): String = listOf(state.library.journalValue, state.collectionKey ?: "all",
+    private fun queryKey(state: LibraryState): String = listOf(state.library?.journalValue ?: "?", state.node?.cacheKey ?: "?",
         state.query.trim(), state.everything, state.tag ?: "", state.sort.name, state.descending).joinToString("|")
 
-    private fun currentQuery(state: LibraryState, start: Int) = BrowseQuery(state.collectionKey, state.query.trim(),
-        state.everything, state.tag, state.sort, state.descending, start)
+    private fun currentQuery(state: LibraryState, start: Int) = BrowseQuery(state.node ?: BrowseNode.All,
+        state.query.trim(), state.everything, state.tag, state.sort, state.descending, start)
 
     fun loadFirstPage() {
-        val current = ++generation
-        job?.cancel()
+        val route = mutable.value.route as? LibraryRoute.Node ?: return
+        val current = ++listGeneration
+        listJob?.cancel()
         val state = mutable.value
         val key = queryKey(state)
         cache.get(key, System.currentTimeMillis())?.let { entry ->
@@ -185,14 +271,14 @@ internal class LibraryController(private val accounts: AccountStore,
         }
         fetchedRaw = 0
         mutable.value = state.copy(loading = true, error = null, items = emptyList(), endReached = false)
-        job = scope.launch {
+        listJob = scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
-                    is AccountRead.Present -> clientFactory().browsePage(state.library, read.account.verified.userId, read.account.key, currentQuery(state, 0))
-                    else -> ZoteroResult.Success(org.blaykie.nativeapp.zotero.ItemsPage(emptyList(), 0, 0))
+                    is AccountRead.Present -> clientFactory().browsePage(route.library, read.account.verified.userId, read.account.key, currentQuery(state, 0))
+                    else -> ZoteroResult.Success(ItemsPage(emptyList(), 0, 0))
                 }
             }
-            if (current != generation) return@launch
+            if (current != listGeneration) return@launch
             when (result) {
                 is ZoteroResult.Success -> {
                     fetchedRaw = result.value.rawCount
@@ -207,19 +293,20 @@ internal class LibraryController(private val accounts: AccountStore,
     }
 
     fun loadMore() {
+        val route = mutable.value.route as? LibraryRoute.Node ?: return
         val state = mutable.value
         if (state.loading || state.loadingMore || state.endReached) return
-        val current = generation
+        val current = listGeneration
         val key = queryKey(state)
         mutable.value = state.copy(loadingMore = true)
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
-                    is AccountRead.Present -> clientFactory().browsePage(state.library, read.account.verified.userId, read.account.key, currentQuery(state, fetchedRaw))
-                    else -> ZoteroResult.Success(org.blaykie.nativeapp.zotero.ItemsPage(emptyList(), 0, 0))
+                    is AccountRead.Present -> clientFactory().browsePage(route.library, read.account.verified.userId, read.account.key, currentQuery(state, fetchedRaw))
+                    else -> ZoteroResult.Success(ItemsPage(emptyList(), 0, 0))
                 }
             }
-            if (current != generation) return@launch
+            if (current != listGeneration) return@launch
             when (result) {
                 is ZoteroResult.Success -> {
                     fetchedRaw += result.value.rawCount
@@ -236,18 +323,26 @@ internal class LibraryController(private val accounts: AccountStore,
 
     fun retry() = loadFirstPage()
 
+    // --- Tags ---
+
+    fun requestTags() {
+        mutable.value = mutable.value.copy(openTagsRequested = mutable.value.openTagsRequested + 1)
+        loadTags("")
+    }
+
     fun loadTags(query: String = "") {
-        val current = generation
-        val library = mutable.value.library
+        val route = mutable.value.route
+        val library = route.libraryOrNull() ?: return
+        val current = ++tagsGeneration
         mutable.value = mutable.value.copy(tagsLoading = true, tagsError = null, tags = emptyList(), tagsEnd = false)
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
                     is AccountRead.Present -> clientFactory().tagsPage(library, read.account.verified.userId, read.account.key, query, 0)
-                    else -> ZoteroResult.Success(org.blaykie.nativeapp.zotero.TagPage(emptyList(), 0))
+                    else -> ZoteroResult.Success(TagPage(emptyList(), 0))
                 }
             }
-            if (current != generation) return@launch
+            if (current != tagsGeneration) return@launch
             when (result) {
                 is ZoteroResult.Success -> mutable.value = mutable.value.copy(tagsLoading = false, tags = result.value.tags,
                     tagsEnd = result.value.tags.size < 50 || (result.value.totalResults != null && result.value.tags.size >= result.value.totalResults))
@@ -259,18 +354,18 @@ internal class LibraryController(private val accounts: AccountStore,
     fun loadMoreTags(query: String = "") {
         val state = mutable.value
         if (state.tagsLoading || state.tagsEnd) return
-        val current = generation
-        val library = state.library
+        val library = state.library ?: return
+        val current = tagsGeneration
         val startAt = state.tags.size
         mutable.value = state.copy(tagsLoading = true)
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 when (val read = accounts.read()) {
                     is AccountRead.Present -> clientFactory().tagsPage(library, read.account.verified.userId, read.account.key, query, startAt)
-                    else -> ZoteroResult.Success(org.blaykie.nativeapp.zotero.TagPage(emptyList(), 0))
+                    else -> ZoteroResult.Success(TagPage(emptyList(), 0))
                 }
             }
-            if (current != generation) return@launch
+            if (current != tagsGeneration) return@launch
             when (result) {
                 is ZoteroResult.Success -> {
                     val all = mutable.value.tags + result.value.tags
@@ -282,6 +377,8 @@ internal class LibraryController(private val accounts: AccountStore,
         }
     }
 
-    fun selectItem(item: ZoteroItem?) { mutable.value = mutable.value.copy(selectedItem = item) }
-    fun close() { generation++; job?.cancel(); scope.cancel() }
+    fun close() {
+        groupsGeneration++; collectionsGeneration++; listGeneration++; tagsGeneration++
+        listJob?.cancel(); scope.cancel()
+    }
 }
