@@ -112,7 +112,7 @@ internal class AccountController(private val store: AccountStore, private val lo
         groupsLoadedForUserId = -1
     }
 
-    fun startOAuth() {
+    fun startOAuth(writeAccess: Boolean = false) {
         val client = oauth ?: return
         if (mutable.value.checking || !gate.begin()) return
         mutable.value = mutable.value.copy(checking = true, message = "", details = "")
@@ -121,7 +121,7 @@ internal class AccountController(private val store: AccountStore, private val lo
             when (result) {
                 is OAuthResult.Success -> {
                     pendingOAuth = result.value
-                    mutable.value = mutable.value.copy(checking = false, authorizeUrl = client.authorizeUrl(result.value.token))
+                    mutable.value = mutable.value.copy(checking = false, authorizeUrl = client.authorizeUrl(result.value.token, writeAccess))
                 }
                 else -> mutable.value = mutable.value.copy(checking = false,
                     message = OAuthStage.RequestToken.message,

@@ -517,7 +517,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         return
     }
     when (screen) {
-        Screen.HOME -> DocumentsScreen(documentRows, message,
+        Screen.HOME -> HomeScreen(documentRows, message,
             onAdd = {
                 try { picker.launch(arrayOf(DOCX_MIME)) }
                 catch (_: Exception) { message = "Could not open the file picker." }
@@ -525,6 +525,9 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             onOpen = ::openDocument, onRename = ::renameDocument, onDelete = ::deleteDocument, onSettings = { navigate(Screen.SETTINGS) },
             textSize = settings.textSize,
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
+            accountStore = accountStore, libraryGroupId = settings.libraryGroupId,
+            onLibraryChoice = { id -> scope.launch { settingsStore.setLibraryGroupId(id) } },
+            onSignIn = { account.openKey(false) }, onAllowEditing = { account.startOAuth(writeAccess = true) },
         )
         Screen.DOCUMENT, Screen.MOBILE_VIEW -> Column(Modifier.fillMaxSize()) {
             val p = project
