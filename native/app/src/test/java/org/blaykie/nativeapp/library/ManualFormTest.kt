@@ -134,14 +134,16 @@ class ManualFormTest {
     @Test fun pasteSeveralAuthorsParser() {
         val rows = parsePastedCreators(
             "Sharma, R. K.\nPatel, Meera; Ministry of Rural Development\nSmith and Wesson\nKabir")
-        assertEquals(4, rows.size)
+        // Split only on new lines and semicolons: Sharma, Patel, Ministry, Smith and Wesson, Kabir.
+        assertEquals(5, rows.size)
         assertFalse(rows[0].singleField)
         assertEquals("Sharma", rows[0].lastName); assertEquals("R. K.", rows[0].firstName)
         assertFalse(rows[1].singleField)
         assertEquals("Patel", rows[1].lastName); assertEquals("Meera", rows[1].firstName)
         // Never split on "and" or "&": organisations keep their full name.
         assertTrue(rows[2].singleField); assertEquals("Ministry of Rural Development", rows[2].name)
-        assertTrue(rows[3].singleField); assertEquals("Kabir", rows[3].name)
+        assertTrue(rows[3].singleField); assertEquals("Smith and Wesson", rows[3].name)
+        assertTrue(rows[4].singleField); assertEquals("Kabir", rows[4].name)
         // Order is kept and empty parts are skipped.
         assertTrue(parsePastedCreators("\n ; \n").isEmpty())
         val suffix = parsePastedCreators("King, Martin Luther, Jr.")

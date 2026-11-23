@@ -125,7 +125,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var discardForChangeType by remember { mutableStateOf(false) }
     val schemaEntry = form.itemType?.let { manual.schemas[it] }
-    val schema = (schemaEntry as? SchemaResult.Success)?.value
+    val schema = (schemaEntry as? SchemaResult.Success<*>)?.value as? TypeSchema
 
     LaunchedEffect(manual.open) { if (manual.open) controller.loadManualTypes() }
     LaunchedEffect(form.itemType) { form.itemType?.let { controller.loadManualSchema(it) } }
