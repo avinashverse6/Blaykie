@@ -15,6 +15,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import org.blaykie.nativeapp.account.AccountRead
 import org.blaykie.nativeapp.account.AccountStore
+import org.blaykie.nativeapp.crossref.CrossrefClient
+import org.blaykie.nativeapp.crossref.CrossrefResult
+import ItemDraft
+import org.blaykie.nativeapp.crossref.buildItemJson
+import org.blaykie.nativeapp.crossref.canonicalDoi
+import org.blaykie.nativeapp.crossref.crossrefToDraft
 import org.blaykie.nativeapp.zotero.BrowseNode
 import org.blaykie.nativeapp.zotero.BrowseQuery
 import org.blaykie.nativeapp.zotero.BrowseSort
@@ -80,7 +86,7 @@ internal data class AddState(
     val open: Boolean = false,
     val doi: String = "",
     val fetching: Boolean = false,
-    val draft: org.blaykie.nativeapp.crossref.ItemDraft? = null,
+    val draft: ItemDraft? = null,
     val error: String? = null,
     val duplicateTitle: String? = null,
     val saving: Boolean = false,
@@ -148,7 +154,7 @@ internal data class LibraryState(
 internal class LibraryController(private val accounts: AccountStore,
                                  private val clientFactory: () -> ZoteroClient = ::ZoteroClient,
                                  private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-                                 private val crossrefFactory: () -> org.blaykie.nativeapp.crossref.CrossrefClient = ::org.blaykie.nativeapp.crossref.CrossrefClient) {
+                                 private val crossrefFactory: () -> CrossrefClient = ::CrossrefClient) {
     private val mutable = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = mutable
     private val cache = LibraryCache()
@@ -473,7 +479,7 @@ internal class LibraryController(private val accounts: AccountStore,
 
     fun fetchDetails() {
         val input = mutable.value.add.doi
-        val canonical = org.blaykie.nativeapp.crossref.canonicalDoi(input)
+        val canonical = canonicalDoi(input)
         if (canonical == null) {
             mutable.value = mutable.value.copy(add = mutable.value.add.copy(error = "That does not look like a DOI."))
             return
@@ -482,22 +488,22 @@ internal class LibraryController(private val accounts: AccountStore,
         scope.launch {
             val result = withContext(Dispatchers.IO) { crossrefFactory().fetch(canonical) }
             mutable.value = when (result) {
-                is org.blaykie.nativeapp.crossref.CrossrefResult.Success -> mutable.value.copy(
+                is CrossrefResult.Success -> mutable.value.copy(
                     add = mutable.value.add.copy(fetching = false,
-                        draft = org.blaykie.nativeapp.crossref.crossrefToDraft(result.work)))
-                is org.blaykie.nativeapp.crossref.CrossrefResult.NotFound -> mutable.value.copy(
+                        draft = crossrefToDraft(result.work)))
+                is CrossrefResult.NotFound -> mutable.value.copy(
                     add = mutable.value.add.copy(fetching = false, error = "DOI not found in Crossref"))
-                is org.blaykie.nativeapp.crossref.CrossrefResult.HttpError -> mutable.value.copy(
+                is CrossrefResult.HttpError -> mutable.value.copy(
                     add = mutable.value.add.copy(fetching = false, error = "Crossref lookup failed: HTTP ${result.status}"))
-                is org.blaykie.nativeapp.crossref.CrossrefResult.NetworkFailure -> mutable.value.copy(
+                is CrossrefResult.NetworkFailure -> mutable.value.copy(
                     add = mutable.value.add.copy(fetching = false, error = "Crossref lookup failed. Check your connection."))
-                is org.blaykie.nativeapp.crossref.CrossrefResult.Malformed -> mutable.value.copy(
+                is CrossrefResult.Malformed -> mutable.value.copy(
                     add = mutable.value.add.copy(fetching = false, error = "Crossref returned invalid data."))
             }
         }
     }
 
-    fun saveDraft(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean) {
+    fun saveDraft(draft: ItemDraft, inCollection: Boolean) {
         if (mutable.value.add.saving) return
         val token = writeToken ?: newWriteToken().also { writeToken = it }
         mutable.value = mutable.value.copy(add = mutable.value.add.copy(saving = true, error = null))
@@ -505,7 +511,7 @@ internal class LibraryController(private val accounts: AccountStore,
             val outcome = withContext(Dispatchers.IO) { saveOnce(draft, inCollection, token) }
             when (outcome) {
                 is SaveOutcome.Saved -> {
-                    val itemJson = org.blaykie.nativeapp.crossref.buildItemJson(draft,
+                    val itemJson = buildItemJson(draft,
                         if (inCollection) mutable.value.add.collectionKey else null)
                     val data = (kotlinx.serialization.json.Json.parseToJsonElement(itemJson) as JsonArray)
                         .first() as JsonObject
@@ -526,7 +532,7 @@ internal class LibraryController(private val accounts: AccountStore,
         }
     }
 
-    fun confirmAddAnyway(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean) {
+    fun confirmAddAnyway(draft: ItemDraft, inCollection: Boolean) {
         duplicateConfirmed = true
         mutable.value = mutable.value.copy(add = mutable.value.add.copy(duplicateTitle = null))
         saveDraft(draft, inCollection)
@@ -544,7 +550,7 @@ internal class LibraryController(private val accounts: AccountStore,
     }
 
     /** Runs on a background thread. The same write token is reused across retries of this save. */
-    private fun saveOnce(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean, token: String): SaveOutcome {
+    private fun saveOnce(draft: ItemDraft, inCollection: Boolean, token: String): SaveOutcome {
         val read = accounts.read() as? AccountRead.Present ?: return SaveOutcome.PermissionNeeded
         val userId = read.account.verified.userId
         val key = read.account.key
@@ -566,7 +572,7 @@ internal class LibraryController(private val accounts: AccountStore,
             }
         }
         val collectionKey = if (inCollection) mutable.value.add.collectionKey else null
-        val body = org.blaykie.nativeapp.crossref.buildItemJson(draft, collectionKey)
+        val body = buildItemJson(draft, collectionKey)
         var result = client.createItem(userId, key, body, token)
         if (result is ZoteroClient.WriteResult.PreconditionFailed && !preconditionRetried) {
             preconditionRetried = true
