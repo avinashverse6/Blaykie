@@ -145,7 +145,7 @@ private fun ReviewContent(state: LibraryState, controller: LibraryController) {
                 }
             }
         }
-        item { OutlinedTextField(title, { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth()) }
+        item { OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth()) }
         itemsIndexed(creators) { index, creator ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(creator.displayName(), { value ->
@@ -164,25 +164,25 @@ private fun ReviewContent(state: LibraryState, controller: LibraryController) {
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(date, { date = it }, label = { Text("Date") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(volume, { volume = it }, label = { Text("Volume") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(issue, { issue = it }, label = { Text("Issue") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Date") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = volume, onValueChange = { volume = it }, label = { Text("Volume") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = issue, onValueChange = { issue = it }, label = { Text("Issue") }, modifier = Modifier.weight(1f))
             }
         }
-        item { OutlinedTextField(publication, { publication = it }, label = { Text("Publication") }, modifier = Modifier.fillMaxWidth()) }
+        item { OutlinedTextField(value = publication, onValueChange = { publication = it }, label = { Text("Publication") }, modifier = Modifier.fillMaxWidth()) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(pages, { pages = it }, label = { Text("Pages") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(doi, { doi = it }, label = { Text("DOI") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = pages, onValueChange = { pages = it }, label = { Text("Pages") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(value = doi, onValueChange = { doi = it }, label = { Text("DOI") }, modifier = Modifier.weight(1f))
             }
         }
-        item { OutlinedTextField(url, { url = it }, label = { Text("URL") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(publisher, { publisher = it }, label = { Text("Publisher") }, modifier = Modifier.fillMaxWidth()) }
+        item { OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("URL") }, modifier = Modifier.fillMaxWidth()) }
+        item { OutlinedTextField(value = publisher, onValueChange = { publisher = it }, label = { Text("Publisher") }, modifier = Modifier.fillMaxWidth()) }
         item {
             TextButton(onClick = { abstractOpen = !abstractOpen }) {
                 Text(if (abstractOpen) "Hide abstract ▴" else "Abstract ▾")
             }
-            if (abstractOpen) OutlinedTextField(abstract, { abstract = it }, label = { Text("Abstract") },
+            if (abstractOpen) OutlinedTextField(value = abstract, onValueChange = { abstract = it }, label = { Text("Abstract") },
                 modifier = Modifier.fillMaxWidth(), minLines = 3)
         }
         item {
