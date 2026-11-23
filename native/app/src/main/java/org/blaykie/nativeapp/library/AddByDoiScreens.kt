@@ -105,17 +105,18 @@ private fun SavedContent(state: LibraryState, controller: LibraryController) {
 private fun ReviewContent(state: LibraryState, controller: LibraryController) {
     val add = state.add
     val base = add.draft ?: return
+    val f = base.fields
     var itemType by remember(base) { mutableStateOf(base.itemType) }
-    var title by remember(base) { mutableStateOf(base.fields["title"].orEmpty()) }
-    var date by remember(base) { mutableStateOf(base.fields["date"].orEmpty()) }
-    var publication by remember(base) { mutableStateOf(base.fields["publicationTitle"].orEmpty()) }
-    var volume by remember(base) { mutableStateOf(base.fields["volume"].orEmpty()) }
-    var issue by remember(base) { mutableStateOf(base.fields["issue"].orEmpty()) }
-    var pages by remember(base) { mutableStateOf(base.fields["pages"].orEmpty()) }
-    var doi by remember(base) { mutableStateOf(base.fields["DOI"].orEmpty()) }
-    var url by remember(base) { mutableStateOf(base.fields["url"].orEmpty()) }
-    var publisher by remember(base) { mutableStateOf(base.fields["publisher"].orEmpty()) }
-    var abstract by remember(base) { mutableStateOf(base.fields["abstractNote"].orEmpty()) }
+    var title by remember(base) { mutableStateOf(f["title"].orEmpty()) }
+    var date by remember(base) { mutableStateOf(f["date"].orEmpty()) }
+    var publication by remember(base) { mutableStateOf(f["publicationTitle"].orEmpty()) }
+    var volume by remember(base) { mutableStateOf(f["volume"].orEmpty()) }
+    var issue by remember(base) { mutableStateOf(f["issue"].orEmpty()) }
+    var pages by remember(base) { mutableStateOf(f["pages"].orEmpty()) }
+    var doi by remember(base) { mutableStateOf(f["DOI"].orEmpty()) }
+    var url by remember(base) { mutableStateOf(f["url"].orEmpty()) }
+    var publisher by remember(base) { mutableStateOf(f["publisher"].orEmpty()) }
+    var abstract by remember(base) { mutableStateOf(f["abstractNote"].orEmpty()) }
     var abstractOpen by remember(base) { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
     val creators = remember(base) { mutableStateListOf<DraftCreator>().apply { addAll(base.creators) } }
