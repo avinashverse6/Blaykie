@@ -51,6 +51,7 @@ internal fun LibraryScreen(state: LibraryState, controller: LibraryController, o
     }
     if (state.showAddMenu) AddMenuSheet(controller, onDismiss = controller::dismissAddMenu)
     if (state.add.open) AddByDoiSheet(state, controller, onDismiss = controller::closeAdd)
+    if (state.manual.open) AddManuallySheet(state, controller)
 }
 
 @Composable
