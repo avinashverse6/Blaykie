@@ -36,7 +36,9 @@ import org.blaykie.nativeapp.zotero.ZoteroGroupsCache
 import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.blaykie.nativeapp.zotero.ZoteroLibrary
 import org.blaykie.nativeapp.zotero.ZoteroResult
+import org.blaykie.nativeapp.zotero.ZoteroSchemaClient
 import org.blaykie.nativeapp.zotero.ZoteroTag
+import org.blaykie.nativeapp.zotero.ItemTypeInfo
 import org.blaykie.nativeapp.zotero.hasMorePages
 
 internal fun libraryError(prefix: String, result: ZoteroResult<*>): String = when (result) {
@@ -160,6 +162,7 @@ internal data class LibraryState(
     val showPermissionSheet: Boolean = false,
     val permissionManualKey: Boolean = false,
     val add: AddState = AddState(),
+    val manual: ManualState = ManualState(),
 ) {
     override fun toString() = "LibraryState(redacted)"
     val library: ZoteroLibrary? get() = route.libraryOrNull()
@@ -178,7 +181,8 @@ internal data class LibraryState(
 internal class LibraryController(private val accounts: AccountStore,
                                  private val clientFactory: () -> ZoteroClient = ::ZoteroClient,
                                  private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-                                 private val crossrefFactory: () -> CrossrefClient = ::CrossrefClient) {
+                                 private val crossrefFactory: () -> CrossrefClient = ::CrossrefClient,
+                                 private val schemaFactory: () -> ZoteroSchemaClient = ::ZoteroSchemaClient) {
     private val mutable = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = mutable
     private val cache = LibraryCache()
@@ -702,7 +706,7 @@ internal class LibraryController(private val accounts: AccountStore,
             if (current != typesGeneration) return@launch
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
-                is SchemaResult.Success -> manual.copy(typesLoading = false,
+                is SchemaResult.Success<*> -> manual.copy(typesLoading = false,
                     types = result.value, usingBasicTypes = result.basic)
                 // The client already falls back to the basic list; reaching here means
                 // even that failed, which cannot happen — keep the flags consistent.
@@ -721,7 +725,7 @@ internal class LibraryController(private val accounts: AccountStore,
             if (current != schemaGeneration) return@launch
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
-                is SchemaResult.Success -> manual.copy(schemaLoadingType = null,
+                is SchemaResult.Success<*> -> manual.copy(schemaLoadingType = null,
                     schemas = manual.schemas + (type to result.value))
                 is SchemaResult.HttpError -> manual.copy(schemaLoadingType = null,
                     schemaError = "Could not load the fields for this type: HTTP ${result.status}",

@@ -51,6 +51,9 @@ internal fun AddMenuSheet(controller: LibraryController, onDismiss: () -> Unit) 
             TextButton(onClick = { controller.openAddByDoi() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Add by DOI", style = MaterialTheme.typography.bodyLarge)
             }
+            TextButton(onClick = { controller.openAddManually() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Add manually", style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }

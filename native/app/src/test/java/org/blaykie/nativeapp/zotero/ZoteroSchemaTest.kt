@@ -30,7 +30,7 @@ class ZoteroSchemaTest {
             {"itemType":"annotation","localized":"Annotation"},
             {"itemType":"artwork","localized":"Artwork"},
             {"itemType":"book","localized":"Book"}]"""))
-        val result = client.itemTypes() as SchemaResult.Success
+        val result = client.itemTypes() as SchemaResult.Success<*>
         assertFalse(result.basic)
         assertEquals(listOf("journalArticle", "artwork", "book"), result.value.map { it.type })
         // No API key or credentials are sent to the public schema endpoints.
@@ -63,7 +63,7 @@ class ZoteroSchemaTest {
         server.enqueue(ok("""[{"key":"","version":0,"itemType":"bookSection","title":"",
             "abstractNote":"","bookTitle":"","publisher":"","dateAdded":"","dateModified":"",
             "creators":[],"tags":[],"collections":[],"relations":{}}]"""))
-        val schema = (client.typeSchema("bookSection") as SchemaResult.Success).value
+        val schema = (client.typeSchema("bookSection") as SchemaResult.Success<*>).value
         // Only template fields are offered (dateAdded/dateModified/creators etc. hidden).
         assertEquals(listOf("title", "abstractNote", "bookTitle", "publisher"), schema.fields.map { it.name })
         assertEquals("publicationTitle", schema.fields.first { it.name == "bookTitle" }.baseField)
@@ -80,18 +80,18 @@ class ZoteroSchemaTest {
         server.enqueue(ok("""[{"creatorType":"author","localized":"Author"},{"creatorType":"counsel","localized":"Counsel"}]"""))
         server.enqueue(ok("""[{"itemType":"case","caseName":"","court":"","creators":[]}]"""))
         server.enqueue(ok("""[{"itemType":"case","localized":"Case"}]"""))
-        val schema = (client.typeSchema("case") as SchemaResult.Success).value
+        val schema = (client.typeSchema("case") as SchemaResult.Success<*>).value
         assertEquals("caseName", titleFieldOf(schema)?.name)
         assertEquals("author", schema.primaryCreatorType())
     }
 
     @Test fun schemaFailureFallsBackToBasicTypes() {
         repeat(9) { server.enqueue(MockResponse().setResponseCode(500)) }
-        val types = client.itemTypes() as SchemaResult.Success
+        val types = client.itemTypes() as SchemaResult.Success<*>
         assertTrue(types.basic)
         assertEquals(11, types.value.size)
         assertTrue(types.value.any { it.type == "journalArticle" })
-        val thesis = (client.typeSchema("thesis") as SchemaResult.Success).value
+        val thesis = (client.typeSchema("thesis") as SchemaResult.Success<*>).value
         assertTrue(thesis.basic)
         assertTrue(thesis.fields.any { it.name == "university" })
         assertTrue(thesis.fields.any { it.name == "thesisType" })
@@ -114,7 +114,7 @@ class ZoteroSchemaTest {
             {"creatorType":"contributor","localized":"Contributor"}]"""))
         server.enqueue(ok("""[{"itemType":"presentation","title":"","presentationType":"","meetingName":"",
             "place":"","date":"","creators":[]}]"""))
-        val schema = (client.typeSchema("presentation") as SchemaResult.Success).value
+        val schema = (client.typeSchema("presentation") as SchemaResult.Success<*>).value
         assertFalse(schema.fields.any { it.name == "DOI" })
         assertTrue(schema.fields.any { it.name == "meetingName" })
         assertEquals("presenter", schema.primaryCreatorType())

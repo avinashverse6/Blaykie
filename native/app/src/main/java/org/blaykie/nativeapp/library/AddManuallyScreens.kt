@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
+import org.blaykie.nativeapp.crossref.ItemDraft
 import org.blaykie.nativeapp.zotero.ItemTypeInfo
 import org.blaykie.nativeapp.zotero.SchemaField
 import org.blaykie.nativeapp.zotero.TypeSchema
@@ -66,6 +67,8 @@ internal class ManualFormState {
     }
 
     fun isDirty(schema: TypeSchema?): Boolean = manualFormDirty(schema, fields, creators)
+
+    fun editedDraft(schema: TypeSchema): ItemDraft = buildManualDraft(schema, fields, creators)
 
     fun reset() {
         itemType = null; typeLabel = ""; typeQuery = ""
@@ -120,7 +123,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
     val form = rememberSaveable(saver = manualFormSaver) { ManualFormState() }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var discardForChangeType by remember { mutableStateOf(false) }
-    val schema = form.itemType?.let { manual.schemas[it] }
+    val schema = form.itemType?.let { (manual.schemas[it] as? SchemaResult.Success)?.value }
 
     LaunchedEffect(manual.open) { if (manual.open) controller.loadManualTypes() }
     LaunchedEffect(form.itemType) { form.itemType?.let { controller.loadManualSchema(it) } }
