@@ -17,7 +17,7 @@ import org.blaykie.nativeapp.account.AccountRead
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.crossref.CrossrefClient
 import org.blaykie.nativeapp.crossref.CrossrefResult
-import ItemDraft
+import org.blaykie.nativeapp.crossref.ItemDraft
 import org.blaykie.nativeapp.crossref.buildItemJson
 import org.blaykie.nativeapp.crossref.canonicalDoi
 import org.blaykie.nativeapp.crossref.crossrefToDraft
