@@ -112,11 +112,11 @@ internal class ZoteroOAuthClient(
     private val nonce: () -> String = { randomNonce() },
     private val timestampSeconds: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
-    /** Read-only access is all Blaykie asks for at sign-in. */
-    fun authorizeUrl(requestToken: String): String =
+    /** Sign-in is read-only; writeAccess is only requested when the user allows editing. Groups stay read-only either way. */
+    fun authorizeUrl(requestToken: String, writeAccess: Boolean = false): String =
         "https://www.zotero.org/oauth/authorize" +
             "?oauth_token=${OAuth1.percentEncode(requestToken)}" +
-            "&name=Blaykie&library_access=1&notes_access=0&write_access=0&all_groups=read"
+            "&name=Blaykie&library_access=1&notes_access=0&write_access=${if (writeAccess) 1 else 0}&all_groups=read"
 
     fun requestToken(): OAuthResult<OAuthRequestToken> {
         val url = baseUrl + "request"

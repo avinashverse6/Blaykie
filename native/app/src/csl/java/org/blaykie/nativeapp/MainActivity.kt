@@ -527,7 +527,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
             accountStore = accountStore, libraryGroupId = settings.libraryGroupId,
             onLibraryChoice = { id -> scope.launch { settingsStore.setLibraryGroupId(id) } },
-            onSignIn = { account.openKey(false) },
+            onSignIn = { account.openKey(false) }, onAllowEditing = { account.startOAuth(writeAccess = true) },
         )
         Screen.DOCUMENT, Screen.MOBILE_VIEW -> Column(Modifier.fillMaxSize()) {
             val p = project

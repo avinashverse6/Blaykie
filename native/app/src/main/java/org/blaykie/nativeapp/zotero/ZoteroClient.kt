@@ -12,6 +12,8 @@ import okhttp3.Call
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -100,6 +102,7 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         internal fun forTesting(calls: Call.Factory, sleep: (Long) -> Unit = {}): ZoteroClient = ZoteroClient(calls, sleep)
     }
     private val json = Json { ignoreUnknownKeys = true }
+    private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private var pendingWaitSeconds = 0L
     private val cancellationLock = Any()
     @Volatile private var cancelled = false
@@ -324,6 +327,99 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
     /** "My Publications" exists only when the publications endpoint answers successfully (never for groups). */
     fun publicationsAvailable(userId: Long, apiKey: String): Boolean =
         browsePage(ZoteroLibrary.Personal, userId, apiKey, BrowseQuery(BrowseNode.Publications, limit = 1)) is ZoteroResult.Success
+
+    /** Items whose DOI field matches (case-insensitively), for the add-by-DOI duplicate check. */
+    fun findByDoi(userId: Long, apiKey: String, doi: String): ZoteroResult<List<ZoteroItem>> {
+        val wanted = org.blaykie.nativeapp.crossref.canonicalDoi(doi) ?: return ZoteroResult.Success(emptyList())
+        val params = mapOf("q" to doi, "qmode" to "everything", "limit" to "5", "format" to "json")
+        return when (val result = parse(request(listOf("users", userId.toString(), "items"), params, apiKey), ::parseItems)) {
+            is ZoteroResult.Success -> ZoteroResult.Success(result.value.filter {
+                org.blaykie.nativeapp.crossref.canonicalDoi((it.data["DOI"] as? JsonPrimitive)?.contentOrNull.orEmpty()) == wanted
+            })
+            is ZoteroResult.EmptyLibrary -> result
+            is ZoteroResult.InvalidKey -> result
+            is ZoteroResult.NetworkFailure -> result
+            is ZoteroResult.Cancelled -> result
+            is ZoteroResult.MalformedJson -> result
+            is ZoteroResult.RateLimited -> result
+            is ZoteroResult.HttpError -> result
+        }
+    }
+
+    /** Outcome of the single-item write; descriptions never include the key or item contents. */
+    sealed class WriteResult {
+        data class Success(val itemKey: String) : WriteResult()
+        object PreconditionFailed : WriteResult()
+        object TooLarge : WriteResult()
+        object Forbidden : WriteResult()
+        data class RateLimited(val retryAfterSeconds: Long) : WriteResult()
+        data class HttpError(val status: Int) : WriteResult()
+        object NetworkFailure : WriteResult()
+        object Malformed : WriteResult()
+        object Cancelled : WriteResult()
+        final override fun toString(): String = "WriteResult.${javaClass.simpleName}"
+    }
+
+    /**
+     * Creates ONE item in the personal library. The caller supplies the write token and
+     * reuses the same one when retrying this save, so a retry cannot create duplicates.
+     */
+    fun createItem(userId: Long, apiKey: String, oneItemJsonArray: String, writeToken: String): WriteResult {
+        val url = BASE.newBuilder().apply { addPathSegment("users"); addPathSegment(userId.toString()); addPathSegment("items") }.build()
+        val request = try {
+            Request.Builder().url(url).header("Zotero-API-Key", apiKey).header("Zotero-API-Version", "3")
+                .header("Content-Type", "application/json").header("User-Agent", blaykieUserAgent())
+                .header("Zotero-Write-Token", writeToken)
+                .post(oneItemJsonArray.toRequestBody(jsonMedia)).build()
+        } catch (_: IllegalArgumentException) { return WriteResult.Forbidden }
+        for (attempt in 0..MAX_RETRIES) {
+            if (cancelled) return WriteResult.Cancelled
+            if (pendingWaitSeconds > 0) {
+                synchronized(cancellationLock) {
+                    if (cancelled) return WriteResult.Cancelled
+                    waitingThread = Thread.currentThread()
+                }
+                try { sleep(pendingWaitSeconds * 1000) } catch (_: InterruptedException) {
+                    if (cancelled) { Thread.interrupted(); return WriteResult.Cancelled }
+                    Thread.currentThread().interrupt(); return WriteResult.NetworkFailure
+                } finally { synchronized(cancellationLock) { waitingThread = null } }
+                pendingWaitSeconds = 0
+            }
+            val call = synchronized(cancellationLock) {
+                if (cancelled) null else calls.newCall(request).also { activeCall = it }
+            } ?: return WriteResult.Cancelled
+            try {
+                val response = try { call.execute() } catch (_: IOException) {
+                    return if (cancelled) WriteResult.Cancelled else WriteResult.NetworkFailure
+                }
+                val delay = retryDelay(response.header("Backoff"), response.header("Retry-After"))
+                if (response.code == 429 || (response.code == 503 && delay > 0)) {
+                    response.close()
+                    if (attempt == MAX_RETRIES) return WriteResult.RateLimited(delay)
+                    pendingWaitSeconds = maxOf(delay, 1)
+                    continue
+                }
+                response.use {
+                    if (cancelled) return WriteResult.Cancelled
+                    return when (it.code) {
+                        200 -> try {
+                            val root = json.parseToJsonElement(it.body?.string() ?: "") as JsonObject
+                            val first = (root["successful"] as? JsonObject)?.get("0") as? JsonObject
+                            val newKey = (first?.get("key") as? JsonPrimitive)?.contentOrNull
+                            if (newKey.isNullOrBlank()) WriteResult.Malformed else WriteResult.Success(newKey)
+                        } catch (_: Exception) { WriteResult.Malformed }
+                        403 -> WriteResult.Forbidden
+                        412 -> WriteResult.PreconditionFailed
+                        413 -> WriteResult.TooLarge
+                        else -> WriteResult.HttpError(it.code)
+                    }
+                }
+            } finally {
+                synchronized(cancellationLock) { if (activeCall === call) activeCall = null }
+            }
+        }
+        return WriteResult.NetworkFailure
+    }
 
     fun fetchItems(userId: Long, apiKey: String, keys: List<String>): ZoteroResult<List<ZoteroItem>> =
         fetchItems(ZoteroLibrary.Personal, userId, apiKey, keys)

@@ -209,13 +209,7 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
             Text("No key saved", modifier = Modifier.padding(vertical = 12.dp))
         } else {
             val p = account.permissions
-            val level = when {
-                p.personalWrite && p.groupAccess -> "Write access and group access"
-                p.personalWrite -> "Write access"
-                p.groupAccess -> "Group access"
-                p.personalLibrary -> "Personal library: read-only"
-                else -> "No personal-library access"
-            }
+            val level = if (p.personalWrite) "Library read and write" else "Read only"
             Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
                 Text(if (account.username.isNullOrBlank()) "Using an API key" else "Signed in as ${account.username}",
                     style = MaterialTheme.typography.bodyLarge)

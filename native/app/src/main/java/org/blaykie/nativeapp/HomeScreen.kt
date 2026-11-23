@@ -30,7 +30,7 @@ internal fun HomeScreen(documents: List<StoredDocument>, message: String, onAdd:
                         onOpen: (String) -> Unit, onRename: (String, String) -> Unit, onDelete: (String) -> Unit,
                         onSettings: () -> Unit, textSize: TextSize, extraStep: HomeExtraStep? = null,
                         accountStore: AccountStore, libraryGroupId: Long,
-                        onLibraryChoice: (Long) -> Unit, onSignIn: () -> Unit) {
+                        onLibraryChoice: (Long) -> Unit, onSignIn: () -> Unit, onAllowEditing: () -> Unit = {}) {
     var tab by rememberSaveable { mutableStateOf(0) }
     val libraryController = remember { LibraryController(accountStore) }
     DisposableEffect(Unit) { onDispose { libraryController.close() } }
@@ -50,7 +50,7 @@ internal fun HomeScreen(documents: List<StoredDocument>, message: String, onAdd:
             if (tab == 0) {
                 DocumentsScreen(documents, message, onAdd, onOpen, onRename, onDelete, onSettings, textSize, extraStep)
             } else {
-                LibraryScreen(libraryState, libraryController, onSignIn)
+                LibraryScreen(libraryState, libraryController, onSignIn, onAllowEditing)
             }
         }
     }

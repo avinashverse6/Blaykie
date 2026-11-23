@@ -36,6 +36,10 @@ class ZoteroOAuthTest {
         assertEquals("https://www.zotero.org/oauth/authorize?oauth_token=req123" +
             "&name=Blaykie&library_access=1&notes_access=0&write_access=0&all_groups=read",
             client.authorizeUrl("req123"))
+        // The editing grant asks for write on the personal library only; groups stay read-only.
+        assertEquals("https://www.zotero.org/oauth/authorize?oauth_token=req123" +
+            "&name=Blaykie&library_access=1&notes_access=0&write_access=1&all_groups=read",
+            client.authorizeUrl("req123", writeAccess = true))
     }
 
     @Test fun callbackParsingAcceptsOnlyOwnSchemeAndHost() {

@@ -35,7 +35,8 @@ import org.blaykie.nativeapp.zotero.ZoteroLibrary
 import org.blaykie.nativeapp.zotero.collectionTree
 
 @Composable
-internal fun LibraryScreen(state: LibraryState, controller: LibraryController, onSignIn: () -> Unit) {
+internal fun LibraryScreen(state: LibraryState, controller: LibraryController, onSignIn: () -> Unit,
+                           onAllowEditing: () -> Unit = {}) {
     BackHandler(enabled = state.route !is LibraryRoute.Libraries) { controller.back() }
     when (state.route) {
         is LibraryRoute.Libraries -> LibrariesScreen(state, controller, onSignIn)
@@ -43,6 +44,13 @@ internal fun LibraryScreen(state: LibraryState, controller: LibraryController, o
         is LibraryRoute.Node -> LibraryNodeScreen(state, controller)
         is LibraryRoute.Detail -> ItemDetailScreen(state, controller)
     }
+    if (state.showPermissionSheet) {
+        PermissionSheet(state, onAllowEditing = { controller.dismissPermissionSheet(); onAllowEditing() },
+            onAdvancedKey = { controller.dismissPermissionSheet(); onSignIn() },
+            onDismiss = controller::dismissPermissionSheet)
+    }
+    if (state.showAddMenu) AddMenuSheet(controller, onDismiss = controller::dismissAddMenu)
+    if (state.add.open) AddByDoiSheet(state, controller, onDismiss = controller::closeAdd)
 }
 
 @Composable
@@ -110,6 +118,11 @@ private fun LibraryRootScreen(state: LibraryState, controller: LibraryController
         TopAppBar(title = { Text(title) }, navigationIcon = {
             IconButton(onClick = { controller.back() }) { Icon(painterResource(R.drawable.ic_arrow_back), "Back") }
         }, actions = {
+            if (library is ZoteroLibrary.Personal) {
+                IconButton(onClick = controller::addTapped) {
+                    Icon(painterResource(R.drawable.ic_document_plus), "Add an item")
+                }
+            }
             IconButton(onClick = { controller.openNode(BrowseNode.All, "All Items") }) {
                 Icon(painterResource(R.drawable.ic_search), "Search all items")
             }
@@ -203,6 +216,11 @@ private fun LibraryNodeScreen(state: LibraryState, controller: LibraryController
         TopAppBar(title = { Text(route.title) }, navigationIcon = {
             IconButton(onClick = { controller.back() }) { Icon(painterResource(R.drawable.ic_arrow_back), "Back") }
         }, actions = {
+            if (route.library is ZoteroLibrary.Personal && route.node !is BrowseNode.Publications && route.node !is BrowseNode.Trash) {
+                IconButton(onClick = controller::addTapped) {
+                    Icon(painterResource(R.drawable.ic_document_plus), "Add an item")
+                }
+            }
             TextButton(onClick = { tagsOpen = true; controller.loadTags("") }) { Text("Tags") }
             Box {
                 IconButton(onClick = { sortOpen = true }) { Icon(painterResource(R.drawable.ic_more), "Sort") }

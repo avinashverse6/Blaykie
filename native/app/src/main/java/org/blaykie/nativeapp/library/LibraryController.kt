@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import org.blaykie.nativeapp.account.AccountRead
 import org.blaykie.nativeapp.account.AccountStore
 import org.blaykie.nativeapp.zotero.BrowseNode
@@ -62,6 +66,37 @@ internal fun LibraryRoute.libraryOrNull(): ZoteroLibrary? = when (this) {
     is LibraryRoute.Libraries -> null
 }
 
+/** What tapping "+" should do, given the stored key. Pure, so it is covered by unit tests. */
+internal enum class AddPermission { Allowed, NeedsOAuth, NeedsManualKey, SignedOut }
+internal fun addPermission(signedIn: Boolean, writeAccess: Boolean, isOAuth: Boolean): AddPermission = when {
+    !signedIn -> AddPermission.SignedOut
+    writeAccess -> AddPermission.Allowed
+    isOAuth -> AddPermission.NeedsOAuth
+    else -> AddPermission.NeedsManualKey
+}
+
+/** State of the Add-by-DOI flow. Item contents live only in memory and are never logged. */
+internal data class AddState(
+    val open: Boolean = false,
+    val doi: String = "",
+    val fetching: Boolean = false,
+    val draft: org.blaykie.nativeapp.crossref.ItemDraft? = null,
+    val error: String? = null,
+    val duplicateTitle: String? = null,
+    val saving: Boolean = false,
+    val savedKey: String? = null,
+    val savedItem: ZoteroItem? = null,
+    val collectionKey: String? = null,
+    val collectionName: String? = null,
+) {
+    override fun toString() = "AddState(redacted)"
+}
+
+internal fun newWriteToken(random: java.security.SecureRandom = java.security.SecureRandom()): String {
+    val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    return (1..32).map { alphabet[random.nextInt(alphabet.length)] }.joinToString("")
+}
+
 internal data class LibraryState(
     val started: Boolean = false,
     val signedIn: Boolean = true,
@@ -91,6 +126,10 @@ internal data class LibraryState(
     val tagsError: String? = null,
     val tagsEnd: Boolean = true,
     val openTagsRequested: Int = 0,
+    val showAddMenu: Boolean = false,
+    val showPermissionSheet: Boolean = false,
+    val permissionManualKey: Boolean = false,
+    val add: AddState = AddState(),
 ) {
     override fun toString() = "LibraryState(redacted)"
     val library: ZoteroLibrary? get() = route.libraryOrNull()
@@ -108,7 +147,8 @@ internal data class LibraryState(
  */
 internal class LibraryController(private val accounts: AccountStore,
                                  private val clientFactory: () -> ZoteroClient = ::ZoteroClient,
-                                 private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)) {
+                                 private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+                                 private val crossrefFactory: () -> org.blaykie.nativeapp.crossref.CrossrefClient = ::org.blaykie.nativeapp.crossref.CrossrefClient) {
     private val mutable = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = mutable
     private val cache = LibraryCache()
@@ -374,6 +414,187 @@ internal class LibraryController(private val accounts: AccountStore,
                 }
                 else -> mutable.value = mutable.value.copy(tagsLoading = false, tagsError = libraryError("Could not load tags", result))
             }
+        }
+    }
+
+    // --- Add by DOI (personal library only; groups stay read-only) ---
+
+    private var writeToken: String? = null
+    private var duplicateConfirmed = false
+    private var preconditionRetried = false
+
+    fun addTapped() {
+        scope.launch {
+            val permission = withContext(Dispatchers.IO) {
+                when (val read = accounts.read()) {
+                    is AccountRead.Present -> addPermission(true, read.account.verified.permissions.personalWrite,
+                        !read.account.username.isNullOrBlank())
+                    else -> addPermission(false, writeAccess = false, isOAuth = false)
+                }
+            }
+            mutable.value = when (permission) {
+                AddPermission.Allowed -> mutable.value.copy(showAddMenu = true)
+                AddPermission.NeedsOAuth -> mutable.value.copy(showPermissionSheet = true, permissionManualKey = false)
+                AddPermission.NeedsManualKey -> mutable.value.copy(showPermissionSheet = true, permissionManualKey = true)
+                AddPermission.SignedOut -> mutable.value.copy(signedIn = false)
+            }
+        }
+    }
+
+    fun dismissAddMenu() { mutable.value = mutable.value.copy(showAddMenu = false) }
+    fun dismissPermissionSheet() { mutable.value = mutable.value.copy(showPermissionSheet = false) }
+
+    fun openAddByDoi() {
+        val route = mutable.value.route
+        val (key, name) = when (route) {
+            is LibraryRoute.Node -> (route.node as? BrowseNode.Collection)?.let {
+                it.key to route.title
+            } ?: (null to null)
+            else -> null to null
+        }
+        writeToken = null; duplicateConfirmed = false; preconditionRetried = false
+        mutable.value = mutable.value.copy(showAddMenu = false,
+            add = AddState(open = true, collectionKey = key, collectionName = name))
+    }
+
+    fun closeAdd() {
+        writeToken = null
+        mutable.value = mutable.value.copy(add = AddState())
+    }
+
+    fun addAnother() {
+        val current = mutable.value.add
+        writeToken = null; duplicateConfirmed = false; preconditionRetried = false
+        mutable.value = mutable.value.copy(add = AddState(open = true,
+            collectionKey = current.collectionKey, collectionName = current.collectionName))
+    }
+
+    fun setDoi(value: String) { mutable.value = mutable.value.copy(add = mutable.value.add.copy(doi = value, error = null)) }
+
+    fun fetchDetails() {
+        val input = mutable.value.add.doi
+        val canonical = org.blaykie.nativeapp.crossref.canonicalDoi(input)
+        if (canonical == null) {
+            mutable.value = mutable.value.copy(add = mutable.value.add.copy(error = "That does not look like a DOI."))
+            return
+        }
+        mutable.value = mutable.value.copy(add = mutable.value.add.copy(fetching = true, error = null, draft = null))
+        scope.launch {
+            val result = withContext(Dispatchers.IO) { crossrefFactory().fetch(canonical) }
+            mutable.value = when (result) {
+                is org.blaykie.nativeapp.crossref.CrossrefResult.Success -> mutable.value.copy(
+                    add = mutable.value.add.copy(fetching = false,
+                        draft = org.blaykie.nativeapp.crossref.crossrefToDraft(result.work)))
+                is org.blaykie.nativeapp.crossref.CrossrefResult.NotFound -> mutable.value.copy(
+                    add = mutable.value.add.copy(fetching = false, error = "DOI not found in Crossref"))
+                is org.blaykie.nativeapp.crossref.CrossrefResult.HttpError -> mutable.value.copy(
+                    add = mutable.value.add.copy(fetching = false, error = "Crossref lookup failed: HTTP ${result.status}"))
+                is org.blaykie.nativeapp.crossref.CrossrefResult.NetworkFailure -> mutable.value.copy(
+                    add = mutable.value.add.copy(fetching = false, error = "Crossref lookup failed. Check your connection."))
+                is org.blaykie.nativeapp.crossref.CrossrefResult.Malformed -> mutable.value.copy(
+                    add = mutable.value.add.copy(fetching = false, error = "Crossref returned invalid data."))
+            }
+        }
+    }
+
+    fun saveDraft(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean) {
+        if (mutable.value.add.saving) return
+        val token = writeToken ?: newWriteToken().also { writeToken = it }
+        mutable.value = mutable.value.copy(add = mutable.value.add.copy(saving = true, error = null))
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) { saveOnce(draft, inCollection, token) }
+            when (outcome) {
+                is SaveOutcome.Saved -> {
+                    val itemJson = org.blaykie.nativeapp.crossref.buildItemJson(draft,
+                        if (inCollection) mutable.value.add.collectionKey else null)
+                    val data = (kotlinx.serialization.json.Json.parseToJsonElement(itemJson) as JsonArray)
+                        .first() as JsonObject
+                    val item = ZoteroItem(outcome.key, data)
+                    cache.clear()
+                    mutable.value = mutable.value.copy(add = mutable.value.add.copy(
+                        saving = false, savedKey = outcome.key, savedItem = item, duplicateTitle = null))
+                    if (mutable.value.route is LibraryRoute.Node) loadFirstPage()
+                }
+                is SaveOutcome.Duplicate -> mutable.value = mutable.value.copy(
+                    add = mutable.value.add.copy(saving = false, duplicateTitle = outcome.title))
+                is SaveOutcome.PermissionNeeded -> mutable.value = mutable.value.copy(
+                    add = mutable.value.add.copy(saving = false),
+                    showPermissionSheet = true, permissionManualKey = false)
+                is SaveOutcome.Failed -> mutable.value = mutable.value.copy(
+                    add = mutable.value.add.copy(saving = false, error = outcome.message))
+            }
+        }
+    }
+
+    fun confirmAddAnyway(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean) {
+        duplicateConfirmed = true
+        mutable.value = mutable.value.copy(add = mutable.value.add.copy(duplicateTitle = null))
+        saveDraft(draft, inCollection)
+    }
+
+    fun cancelDuplicate() {
+        mutable.value = mutable.value.copy(add = mutable.value.add.copy(duplicateTitle = null))
+    }
+
+    private sealed interface SaveOutcome {
+        data class Saved(val key: String) : SaveOutcome
+        data class Duplicate(val title: String) : SaveOutcome
+        object PermissionNeeded : SaveOutcome
+        data class Failed(val message: String) : SaveOutcome
+    }
+
+    /** Runs on a background thread. The same write token is reused across retries of this save. */
+    private fun saveOnce(draft: org.blaykie.nativeapp.crossref.ItemDraft, inCollection: Boolean, token: String): SaveOutcome {
+        val read = accounts.read() as? AccountRead.Present ?: return SaveOutcome.PermissionNeeded
+        val userId = read.account.verified.userId
+        val key = read.account.key
+        val client = clientFactory()
+        if (!duplicateConfirmed) {
+            val doi = draft.fields["DOI"].orEmpty()
+            if (doi.isNotBlank()) {
+                when (val check = client.findByDoi(userId, key, doi)) {
+                    is ZoteroResult.Success -> check.value.firstOrNull()?.let {
+                        return SaveOutcome.Duplicate((it.data["title"] as? JsonPrimitive)
+                            ?.contentOrNull?.ifBlank { "Untitled" } ?: "Untitled")
+                    }
+                    is ZoteroResult.InvalidKey -> return SaveOutcome.Failed("Could not check for duplicates: HTTP 403")
+                    is ZoteroResult.HttpError -> return SaveOutcome.Failed("Could not check for duplicates: HTTP ${check.status}")
+                    is ZoteroResult.RateLimited -> return SaveOutcome.Failed("Could not check for duplicates: HTTP 429")
+                    is ZoteroResult.NetworkFailure -> return SaveOutcome.Failed("Could not check for duplicates. Check your connection.")
+                    else -> Unit
+                }
+            }
+        }
+        val collectionKey = if (inCollection) mutable.value.add.collectionKey else null
+        val body = org.blaykie.nativeapp.crossref.buildItemJson(draft, collectionKey)
+        var result = client.createItem(userId, key, body, token)
+        if (result is ZoteroClient.WriteResult.PreconditionFailed && !preconditionRetried) {
+            preconditionRetried = true
+            // Re-fetch (the duplicate check) and retry once with the same write token.
+            val doi = draft.fields["DOI"].orEmpty()
+            if (doi.isNotBlank()) client.findByDoi(userId, key, doi)
+            result = client.createItem(userId, key, body, token)
+        }
+        return when (result) {
+            is ZoteroClient.WriteResult.Success -> SaveOutcome.Saved(result.itemKey)
+            is ZoteroClient.WriteResult.Forbidden -> SaveOutcome.PermissionNeeded
+            is ZoteroClient.WriteResult.PreconditionFailed -> SaveOutcome.Failed("Could not save: HTTP 412")
+            is ZoteroClient.WriteResult.TooLarge -> SaveOutcome.Failed("Could not save: HTTP 413")
+            is ZoteroClient.WriteResult.RateLimited -> SaveOutcome.Failed("Could not save: HTTP 429")
+            is ZoteroClient.WriteResult.HttpError -> SaveOutcome.Failed("Could not save: HTTP ${result.status}")
+            is ZoteroClient.WriteResult.NetworkFailure -> SaveOutcome.Failed("Could not save. Check your connection.")
+            is ZoteroClient.WriteResult.Malformed -> SaveOutcome.Failed("Could not save: unreadable reply")
+            is ZoteroClient.WriteResult.Cancelled -> SaveOutcome.Failed("Saving was cancelled.")
+        }
+    }
+
+    fun viewSavedItem() {
+        val item = mutable.value.add.savedItem ?: return
+        closeAdd()
+        when (mutable.value.route) {
+            is LibraryRoute.Node -> selectItem(item)
+            is LibraryRoute.Root -> { openNode(BrowseNode.All, "All Items"); selectItem(item) }
+            else -> Unit
         }
     }
 

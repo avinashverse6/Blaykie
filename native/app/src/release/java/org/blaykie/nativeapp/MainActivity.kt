@@ -443,7 +443,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             textSize = settings.textSize,
             accountStore = accountStore, libraryGroupId = settings.libraryGroupId,
             onLibraryChoice = { id -> scope.launch { settingsStore.setLibraryGroupId(id) } },
-            onSignIn = { account.openKey(false) },
+            onSignIn = { account.openKey(false) }, onAllowEditing = { account.startOAuth(writeAccess = true) },
         )
         Screen.DOCUMENT, Screen.MOBILE_VIEW -> Column(Modifier.fillMaxSize()) {
             val p = project
