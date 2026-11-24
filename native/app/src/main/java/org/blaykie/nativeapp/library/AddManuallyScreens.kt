@@ -24,6 +24,7 @@ import org.blaykie.nativeapp.crossref.ItemDraft
 import org.blaykie.nativeapp.zotero.ItemTypeInfo
 import org.blaykie.nativeapp.zotero.SchemaField
 import org.blaykie.nativeapp.zotero.TypeSchema
+import org.blaykie.nativeapp.zotero.humaniseSchemaName
 import org.blaykie.nativeapp.zotero.knownBaseFields
 
 /**
@@ -250,30 +251,44 @@ private fun ManualFormContent(state: LibraryState, controller: LibraryController
                               schema: TypeSchema?, onChangeType: () -> Unit) {
     val manual = state.manual
     val type = form.itemType ?: return
+    val label = schema?.label ?: form.typeLabel.ifBlank { humaniseSchemaName(type) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("New ${schema?.label ?: form.typeLabel}", style = MaterialTheme.typography.titleLarge,
+            Text("New $label", style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             TextButton(onClick = onChangeType) { Text("Change type") }
         }
         when {
-            schema == null && manual.schemaErrorType == type && manual.schemaError != null -> Column(
-                verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text(manual.schemaError ?: "", style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error)
-                AppPrimaryButton(onClick = { controller.loadManualSchema(type) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Retry") }
-                TextButton(onClick = { controller.useBasicManualForm(type) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Use basic form") }
-                val clipboard = LocalClipboardManager.current
-                val details = controller.manualSchemaCopyDetails() ?: "stage=unknown; httpStatus=none; exception=none"
-                TextButton(onClick = { clipboard.setText(AnnotatedString(details)) },
-                    modifier = Modifier.fillMaxWidth()) { Text("Copy details") }
-            }
-            schema == null -> Box(Modifier.fillMaxWidth().padding(24.dp),
+            schema != null -> ManualFieldsForm(state, controller, form, schema)
+            // Only a load that is actually running shows a spinner. Any other missing
+            // schema is shown as a recoverable error, so the sheet can never hang here.
+            manual.schemaLoadingType == type -> Box(Modifier.fillMaxWidth().padding(24.dp),
                 contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            else -> ManualFieldsForm(state, controller, form, schema)
+            else -> SchemaLoadFailed(controller, manual, type, label)
         }
+    }
+}
+
+/**
+ * The recoverable failure state of a schema load: the stage and HTTP status, a Retry that
+ * starts a fresh load, and "Use basic form" so the user can always continue offline.
+ * "Copy details" copies only the stage, HTTP status and exception class name — never a key
+ * or any item contents.
+ */
+@Composable
+private fun SchemaLoadFailed(controller: LibraryController, manual: ManualState, type: String, label: String) {
+    val message = manual.schemaError?.takeIf { manual.schemaErrorType == type }
+        ?: "Could not load fields for $label: step schema. Check your connection and try again."
+    val clipboard = LocalClipboardManager.current
+    val details = controller.manualSchemaCopyDetails() ?: "stage=unknown; httpStatus=none; exception=none"
+    Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+        AppPrimaryButton(onClick = { controller.loadManualSchema(type) },
+            modifier = Modifier.fillMaxWidth()) { Text("Retry") }
+        TextButton(onClick = { controller.useBasicManualForm(type) },
+            modifier = Modifier.fillMaxWidth()) { Text("Use basic form") }
+        TextButton(onClick = { clipboard.setText(AnnotatedString(details)) },
+            modifier = Modifier.fillMaxWidth()) { Text("Copy details") }
     }
 }
 

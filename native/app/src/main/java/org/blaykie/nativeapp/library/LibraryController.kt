@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp.library
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -674,6 +675,8 @@ internal class LibraryController(private val accounts: AccountStore,
     private val schemaClient: ZoteroSchemaClient by lazy { schemaFactory() }
     private var typesGeneration = 0
     private var schemaGeneration = 0
+    private var typesJob: Job? = null
+    private var schemaJob: Job? = null
 
     fun openAddManually() {
         val route = mutable.value.route
@@ -707,9 +710,20 @@ internal class LibraryController(private val accounts: AccountStore,
     fun loadManualTypes() {
         if (mutable.value.manual.types.isNotEmpty()) return
         val current = ++typesGeneration
+        typesJob?.cancel()
         mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(typesLoading = true))
-        scope.launch {
-            val result = withContext(Dispatchers.IO) { schemaClient.itemTypes() }
+        typesJob = scope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { schemaClient.itemTypes() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Never leave the chooser on a spinner: fall back to the built-in type list.
+                if (current != typesGeneration) return@launch
+                mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(
+                    typesLoading = false, types = ZoteroSchemaFallback.types, usingBasicTypes = true))
+                return@launch
+            }
             if (current != typesGeneration) return@launch
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
@@ -717,7 +731,8 @@ internal class LibraryController(private val accounts: AccountStore,
                     types = result.value as List<ItemTypeInfo>, usingBasicTypes = result.basic)
                 // The client already falls back to the basic list; reaching here means
                 // even that failed, which cannot happen — keep the flags consistent.
-                else -> manual.copy(typesLoading = false)
+                else -> manual.copy(typesLoading = false, types = ZoteroSchemaFallback.types,
+                    usingBasicTypes = true)
             })
         }
     }
@@ -736,27 +751,49 @@ internal class LibraryController(private val accounts: AccountStore,
     private fun schemaCopyDetails(stage: String, status: Int?, exception: String?): String =
         "stage=$stage; httpStatus=${status ?: "none"}; exception=${exception ?: "none"}"
 
+    /**
+     * Starts (or restarts) the schema load for [type]. Re-entrant by design: every call cancels
+     * any load still in flight and starts a fresh one, so changing the type, tapping Retry,
+     * rotating the phone or reopening the sheet always produces a new load. A failed load is
+     * never cached, so this always makes a request again for a type that is not loaded yet.
+     */
     fun loadManualSchema(type: String) {
-        if (mutable.value.manual.schemas.containsKey(type)) return
         val current = ++schemaGeneration
-        val label = mutable.value.manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
-        mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(
+        schemaJob?.cancel()
+        val manual = mutable.value.manual
+        if (manual.schemas.containsKey(type)) {
+            // Already loaded: just clear any stale loading/error state for this type.
+            if (manual.schemaLoadingType != null || manual.schemaError != null) {
+                mutable.value = mutable.value.copy(manual = manual.copy(
+                    schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+                    schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
+            }
+            return
+        }
+        // The label comes from the type list already in memory; no extra request for it.
+        val label = manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
+        mutable.value = mutable.value.copy(manual = manual.copy(
             schemaLoadingType = type, schemaError = null, schemaErrorType = null,
             schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                schemaClient.typeSchema(type, mutable.value.manual.types.firstOrNull { it.type == type }?.label)
+        schemaJob = scope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { schemaClient.typeSchema(type, label) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A crash inside the client must still end the spinner, with a stage to show.
+                SchemaResult.Failed("schema", null, e.javaClass.simpleName)
             }
             if (current != schemaGeneration) return@launch
-            val manual = mutable.value.manual
+            val manualNow = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
-                is SchemaResult.Success<*> -> manual.copy(schemaLoadingType = null,
-                    schemas = manual.schemas + (type to result.value as TypeSchema))
-                is SchemaResult.Failed -> manual.copy(schemaLoadingType = null,
+                is SchemaResult.Success<*> -> manualNow.copy(schemaLoadingType = null,
+                    schemas = manualNow.schemas + (type to result.value as TypeSchema))
+                is SchemaResult.Failed -> manualNow.copy(schemaLoadingType = null,
                     schemaError = schemaErrorText(label, result.stage, result.status, result.exception),
                     schemaErrorType = type, schemaErrorStage = result.stage,
                     schemaErrorStatus = result.status, schemaErrorException = result.exception)
-                else -> manual.copy(schemaLoadingType = null,
+                else -> manualNow.copy(schemaLoadingType = null,
                     schemaError = schemaErrorText(label, "schema", null, "unknown"),
                     schemaErrorType = type, schemaErrorStage = "schema",
                     schemaErrorStatus = null, schemaErrorException = "unknown")
@@ -771,6 +808,10 @@ internal class LibraryController(private val accounts: AccountStore,
      */
     fun useBasicManualForm(type: String) {
         val manual = mutable.value.manual
+        if (manual.schemaLoadingType == type) {
+            ++schemaGeneration
+            schemaJob?.cancel()
+        }
         if (manual.schemas.containsKey(type)) {
             mutable.value = mutable.value.copy(manual = manual.copy(
                 schemaLoadingType = null, schemaError = null, schemaErrorType = null,
