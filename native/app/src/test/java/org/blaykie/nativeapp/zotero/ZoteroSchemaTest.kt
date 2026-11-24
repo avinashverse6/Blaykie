@@ -79,29 +79,84 @@ class ZoteroSchemaTest {
             {"field":"court","localized":"Court"}]"""))
         server.enqueue(ok("""[{"creatorType":"author","localized":"Author"},{"creatorType":"counsel","localized":"Counsel"}]"""))
         server.enqueue(ok("""[{"itemType":"case","caseName":"","court":"","creators":[]}]"""))
-        server.enqueue(ok("""[{"itemType":"case","localized":"Case"}]"""))
         val schema = (client.typeSchema("case") as SchemaResult.Success<TypeSchema>).value
         assertEquals("caseName", titleFieldOf(schema)?.name)
         assertEquals("author", schema.primaryCreatorType())
     }
 
-    @Test fun schemaFailureFallsBackToBasicTypes() {
-        repeat(9) { server.enqueue(MockResponse().setResponseCode(500)) }
-        val types = client.itemTypes() as SchemaResult.Success<List<ItemTypeInfo>>
-        assertTrue(types.basic)
-        assertEquals(11, types.value.size)
-        assertTrue(types.value.any { it.type == "journalArticle" })
-        val thesis = (client.typeSchema("thesis") as SchemaResult.Success<TypeSchema>).value
-        assertTrue(thesis.basic)
-        assertTrue(thesis.fields.any { it.name == "university" })
-        assertTrue(thesis.fields.any { it.name == "thesisType" })
+    @Test fun schemaFailureReportsStageAndStatusInsteadOfSilentSpinner() {
+        // All three schema requests fail; typeSchema must report the failing stage + HTTP status,
+        // not silently hang or auto-fall-back.
+        repeat(3) { server.enqueue(MockResponse().setResponseCode(500)) }
+        val result = client.typeSchema("thesis") as SchemaResult.Failed
+        assertEquals("fields", result.stage)
+        assertEquals(500, result.status)
+        // The built-in classic fields are still available for the "Use basic form" escape hatch.
+        val basic = ZoteroSchemaFallback.schema("thesis")
+        assertNotNull(basic)
+        assertTrue(basic!!.fields.any { it.name == "university" })
+        assertTrue(basic.fields.any { it.name == "thesisType" })
     }
 
     @Test fun schemaFailureForUnknownTypeReportsHttpStatus() {
-        repeat(3) { server.enqueue(MockResponse().setResponseCode(503)) }
-        val result = client.typeSchema("artwork")
-        assertTrue(result is SchemaResult.HttpError)
-        assertEquals(503, (result as SchemaResult.HttpError).status)
+        // Route the 503 deterministically to the fields request so the stage is predictable.
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse =
+                when {
+                    request.path.orEmpty().contains("itemTypeFields") -> MockResponse().setResponseCode(503)
+                    request.path.orEmpty().contains("itemTypeCreatorTypes") -> ok("[]")
+                    request.path.orEmpty().contains("items/new") -> ok("[]")
+                    else -> MockResponse().setResponseCode(404)
+                }
+        }
+        val result = client.typeSchema("artwork") as SchemaResult.Failed
+        assertEquals("fields", result.stage)
+        assertEquals(503, result.status)
+    }
+
+    @Test fun labelComesFromLoadedListWithoutExtraRequest() {
+        server.enqueue(ok("""[{"itemType":"journalArticle","localized":"Journal Article"}]"""))
+        client.itemTypes()
+        val before = server.requestCount
+        server.enqueue(ok("""[{"field":"title","localized":"Title"}]"""))
+        server.enqueue(ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""))
+        server.enqueue(ok("""[{"itemType":"journalArticle","title":"","creators":[]}]"""))
+        val schema = (client.typeSchema("journalArticle", "Journal Article") as SchemaResult.Success<TypeSchema>).value
+        assertEquals("Journal Article", schema.label)
+        // Exactly the three schema requests were made; no fourth itemTypes request for the label.
+        assertEquals(before + 3, server.requestCount)
+        val paths = (before until server.requestCount).map { server.takeRequest().path.orEmpty() }
+        assertTrue(paths.none { it.startsWith("/itemTypes") })
+    }
+
+    @Test fun requestNeverAnswersHitsTimeoutAndReportsStage() {
+        val slow = MockResponse().setResponseCode(200).setBody("[]").setBodyDelay(3, java.util.concurrent.TimeUnit.SECONDS)
+        server.enqueue(slow); server.enqueue(slow); server.enqueue(slow)
+        val client = ZoteroSchemaClient.forTesting(OkHttpClient(), server.url("/").toString(), 300, 2000)
+        val result = client.typeSchema("journalArticle", "Journal Article") as SchemaResult.Failed
+        assertEquals("timeout", result.exception)
+        assertTrue(result.stage.isNotBlank())
+    }
+
+    @Test fun failedLoadIsNotCachedAndCanBeRetried() {
+        server.enqueue(MockResponse().setResponseCode(500))
+        server.enqueue(ok("[]")); server.enqueue(ok("[]"))
+        assertTrue(client.typeSchema("thesis") is SchemaResult.Failed)
+        // A later successful load must work and be returned (nothing was cached as "loading").
+        server.enqueue(ok("""[{"field":"title","localized":"Title"},{"field":"university","localized":"University"}]"""))
+        server.enqueue(ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""))
+        server.enqueue(ok("""[{"itemType":"thesis","title":"","university":"","creators":[]}]"""))
+        val schema = (client.typeSchema("thesis") as SchemaResult.Success<TypeSchema>).value
+        assertTrue(schema.fields.any { it.name == "university" })
+    }
+
+    @Test fun basicFormForJournalArticleHasClassicFields() {
+        val schema = ZoteroSchemaFallback.schema("journalArticle")
+        assertNotNull(schema)
+        val names = schema!!.fields.map { it.name }
+        assertTrue("title" in names)
+        assertTrue("publicationTitle" in names)
+        assertTrue("DOI" in names)
     }
 
     @Test fun templateIsAuthoritativeOverFieldsList() {

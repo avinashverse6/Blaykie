@@ -169,4 +169,18 @@ internal object ZoteroSchemaFallback {
         }
         return TypeSchema(type, info.label, fieldNames, creatorTypes, basic = true)
     }
+
+    /**
+     * A minimal schema for any type when the schema API cannot be reached. Used by the
+     * "Use basic form" escape hatch so the user can always continue (title + a few
+     * core fields + a single author role). The 11 common types get their fuller
+     * classic field set via [schema]; this covers the rest.
+     */
+    internal fun basicSchema(type: String, label: String): TypeSchema {
+        val fields = listOf("title", "abstractNote", "date", "url").map { name ->
+            SchemaField(name, fallbackFieldLabels[name] ?: humaniseSchemaName(name), knownBaseFields[name])
+        }
+        return TypeSchema(type, label, fields,
+            listOf(CreatorTypeInfo("author", fallbackCreatorLabels["author"] ?: "Author", primary = true)), basic = true)
+    }
 }

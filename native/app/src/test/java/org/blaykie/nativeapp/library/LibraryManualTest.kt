@@ -13,6 +13,7 @@ import org.blaykie.nativeapp.zotero.KeyPermissions
 import org.blaykie.nativeapp.zotero.VerifiedKey
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroGroupsCache
+import org.blaykie.nativeapp.zotero.ZoteroSchemaClient
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -49,7 +50,8 @@ class LibraryManualTest {
                 val target = server.url(request.url.encodedPath + (request.url.encodedQuery?.let { "?$it" } ?: ""))
                 chain.proceed(request.newBuilder().url(target).build())
             }.build()
-        controller = LibraryController(store, { ZoteroClient.forTesting(transport) }, CoroutineScope(Dispatchers.Unconfined))
+        controller = LibraryController(store, { ZoteroClient.forTesting(transport) }, CoroutineScope(Dispatchers.Unconfined),
+            schemaFactory = { ZoteroSchemaClient.forTesting(transport, server.url("/").toString(), 300, 2000) })
     }
     @After fun teardown() { controller.close(); ZoteroGroupsCache.clear(); server.shutdown() }
 
@@ -61,6 +63,20 @@ class LibraryManualTest {
         }
     }
     private fun ok(body: String) = MockResponse().setResponseCode(200).setBody(body)
+
+    private val journalArticleTypes = """[{"itemType":"journalArticle","localized":"Journal Article"},
+        {"itemType":"book","localized":"Book"}]"""
+    private fun loadTypes() {
+        server.enqueue(ok(journalArticleTypes))
+        controller.loadManualTypes()
+        await("types") { controller.state.value.manual.types.isNotEmpty() }
+    }
+    private fun journalArticleFields() = ok("""[{"field":"title","localized":"Title"},
+        {"field":"publicationTitle","localized":"Publication"},{"field":"DOI","localized":"DOI"}]""")
+    private fun journalArticleCreators() = ok("""[{"creatorType":"author","localized":"Author","primary":true},
+        {"creatorType":"editor","localized":"Editor"}]""")
+    private fun journalArticleTemplate() = ok("""[{"itemType":"journalArticle","title":"","publicationTitle":"",
+        "DOI":"","dateAdded":"","dateModified":"","creators":[],"tags":[],"collections":[],"relations":{}}]""")
 
     @Test fun duplicateCheckIsSkippedWithoutDoiOrIsbn() {
         server.enqueue(ok(created))
@@ -114,5 +130,69 @@ class LibraryManualTest {
         assertEquals("NEWKEY12", controller.state.value.manual.savedItem?.key)
         assertNull(controller.state.value.manual.error)
         assertNull(controller.state.value.manual.duplicateTitle)
+    }
+
+    @Test fun parallelSchemaLoadShowsTheForm() {
+        loadTypes()
+        server.enqueue(journalArticleFields()); server.enqueue(journalArticleCreators()); server.enqueue(journalArticleTemplate())
+        controller.loadManualSchema("journalArticle")
+        await("form loaded") { controller.state.value.manual.schemas.containsKey("journalArticle") }
+        assertNull(controller.state.value.manual.schemaError)
+        val schema = controller.state.value.manual.schemas["journalArticle"]
+        assertNotNull(schema)
+        assertTrue(schema!!.fields.any { it.name == "title" })
+        assertTrue(schema.creatorTypes.map { it.type }.contains("author"))
+    }
+
+    @Test fun schema403ShowsStageStatusRetryAndUseBasic() {
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse = when {
+                request.path.orEmpty().contains("itemTypes") -> ok(journalArticleTypes)
+                request.path.orEmpty().contains("itemTypeFields") -> MockResponse().setResponseCode(403)
+                request.path.orEmpty().contains("itemTypeCreatorTypes") -> journalArticleCreators()
+                request.path.orEmpty().contains("items/new") -> journalArticleTemplate()
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        loadTypes()
+        controller.loadManualSchema("journalArticle")
+        await("error shown") { controller.state.value.manual.schemaError != null }
+        assertEquals("fields", controller.state.value.manual.schemaErrorStage)
+        assertEquals(403, controller.state.value.manual.schemaErrorStatus)
+        assertTrue(controller.state.value.manual.schemaError!!.contains("HTTP 403"))
+        // A failed load is not cached, so Retry actually reloads.
+        assertFalse(controller.state.value.manual.schemas.containsKey("journalArticle"))
+        // Retry: now the fields request succeeds too.
+        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse = when {
+                request.path.orEmpty().contains("itemTypes") -> ok(journalArticleTypes)
+                request.path.orEmpty().contains("itemTypeFields") -> journalArticleFields()
+                request.path.orEmpty().contains("itemTypeCreatorTypes") -> journalArticleCreators()
+                request.path.orEmpty().contains("items/new") -> journalArticleTemplate()
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
+        controller.loadManualSchema("journalArticle")
+        await("reloaded after Retry") { controller.state.value.manual.schemas.containsKey("journalArticle") }
+        assertNull(controller.state.value.manual.schemaError)
+        // Use basic form opens the form with classic fields so the user can always continue.
+        controller.useBasicManualForm("journalArticle")
+        val basic = controller.state.value.manual.schemas["journalArticle"]
+        assertNotNull(basic)
+        assertTrue(basic!!.fields.any { it.name == "title" })
+        assertTrue(basic.basic)
+    }
+
+    @Test fun schemaTimeoutShowsMessageAndDoesNotSpinForever() {
+        loadTypes()
+        // Every request answers slowly; the per-step timeout must trip and report it.
+        val slow = MockResponse().setResponseCode(200).setBody("[]").setBodyDelay(3, TimeUnit.SECONDS)
+        server.enqueue(slow); server.enqueue(slow); server.enqueue(slow)
+        controller.loadManualSchema("journalArticle")
+        await("timeout reported") { controller.state.value.manual.schemaError != null }
+        assertEquals("timeout", controller.state.value.manual.schemaErrorException)
+        // The sheet must show an error (not an endless spinner).
+        assertNull(controller.state.value.manual.schemas["journalArticle"])
+        assertTrue(controller.state.value.manual.schemaError!!.contains("timeout"))
     }
 }

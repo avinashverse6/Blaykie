@@ -37,8 +37,11 @@ import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.blaykie.nativeapp.zotero.ZoteroLibrary
 import org.blaykie.nativeapp.zotero.ZoteroResult
 import org.blaykie.nativeapp.zotero.ZoteroSchemaClient
+import org.blaykie.nativeapp.zotero.ZoteroSchemaFallback
 import org.blaykie.nativeapp.zotero.ZoteroTag
 import org.blaykie.nativeapp.zotero.ItemTypeInfo
+import org.blaykie.nativeapp.zotero.basicSchema
+import org.blaykie.nativeapp.zotero.humaniseSchemaName
 import org.blaykie.nativeapp.zotero.hasMorePages
 
 internal fun libraryError(prefix: String, result: ZoteroResult<*>): String = when (result) {
@@ -113,6 +116,9 @@ internal data class ManualState(
     val schemaLoadingType: String? = null,
     val schemaError: String? = null,
     val schemaErrorType: String? = null,
+    val schemaErrorStage: String? = null,
+    val schemaErrorStatus: Int? = null,
+    val schemaErrorException: String? = null,
     val saving: Boolean = false,
     val error: String? = null,
     val duplicateTitle: String? = null,
@@ -716,29 +722,73 @@ internal class LibraryController(private val accounts: AccountStore,
         }
     }
 
+    /** Human-readable message for a failed schema load, including the failing stage and HTTP status. */
+    private fun schemaErrorText(label: String, stage: String, status: Int?, exception: String?): String {
+        val base = "Could not load fields for $label: step $stage"
+        return base + when {
+            status != null -> ", HTTP $status"
+            exception != null -> ": $exception"
+            else -> ""
+        }
+    }
+
+    /** Exact, key-free details for the "Copy details" button (stage, HTTP status, exception class). */
+    private fun schemaCopyDetails(stage: String, status: Int?, exception: String?): String =
+        "stage=$stage; httpStatus=${status ?: "none"}; exception=${exception ?: "none"}"
+
     fun loadManualSchema(type: String) {
         if (mutable.value.manual.schemas.containsKey(type)) return
         val current = ++schemaGeneration
+        val label = mutable.value.manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
         mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(
-            schemaLoadingType = type, schemaError = null, schemaErrorType = null))
+            schemaLoadingType = type, schemaError = null, schemaErrorType = null,
+            schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
         scope.launch {
-            val result = withContext(Dispatchers.IO) { schemaClient.typeSchema(type) }
+            val result = withContext(Dispatchers.IO) {
+                schemaClient.typeSchema(type, mutable.value.manual.types.firstOrNull { it.type == type }?.label)
+            }
             if (current != schemaGeneration) return@launch
             val manual = mutable.value.manual
             mutable.value = mutable.value.copy(manual = when (result) {
                 is SchemaResult.Success<*> -> manual.copy(schemaLoadingType = null,
                     schemas = manual.schemas + (type to result.value as TypeSchema))
-                is SchemaResult.HttpError -> manual.copy(schemaLoadingType = null,
-                    schemaError = "Could not load the fields for this type: HTTP ${result.status}",
-                    schemaErrorType = type)
-                SchemaResult.NetworkFailure -> manual.copy(schemaLoadingType = null,
-                    schemaError = "Could not load the fields for this type. Check your connection.",
-                    schemaErrorType = type)
-                SchemaResult.Malformed -> manual.copy(schemaLoadingType = null,
-                    schemaError = "Could not load the fields for this type: unreadable reply",
-                    schemaErrorType = type)
+                is SchemaResult.Failed -> manual.copy(schemaLoadingType = null,
+                    schemaError = schemaErrorText(label, result.stage, result.status, result.exception),
+                    schemaErrorType = type, schemaErrorStage = result.stage,
+                    schemaErrorStatus = result.status, schemaErrorException = result.exception)
+                else -> manual.copy(schemaLoadingType = null,
+                    schemaError = schemaErrorText(label, "schema", null, "unknown"),
+                    schemaErrorType = type, schemaErrorStage = "schema",
+                    schemaErrorStatus = null, schemaErrorException = "unknown")
             })
         }
+    }
+
+    /**
+     * Escape hatch: open the form with the built-in classic fields (for the 11 common types)
+     * or a minimal title-plus-author schema otherwise, so the user can always continue even
+     * when the schema API is unavailable. Never blocks and never logs anything.
+     */
+    fun useBasicManualForm(type: String) {
+        val manual = mutable.value.manual
+        if (manual.schemas.containsKey(type)) {
+            mutable.value = mutable.value.copy(manual = manual.copy(
+                schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+                schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
+            return
+        }
+        val label = manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
+        val schema = ZoteroSchemaFallback.schema(type) ?: basicSchema(type, label)
+        mutable.value = mutable.value.copy(manual = manual.copy(
+            schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+            schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null,
+            schemas = manual.schemas + (type to schema)))
+    }
+
+    /** Builds the copy-details text for the current schema error (no keys or item contents). */
+    fun manualSchemaCopyDetails(): String? {
+        val manual = mutable.value.manual
+        return manual.schemaErrorStage?.let { schemaCopyDetails(it, manual.schemaErrorStatus, manual.schemaErrorException) }
     }
 
     fun saveManualDraft(draft: ItemDraft, inCollection: Boolean) {

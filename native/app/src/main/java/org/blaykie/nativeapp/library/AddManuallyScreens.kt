@@ -13,7 +13,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
 import org.blaykie.nativeapp.R
@@ -21,7 +23,6 @@ import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.crossref.ItemDraft
 import org.blaykie.nativeapp.zotero.ItemTypeInfo
 import org.blaykie.nativeapp.zotero.SchemaField
-import org.blaykie.nativeapp.zotero.SchemaResult
 import org.blaykie.nativeapp.zotero.TypeSchema
 import org.blaykie.nativeapp.zotero.knownBaseFields
 
@@ -124,8 +125,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
     val form = rememberSaveable(saver = manualFormSaver) { ManualFormState() }
     var showDiscard by rememberSaveable { mutableStateOf(false) }
     var discardForChangeType by remember { mutableStateOf(false) }
-    val schemaEntry = form.itemType?.let { manual.schemas[it] }
-    val schema = (schemaEntry as? SchemaResult.Success<*>)?.value as? TypeSchema
+    val schema = form.itemType?.let { manual.schemas[it] }
 
     LaunchedEffect(manual.open) { if (manual.open) controller.loadManualTypes() }
     LaunchedEffect(form.itemType) { form.itemType?.let { controller.loadManualSchema(it) } }
@@ -156,7 +156,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
                     onAddAnother = { form.reset(); controller.addAnotherManual() },
                     onDone = { closeClean() })
                 form.itemType == null -> TypeChooserContent(state, form,
-                    onPick = { info -> form.startType(info); controller.loadManualSchema(info.type) })
+                    onPick = { info -> form.startType(info) })
                 else -> ManualFormContent(state, controller, form, schema,
                     onChangeType = { requestChangeType() })
             }
@@ -263,6 +263,12 @@ private fun ManualFormContent(state: LibraryState, controller: LibraryController
                     color = MaterialTheme.colorScheme.error)
                 AppPrimaryButton(onClick = { controller.loadManualSchema(type) },
                     modifier = Modifier.fillMaxWidth()) { Text("Retry") }
+                TextButton(onClick = { controller.useBasicManualForm(type) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Use basic form") }
+                val clipboard = LocalClipboardManager.current
+                val details = controller.manualSchemaCopyDetails() ?: "stage=unknown; httpStatus=none; exception=none"
+                TextButton(onClick = { clipboard.setText(AnnotatedString(details)) },
+                    modifier = Modifier.fillMaxWidth()) { Text("Copy details") }
             }
             schema == null -> Box(Modifier.fillMaxWidth().padding(24.dp),
                 contentAlignment = Alignment.Center) { CircularProgressIndicator() }
