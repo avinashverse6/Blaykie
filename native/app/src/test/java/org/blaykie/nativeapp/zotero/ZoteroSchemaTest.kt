@@ -224,8 +224,11 @@ class ZoteroSchemaTest {
         )
         val schema = (runBlocking { client.typeSchema("journalArticle", "Journal Article") }
             as SchemaResult.Success<TypeSchema>).value
-        assertEquals(listOf("title", "volume"), schema.fields.map { it.name })
+        // The template is authoritative, so an unknown future field is still offered, with a
+        // humanised label; hidden bookkeeping keys and "creators" are still dropped.
+        assertEquals(listOf("title", "volume", "futureField"), schema.fields.map { it.name })
         assertEquals("Volume", schema.fields.first { it.name == "volume" }.label)
+        assertEquals("Future Field", schema.fields.first { it.name == "futureField" }.label)
         assertEquals(listOf("author", "editor"), schema.creatorTypes.map { it.type })
         assertEquals("Editor", schema.creatorTypes.first { it.type == "editor" }.label)
         assertEquals("Journal Article", schema.label)
