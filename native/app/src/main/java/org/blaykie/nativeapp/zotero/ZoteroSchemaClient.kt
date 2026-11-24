@@ -111,7 +111,7 @@ class ZoteroSchemaClient private constructor(
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resume(SchemaResult.Failed(stage, null, classify(e)))
+                    if (continuation.isActive) continuation.resumeWith(Result.success(SchemaResult.Failed(stage, null, classify(e))))
                 }
 
                 override fun onResponse(call: Call, response: Response) {
@@ -125,7 +125,7 @@ class ZoteroSchemaClient private constructor(
                             }
                         }
                     }
-                    if (continuation.isActive) continuation.resume(result)
+                    if (continuation.isActive) continuation.resumeWith(Result.success(result))
                 }
             })
         }
