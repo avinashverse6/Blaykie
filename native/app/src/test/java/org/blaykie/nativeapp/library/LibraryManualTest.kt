@@ -14,6 +14,8 @@ import org.blaykie.nativeapp.zotero.VerifiedKey
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroGroupsCache
 import org.blaykie.nativeapp.zotero.ZoteroSchemaClient
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.RecordedRequest
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -133,8 +135,16 @@ class LibraryManualTest {
     }
 
     @Test fun parallelSchemaLoadShowsTheForm() {
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when {
+                request.path.orEmpty().contains("itemTypes") -> ok(journalArticleTypes)
+                request.path.orEmpty().contains("itemTypeFields") -> journalArticleFields()
+                request.path.orEmpty().contains("itemTypeCreatorTypes") -> journalArticleCreators()
+                request.path.orEmpty().contains("items/new") -> journalArticleTemplate()
+                else -> MockResponse().setResponseCode(404)
+            }
+        }
         loadTypes()
-        server.enqueue(journalArticleFields()); server.enqueue(journalArticleCreators()); server.enqueue(journalArticleTemplate())
         controller.loadManualSchema("journalArticle")
         await("form loaded") { controller.state.value.manual.schemas.containsKey("journalArticle") }
         assertNull(controller.state.value.manual.schemaError)
@@ -184,10 +194,14 @@ class LibraryManualTest {
     }
 
     @Test fun schemaTimeoutShowsMessageAndDoesNotSpinForever() {
+        // The server accepts the connection but never answers; the per-step timeout must trip.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                Thread.sleep(3000)
+                return ok("[]")
+            }
+        }
         loadTypes()
-        // Every request answers slowly; the per-step timeout must trip and report it.
-        val slow = MockResponse().setResponseCode(200).setBody("[]").setBodyDelay(3, TimeUnit.SECONDS)
-        server.enqueue(slow); server.enqueue(slow); server.enqueue(slow)
         controller.loadManualSchema("journalArticle")
         await("timeout reported") { controller.state.value.manual.schemaError != null }
         assertEquals("timeout", controller.state.value.manual.schemaErrorException)

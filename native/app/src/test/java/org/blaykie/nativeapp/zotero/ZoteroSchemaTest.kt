@@ -1,8 +1,10 @@
 package org.blaykie.nativeapp.zotero
 
 import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
 import org.blaykie.nativeapp.library.groupedTypes
 import org.blaykie.nativeapp.library.titleFieldOf
 import org.junit.After
@@ -21,6 +23,14 @@ class ZoteroSchemaTest {
     @After fun teardown() = server.shutdown()
 
     private fun ok(body: String) = MockResponse().setResponseCode(200).setBody(body)
+
+    /** Routes schema requests to the right canned response by path, so concurrent requests stay deterministic. */
+    private fun routeByPath(vararg pairs: Pair<String, MockResponse>): Dispatcher = object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            val path = request.path.orEmpty()
+            return pairs.firstOrNull { path.contains(it.first) }?.second ?: MockResponse().setResponseCode(404)
+        }
+    }
 
     @Test fun itemTypesExcludeAttachmentNoteAnnotation() {
         server.enqueue(ok("""[
@@ -52,17 +62,19 @@ class ZoteroSchemaTest {
     }
 
     @Test fun schemaUsesTemplateFieldsLabelsAndCreatorTypes() {
-        server.enqueue(ok("""[
-            {"field":"title","localized":"Title"},
-            {"field":"bookTitle","localized":"Book Title","baseField":"publicationTitle"},
-            {"field":"publisher","localized":"Publisher"}]"""))
-        server.enqueue(ok("""[
-            {"creatorType":"author","localized":"Author","primary":true},
-            {"creatorType":"bookAuthor","localized":"Book Author"},
-            {"creatorType":"editor","localized":"Editor"}]"""))
-        server.enqueue(ok("""[{"key":"","version":0,"itemType":"bookSection","title":"",
-            "abstractNote":"","bookTitle":"","publisher":"","dateAdded":"","dateModified":"",
-            "creators":[],"tags":[],"collections":[],"relations":{}}]"""))
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to ok("""[
+                {"field":"title","localized":"Title"},
+                {"field":"bookTitle","localized":"Book Title","baseField":"publicationTitle"},
+                {"field":"publisher","localized":"Publisher"}]"""),
+            "itemTypeCreatorTypes" to ok("""[
+                {"creatorType":"author","localized":"Author","primary":true},
+                {"creatorType":"bookAuthor","localized":"Book Author"},
+                {"creatorType":"editor","localized":"Editor"}]"""),
+            "items/new" to ok("""[{"key":"","version":0,"itemType":"bookSection","title":"",
+                "abstractNote":"","bookTitle":"","publisher":"","dateAdded":"","dateModified":"",
+                "creators":[],"tags":[],"collections":[],"relations":{}}]"""),
+        )
         val schema = (client.typeSchema("bookSection") as SchemaResult.Success<TypeSchema>).value
         // Only template fields are offered (dateAdded/dateModified/creators etc. hidden).
         assertEquals(listOf("title", "abstractNote", "bookTitle", "publisher"), schema.fields.map { it.name })
@@ -74,11 +86,13 @@ class ZoteroSchemaTest {
     }
 
     @Test fun caseTitleComesFromBaseMappedField() {
-        server.enqueue(ok("""[
-            {"field":"caseName","localized":"Case Name","baseField":"title"},
-            {"field":"court","localized":"Court"}]"""))
-        server.enqueue(ok("""[{"creatorType":"author","localized":"Author"},{"creatorType":"counsel","localized":"Counsel"}]"""))
-        server.enqueue(ok("""[{"itemType":"case","caseName":"","court":"","creators":[]}]"""))
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to ok("""[
+                {"field":"caseName","localized":"Case Name","baseField":"title"},
+                {"field":"court","localized":"Court"}]"""),
+            "itemTypeCreatorTypes" to ok("""[{"creatorType":"author","localized":"Author"},{"creatorType":"counsel","localized":"Counsel"}]"""),
+            "items/new" to ok("""[{"itemType":"case","caseName":"","court":"","creators":[]}]"""),
+        )
         val schema = (client.typeSchema("case") as SchemaResult.Success<TypeSchema>).value
         assertEquals("caseName", titleFieldOf(schema)?.name)
         assertEquals("author", schema.primaryCreatorType())
@@ -87,7 +101,11 @@ class ZoteroSchemaTest {
     @Test fun schemaFailureReportsStageAndStatusInsteadOfSilentSpinner() {
         // All three schema requests fail; typeSchema must report the failing stage + HTTP status,
         // not silently hang or auto-fall-back.
-        repeat(3) { server.enqueue(MockResponse().setResponseCode(500)) }
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to MockResponse().setResponseCode(500),
+            "itemTypeCreatorTypes" to MockResponse().setResponseCode(500),
+            "items/new" to MockResponse().setResponseCode(500),
+        )
         val result = client.typeSchema("thesis") as SchemaResult.Failed
         assertEquals("fields", result.stage)
         assertEquals(500, result.status)
@@ -100,27 +118,25 @@ class ZoteroSchemaTest {
 
     @Test fun schemaFailureForUnknownTypeReportsHttpStatus() {
         // Route the 503 deterministically to the fields request so the stage is predictable.
-        server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
-            override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest): MockResponse =
-                when {
-                    request.path.orEmpty().contains("itemTypeFields") -> MockResponse().setResponseCode(503)
-                    request.path.orEmpty().contains("itemTypeCreatorTypes") -> ok("[]")
-                    request.path.orEmpty().contains("items/new") -> ok("[]")
-                    else -> MockResponse().setResponseCode(404)
-                }
-        }
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to MockResponse().setResponseCode(503),
+            "itemTypeCreatorTypes" to ok("[]"),
+            "items/new" to ok("[]"),
+        )
         val result = client.typeSchema("artwork") as SchemaResult.Failed
         assertEquals("fields", result.stage)
         assertEquals(503, result.status)
     }
 
     @Test fun labelComesFromLoadedListWithoutExtraRequest() {
-        server.enqueue(ok("""[{"itemType":"journalArticle","localized":"Journal Article"}]"""))
+        server.dispatcher = routeByPath(
+            "itemTypes" to ok("""[{"itemType":"journalArticle","localized":"Journal Article"}]"""),
+            "itemTypeFields" to ok("""[{"field":"title","localized":"Title"}]"""),
+            "itemTypeCreatorTypes" to ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""),
+            "items/new" to ok("""[{"itemType":"journalArticle","title":"","creators":[]}]"""),
+        )
         client.itemTypes()
         val before = server.requestCount
-        server.enqueue(ok("""[{"field":"title","localized":"Title"}]"""))
-        server.enqueue(ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""))
-        server.enqueue(ok("""[{"itemType":"journalArticle","title":"","creators":[]}]"""))
         val schema = (client.typeSchema("journalArticle", "Journal Article") as SchemaResult.Success<TypeSchema>).value
         assertEquals("Journal Article", schema.label)
         // Exactly the three schema requests were made; no fourth itemTypes request for the label.
@@ -130,8 +146,13 @@ class ZoteroSchemaTest {
     }
 
     @Test fun requestNeverAnswersHitsTimeoutAndReportsStage() {
-        val slow = MockResponse().setResponseCode(200).setBody("[]").setBodyDelay(3, java.util.concurrent.TimeUnit.SECONDS)
-        server.enqueue(slow); server.enqueue(slow); server.enqueue(slow)
+        // The server accepts the connection but never answers in time; the per-step timeout must fire.
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                Thread.sleep(2000)
+                return ok("[]")
+            }
+        }
         val client = ZoteroSchemaClient.forTesting(OkHttpClient(), server.url("/").toString(), 300, 2000)
         val result = client.typeSchema("journalArticle", "Journal Article") as SchemaResult.Failed
         assertEquals("timeout", result.exception)
@@ -139,13 +160,18 @@ class ZoteroSchemaTest {
     }
 
     @Test fun failedLoadIsNotCachedAndCanBeRetried() {
-        server.enqueue(MockResponse().setResponseCode(500))
-        server.enqueue(ok("[]")); server.enqueue(ok("[]"))
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to MockResponse().setResponseCode(500),
+            "itemTypeCreatorTypes" to MockResponse().setResponseCode(500),
+            "items/new" to MockResponse().setResponseCode(500),
+        )
         assertTrue(client.typeSchema("thesis") is SchemaResult.Failed)
         // A later successful load must work and be returned (nothing was cached as "loading").
-        server.enqueue(ok("""[{"field":"title","localized":"Title"},{"field":"university","localized":"University"}]"""))
-        server.enqueue(ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""))
-        server.enqueue(ok("""[{"itemType":"thesis","title":"","university":"","creators":[]}]"""))
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to ok("""[{"field":"title","localized":"Title"},{"field":"university","localized":"University"}]"""),
+            "itemTypeCreatorTypes" to ok("""[{"creatorType":"author","localized":"Author","primary":true}]"""),
+            "items/new" to ok("""[{"itemType":"thesis","title":"","university":"","creators":[]}]"""),
+        )
         val schema = (client.typeSchema("thesis") as SchemaResult.Success<TypeSchema>).value
         assertTrue(schema.fields.any { it.name == "university" })
     }
@@ -161,14 +187,16 @@ class ZoteroSchemaTest {
 
     @Test fun templateIsAuthoritativeOverFieldsList() {
         // The fields endpoint mentions DOI, but the presentation template does not have it.
-        server.enqueue(ok("""[
-            {"field":"title","localized":"Title"},
-            {"field":"meetingName","localized":"Meeting Name"},
-            {"field":"DOI","localized":"DOI"}]"""))
-        server.enqueue(ok("""[{"creatorType":"presenter","localized":"Presenter","primary":true},
-            {"creatorType":"contributor","localized":"Contributor"}]"""))
-        server.enqueue(ok("""[{"itemType":"presentation","title":"","presentationType":"","meetingName":"",
-            "place":"","date":"","creators":[]}]"""))
+        server.dispatcher = routeByPath(
+            "itemTypeFields" to ok("""[
+                {"field":"title","localized":"Title"},
+                {"field":"meetingName","localized":"Meeting Name"},
+                {"field":"DOI","localized":"DOI"}]"""),
+            "itemTypeCreatorTypes" to ok("""[{"creatorType":"presenter","localized":"Presenter","primary":true},
+                {"creatorType":"contributor","localized":"Contributor"}]"""),
+            "items/new" to ok("""[{"itemType":"presentation","title":"","presentationType":"","meetingName":"",
+                "place":"","date":"","creators":[]}]"""),
+        )
         val schema = (client.typeSchema("presentation") as SchemaResult.Success<TypeSchema>).value
         assertFalse(schema.fields.any { it.name == "DOI" })
         assertTrue(schema.fields.any { it.name == "meetingName" })
