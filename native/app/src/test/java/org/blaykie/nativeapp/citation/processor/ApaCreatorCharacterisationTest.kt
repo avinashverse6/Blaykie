@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import org.blaykie.nativeapp.docx.CitationFormatting
 import org.blaykie.nativeapp.docx.CitationItem
 import org.blaykie.nativeapp.zotero.ZoteroItem
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,11 +69,13 @@ class ApaCreatorCharacterisationTest {
         // (h) a person with a particle
         report("h", journal("h", """[{"creatorType":"author","firstName":"Jan","lastName":"van der Berg"}]"""))
         // (i) an author with a suffix, typed into First name after a comma (Zotero convention)
-        report("i", journal("i", """[{"creatorType":"author","firstName":"John, Jr.","lastName":"Smith"}]"""))
+        val suffixAuthor = journal("i", """[{"creatorType":"author","firstName":"John, Jr.","lastName":"Smith"}]""")
+        report("i", suffixAuthor)
         // (j) an editor-only book
-        report("j", item("j", """{"itemType":"book","title":"The edited volume","date":"2020",
+        val editorOnly = item("j", """{"itemType":"book","title":"The edited volume","date":"2020",
             "publisher":"Academic Press",
-            "creators":[{"creatorType":"editor","firstName":"Priya","lastName":"Nair"}]}"""))
+            "creators":[{"creatorType":"editor","firstName":"Priya","lastName":"Nair"}]}""")
+        report("j", editorOnly)
         // (k) no author
         report("k", journal("k", "[]"))
         // (l) an organisation that is also the publisher
@@ -89,6 +92,15 @@ class ApaCreatorCharacterisationTest {
         report("m-second", second, context)
         // (n) a Devanagari name
         report("n", journal("n", """[{"creatorType":"author","firstName":"राम","lastName":"शर्मा"}]"""))
+        // Expected values for the two cases fixed in this change, updated deliberately with the
+        // formatter fix (every other case above is unchanged):
+        //  (i) the suffix is printed after the initials instead of becoming a second initial,
+        //      and it never appears in the in-text citation;
+        //  (j) an editor-only book takes a period after "(Ed.)" / "(Eds.)", before the date.
+        assertEquals("Smith, J., Jr.", authorPart(suffixAuthor))
+        assertEquals("(Smith, 2021)", runBlocking { BuiltInApaProcessor.citation(listOf(suffixAuthor), "parenthetical") })
+        assertEquals("Nair, P. (Ed.).", authorPart(editorOnly))
+        assertEquals("(Nair, 2020)", runBlocking { BuiltInApaProcessor.citation(listOf(editorOnly), "parenthetical") })
         assertTrue(true)
     }
 }

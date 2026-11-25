@@ -166,7 +166,54 @@ internal object CitationFormatting {
             if (years != 0) years else titleSort(a).compareTo(titleSort(b))
         }
     }
-    private fun initials(value: String): String = value.trim().replace(".", " ").split(Regex("\\s+"))
+    /** Generational suffixes Zotero users type into the first-name field, e.g. "John, Jr." */
+    private val creatorSuffixWords = setOf("jr", "sr", "ii", "iii", "iv", "v")
+
+    /**
+     * Zotero stores a generational suffix inside the first-name field, typed after a comma
+     * ("John, Jr.") or after a space ("John Jr"). Returns the given names and the suffix in
+     * APA form ("Jr.", "Sr.", "II", ...), or the whole name and null when the last element is
+     * not one of the recognised suffixes — so an ordinary name such as "Jay", or a first name
+     * that is only "Jr", is left untouched.
+     */
+    internal fun splitCreatorSuffix(first: String): Pair<String, String?> {
+        val trimmed = first.trim()
+        if (trimmed.isEmpty()) return "" to null
+        val chunks = trimmed.split(',')
+        val head = chunks.dropLast(1).joinToString(",").trim()
+        val commaSuffix = suffixForm(chunks.last())?.takeIf { head.isNotEmpty() }
+        if (commaSuffix != null) return head to commaSuffix
+        val words = trimmed.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (words.size < 2) return trimmed to null
+        val spacedSuffix = suffixForm(words.last()) ?: return trimmed to null
+        return words.dropLast(1).joinToString(" ") to spacedSuffix
+    }
+
+    /** "Jr."/"Sr." keep their period, roman numerals do not. */
+    private fun suffixForm(word: String): String? {
+        val bare = word.trim().trimEnd('.')
+        val lower = bare.lowercase()
+        if (lower !in creatorSuffixWords) return null
+        return if (lower == "jr" || lower == "sr") lower.replaceFirstChar { it.uppercase() } + "." else bare.uppercase()
+    }
+
+    /** Reference-list form: "Smith, J., Jr."; a group keeps its full name. */
+    private fun referenceName(author: CitationAuthor): String {
+        if (author.group) return author.last
+        val (given, suffix) = splitCreatorSuffix(author.first)
+        val withInitials = initials(given).let { if (it.isEmpty()) author.last else "${author.last}, $it" }
+        return if (suffix == null) withInitials else "$withInitials, $suffix"
+    }
+
+    /** Chapter-editor form: "P. Nair" or "J. Nair, Jr." (initials first, like APA's "In ..."). */
+    private fun chapterEditorName(editor: CitationAuthor): String {
+        if (editor.group) return editor.last
+        val (given, suffix) = splitCreatorSuffix(editor.first)
+        val base = "${initials(given)} ${editor.last}".trim()
+        return if (suffix == null) base else "$base, $suffix"
+    }
+
+    private fun initials(value: String): String = splitCreatorSuffix(value).first.trim().replace(".", " ").split(Regex("\\s+"))
         .filter { it.isNotEmpty() }.joinToString(" ") { word -> word.split('-').filter { it.isNotEmpty() }.joinToString("-") { part ->
             String(Character.toChars(part.codePointAt(0))).uppercase() + "."
         } }
@@ -255,7 +302,7 @@ internal object CitationFormatting {
     private fun round2Reference(item: CitationItem, suffix: String): List<Pair<String, Boolean>> {
         val parts = mutableListOf<Pair<String, Boolean>>()
         fun add(text: String, italic: Boolean = false) { if (text.isNotEmpty()) parts.add(text to italic) }
-        val names = item.authors.map { a -> a.last + if (a.group || initials(a.first).isEmpty()) "" else ", ${initials(a.first)}" }
+        val names = item.authors.map { referenceName(it) }
         val authorList = when (names.size) {
             0 -> ""; 1 -> names[0]; 2 -> names.joinToString(", & ")
             in 3..20 -> names.dropLast(1).joinToString(", ") + ", & " + names.last()
@@ -312,7 +359,7 @@ internal object CitationFormatting {
         }
         fun chapter(container: String) {
             begin("year", false)
-            val editors = item.editors.map { if (it.group) it.last else "${initials(it.first)} ${it.last}".trim() }
+            val editors = item.editors.map { chapterEditorName(it) }
             val editorText = when (editors.size) { 0 -> ""; 1 -> "${editors[0]} (Ed.)"; 2 -> "${editors[0]} & ${editors[1]} (Eds.)"; else -> editors.dropLast(1).joinToString(", ") + ", & ${editors.last()} (Eds.)" }
             if (container.isNotEmpty() || editorText.isNotEmpty()) {
                 add("In "); if (editorText.isNotEmpty()) add(editorText + if (container.isNotEmpty()) ", " else "")
@@ -394,12 +441,7 @@ internal object CitationFormatting {
 
     fun reference(item: CitationItem, suffix: String = ""): List<Pair<String, Boolean>> {
         if (item.authors.any { it.group } || item.itemType in setOf("magazineArticle", "newspaperArticle", "webpage", "blogPost", "report", "thesis", "conferencePaper", "preprint")) return round2Reference(item, suffix)
-        val names = item.authors.map { author ->
-            val initials = author.first.trim().replace(".", " ").split(Regex("\\s+"))
-                .filter { it.isNotEmpty() }
-                .joinToString(" ") { word -> word.split('-').filter { it.isNotEmpty() }.joinToString("-") { "${it.first().uppercase()}." } }
-            author.last + if (author.group || initials.isEmpty()) "" else ", $initials"
-        }
+        val names = item.authors.map { referenceName(it) }
         val authorList = when (names.size) {
             0 -> ""
             1 -> names[0]
@@ -412,7 +454,12 @@ internal object CitationFormatting {
         val title = item.title.ifBlank { "Untitled" }.let { if (it.last() in ".?!") it else "$it." }
         val parts = mutableListOf<Pair<String, Boolean>>()
         if (item.itemType == "book" || item.itemType == "bookSection") {
-            val authorPrefix = if (authors.isEmpty()) "" else "$authors ($year). "
+            val authorPrefix = when {
+                authors.isEmpty() -> ""
+                // "(Ed.)" already closes with a parenthesis: APA 7 writes "(Ed.). (2020)."
+                item.editorLead -> "$authors. ($year). "
+                else -> "$authors ($year). "
+            }
             parts += authorPrefix to false
             val edition = item.edition.trim().toIntOrNull()?.let { n ->
                 if (n <= 1) "" else "$n${if (n % 100 in 11..13) "th" else when (n % 10) { 1 -> "st"; 2 -> "nd"; 3 -> "rd"; else -> "th" }} ed."
@@ -423,10 +470,7 @@ internal object CitationFormatting {
             if (authors.isEmpty()) parts += " ($year)." to false
             parts += " " to false
             if (item.itemType == "bookSection" && (item.editors.isNotEmpty() || item.bookTitle.isNotBlank())) {
-                val editors = item.editors.map { author ->
-                    val initials = author.first.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ") { "${it.first().uppercase()}." }
-                    if (author.group) author.last else "$initials ${author.last}".trim()
-                }
+                val editors = item.editors.map { chapterEditorName(it) }
                 val editorText = when (editors.size) {
                     0 -> ""
                     1 -> "${editors[0]} (Ed.)"
