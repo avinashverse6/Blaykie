@@ -1,5 +1,6 @@
 package org.blaykie.nativeapp.library
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -26,7 +27,9 @@ import org.blaykie.nativeapp.zotero.BrowseQuery
 import org.blaykie.nativeapp.zotero.BrowseSort
 import org.blaykie.nativeapp.zotero.GroupsLoad
 import org.blaykie.nativeapp.zotero.ItemsPage
+import org.blaykie.nativeapp.zotero.SchemaResult
 import org.blaykie.nativeapp.zotero.TagPage
+import org.blaykie.nativeapp.zotero.TypeSchema
 import org.blaykie.nativeapp.zotero.ZoteroClient
 import org.blaykie.nativeapp.zotero.ZoteroCollection
 import org.blaykie.nativeapp.zotero.ZoteroGroup
@@ -34,7 +37,12 @@ import org.blaykie.nativeapp.zotero.ZoteroGroupsCache
 import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.blaykie.nativeapp.zotero.ZoteroLibrary
 import org.blaykie.nativeapp.zotero.ZoteroResult
+import org.blaykie.nativeapp.zotero.ZoteroSchemaClient
+import org.blaykie.nativeapp.zotero.ZoteroSchemaFallback
 import org.blaykie.nativeapp.zotero.ZoteroTag
+import org.blaykie.nativeapp.zotero.ItemTypeInfo
+import org.blaykie.nativeapp.zotero.basicSchema
+import org.blaykie.nativeapp.zotero.humaniseSchemaName
 import org.blaykie.nativeapp.zotero.hasMorePages
 
 internal fun libraryError(prefix: String, result: ZoteroResult<*>): String = when (result) {
@@ -89,6 +97,7 @@ internal data class AddState(
     val draft: ItemDraft? = null,
     val error: String? = null,
     val duplicateTitle: String? = null,
+    val duplicateViaIsbn: Boolean = false,
     val saving: Boolean = false,
     val savedKey: String? = null,
     val savedItem: ZoteroItem? = null,
@@ -96,6 +105,31 @@ internal data class AddState(
     val collectionName: String? = null,
 ) {
     override fun toString() = "AddState(redacted)"
+}
+
+/** State of the Add manually flow. Item contents live only in memory and are never logged. */
+internal data class ManualState(
+    val open: Boolean = false,
+    val typesLoading: Boolean = false,
+    val usingBasicTypes: Boolean = false,
+    val types: List<ItemTypeInfo> = emptyList(),
+    val schemas: Map<String, TypeSchema> = emptyMap(),
+    val schemaLoadingType: String? = null,
+    val schemaError: String? = null,
+    val schemaErrorType: String? = null,
+    val schemaErrorStage: String? = null,
+    val schemaErrorStatus: Int? = null,
+    val schemaErrorException: String? = null,
+    val saving: Boolean = false,
+    val error: String? = null,
+    val duplicateTitle: String? = null,
+    val duplicateViaIsbn: Boolean = false,
+    val savedKey: String? = null,
+    val savedItem: ZoteroItem? = null,
+    val collectionKey: String? = null,
+    val collectionName: String? = null,
+) {
+    override fun toString() = "ManualState(redacted)"
 }
 
 internal fun newWriteToken(random: java.security.SecureRandom = java.security.SecureRandom()): String {
@@ -136,6 +170,7 @@ internal data class LibraryState(
     val showPermissionSheet: Boolean = false,
     val permissionManualKey: Boolean = false,
     val add: AddState = AddState(),
+    val manual: ManualState = ManualState(),
 ) {
     override fun toString() = "LibraryState(redacted)"
     val library: ZoteroLibrary? get() = route.libraryOrNull()
@@ -154,7 +189,8 @@ internal data class LibraryState(
 internal class LibraryController(private val accounts: AccountStore,
                                  private val clientFactory: () -> ZoteroClient = ::ZoteroClient,
                                  private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
-                                 private val crossrefFactory: () -> CrossrefClient = ::CrossrefClient) {
+                                 private val crossrefFactory: () -> CrossrefClient = ::CrossrefClient,
+                                 private val schemaFactory: () -> ZoteroSchemaClient = ::ZoteroSchemaClient) {
     private val mutable = MutableStateFlow(LibraryState())
     val state: StateFlow<LibraryState> = mutable
     private val cache = LibraryCache()
@@ -503,26 +539,31 @@ internal class LibraryController(private val accounts: AccountStore,
         }
     }
 
+    private fun savedItemFor(draft: ItemDraft, inCollection: Boolean, collectionKey: String?, key: String): ZoteroItem {
+        val itemJson = buildItemJson(draft, if (inCollection) collectionKey else null)
+        val data = (kotlinx.serialization.json.Json.parseToJsonElement(itemJson) as JsonArray)
+            .first() as JsonObject
+        return ZoteroItem(key, data)
+    }
+
     fun saveDraft(draft: ItemDraft, inCollection: Boolean) {
         if (mutable.value.add.saving) return
         val token = writeToken ?: newWriteToken().also { writeToken = it }
+        val collectionKey = if (inCollection) mutable.value.add.collectionKey else null
         mutable.value = mutable.value.copy(add = mutable.value.add.copy(saving = true, error = null))
         scope.launch {
-            val outcome = withContext(Dispatchers.IO) { saveOnce(draft, inCollection, token) }
+            val outcome = withContext(Dispatchers.IO) { saveOnce(draft, collectionKey, token) }
             when (outcome) {
                 is SaveOutcome.Saved -> {
-                    val itemJson = buildItemJson(draft,
-                        if (inCollection) mutable.value.add.collectionKey else null)
-                    val data = (kotlinx.serialization.json.Json.parseToJsonElement(itemJson) as JsonArray)
-                        .first() as JsonObject
-                    val item = ZoteroItem(outcome.key, data)
+                    val item = savedItemFor(draft, inCollection, mutable.value.add.collectionKey, outcome.key)
                     cache.clear()
                     mutable.value = mutable.value.copy(add = mutable.value.add.copy(
                         saving = false, savedKey = outcome.key, savedItem = item, duplicateTitle = null))
                     if (mutable.value.route is LibraryRoute.Node) loadFirstPage()
                 }
                 is SaveOutcome.Duplicate -> mutable.value = mutable.value.copy(
-                    add = mutable.value.add.copy(saving = false, duplicateTitle = outcome.title))
+                    add = mutable.value.add.copy(saving = false, duplicateTitle = outcome.title,
+                        duplicateViaIsbn = outcome.viaIsbn))
                 is SaveOutcome.PermissionNeeded -> mutable.value = mutable.value.copy(
                     add = mutable.value.add.copy(saving = false),
                     showPermissionSheet = true, permissionManualKey = false)
@@ -544,41 +585,62 @@ internal class LibraryController(private val accounts: AccountStore,
 
     private sealed interface SaveOutcome {
         data class Saved(val key: String) : SaveOutcome
-        data class Duplicate(val title: String) : SaveOutcome
+        data class Duplicate(val title: String, val viaIsbn: Boolean) : SaveOutcome
         object PermissionNeeded : SaveOutcome
         data class Failed(val message: String) : SaveOutcome
     }
 
+    private sealed interface DuplicateCheck {
+        object None : DuplicateCheck
+        data class Found(val title: String, val viaIsbn: Boolean) : DuplicateCheck
+        data class Failed(val message: String) : DuplicateCheck
+    }
+
+    /**
+     * The duplicate check shared by Add by DOI and Add manually: it runs only when a
+     * DOI (preferred) or an ISBN was entered. Runs on a background thread.
+     */
+    private fun checkDuplicate(client: ZoteroClient, userId: Long, key: String, draft: ItemDraft): DuplicateCheck {
+        val doi = draft.fields["DOI"].orEmpty().trim()
+        val isbn = draft.fields["ISBN"].orEmpty().trim()
+        val (query, viaIsbn) = when {
+            doi.isNotBlank() -> doi to false
+            isbn.isNotBlank() -> isbn to true
+            else -> return DuplicateCheck.None
+        }
+        val result = if (viaIsbn) client.findByIsbn(userId, key, query) else client.findByDoi(userId, key, query)
+        return when (result) {
+            is ZoteroResult.Success -> result.value.firstOrNull()?.let { item ->
+                DuplicateCheck.Found((item.data["title"] as? JsonPrimitive)
+                    ?.contentOrNull?.ifBlank { "Untitled" } ?: "Untitled", viaIsbn)
+            } ?: DuplicateCheck.None
+            is ZoteroResult.InvalidKey -> DuplicateCheck.Failed("Could not check for duplicates: HTTP 403")
+            is ZoteroResult.HttpError -> DuplicateCheck.Failed("Could not check for duplicates: HTTP ${result.status}")
+            is ZoteroResult.RateLimited -> DuplicateCheck.Failed("Could not check for duplicates: HTTP 429")
+            is ZoteroResult.NetworkFailure -> DuplicateCheck.Failed("Could not check for duplicates. Check your connection.")
+            else -> DuplicateCheck.None
+        }
+    }
+
     /** Runs on a background thread. The same write token is reused across retries of this save. */
-    private fun saveOnce(draft: ItemDraft, inCollection: Boolean, token: String): SaveOutcome {
+    private fun saveOnce(draft: ItemDraft, collectionKey: String?, token: String): SaveOutcome {
         val read = accounts.read() as? AccountRead.Present ?: return SaveOutcome.PermissionNeeded
         val userId = read.account.verified.userId
         val key = read.account.key
         val client = clientFactory()
         if (!duplicateConfirmed) {
-            val doi = draft.fields["DOI"].orEmpty()
-            if (doi.isNotBlank()) {
-                when (val check = client.findByDoi(userId, key, doi)) {
-                    is ZoteroResult.Success -> check.value.firstOrNull()?.let {
-                        return SaveOutcome.Duplicate((it.data["title"] as? JsonPrimitive)
-                            ?.contentOrNull?.ifBlank { "Untitled" } ?: "Untitled")
-                    }
-                    is ZoteroResult.InvalidKey -> return SaveOutcome.Failed("Could not check for duplicates: HTTP 403")
-                    is ZoteroResult.HttpError -> return SaveOutcome.Failed("Could not check for duplicates: HTTP ${check.status}")
-                    is ZoteroResult.RateLimited -> return SaveOutcome.Failed("Could not check for duplicates: HTTP 429")
-                    is ZoteroResult.NetworkFailure -> return SaveOutcome.Failed("Could not check for duplicates. Check your connection.")
-                    else -> Unit
-                }
+            when (val check = checkDuplicate(client, userId, key, draft)) {
+                is DuplicateCheck.Found -> return SaveOutcome.Duplicate(check.title, check.viaIsbn)
+                is DuplicateCheck.Failed -> return SaveOutcome.Failed(check.message)
+                DuplicateCheck.None -> Unit
             }
         }
-        val collectionKey = if (inCollection) mutable.value.add.collectionKey else null
         val body = buildItemJson(draft, collectionKey)
         var result = client.createItem(userId, key, body, token)
         if (result is ZoteroClient.WriteResult.PreconditionFailed && !preconditionRetried) {
             preconditionRetried = true
             // Re-fetch (the duplicate check) and retry once with the same write token.
-            val doi = draft.fields["DOI"].orEmpty()
-            if (doi.isNotBlank()) client.findByDoi(userId, key, doi)
+            checkDuplicate(client, userId, key, draft)
             result = client.createItem(userId, key, body, token)
         }
         return when (result) {
@@ -597,6 +659,10 @@ internal class LibraryController(private val accounts: AccountStore,
     fun viewSavedItem() {
         val item = mutable.value.add.savedItem ?: return
         closeAdd()
+        showSavedItem(item)
+    }
+
+    private fun showSavedItem(item: ZoteroItem) {
         when (mutable.value.route) {
             is LibraryRoute.Node -> selectItem(item)
             is LibraryRoute.Root -> { openNode(BrowseNode.All, "All Items"); selectItem(item) }
@@ -604,8 +670,214 @@ internal class LibraryController(private val accounts: AccountStore,
         }
     }
 
+    // --- Add manually (personal library only; reuses the save pipeline above) ---
+
+    private val schemaClient: ZoteroSchemaClient by lazy { schemaFactory() }
+    private var typesGeneration = 0
+    private var schemaGeneration = 0
+    private var typesJob: Job? = null
+    private var schemaJob: Job? = null
+
+    fun openAddManually() {
+        val route = mutable.value.route
+        val (key, name) = when (route) {
+            is LibraryRoute.Node -> (route.node as? BrowseNode.Collection)?.let {
+                it.key to route.title
+            } ?: (null to null)
+            else -> null to null
+        }
+        writeToken = null; duplicateConfirmed = false; preconditionRetried = false
+        val loadedTypes = mutable.value.manual.types
+        mutable.value = mutable.value.copy(showAddMenu = false,
+            manual = ManualState(open = true, types = loadedTypes, collectionKey = key, collectionName = name))
+        if (loadedTypes.isEmpty()) loadManualTypes()
+    }
+
+    fun closeManual() {
+        writeToken = null
+        mutable.value = mutable.value.copy(manual = ManualState(types = mutable.value.manual.types,
+            usingBasicTypes = mutable.value.manual.usingBasicTypes, schemas = mutable.value.manual.schemas))
+    }
+
+    fun addAnotherManual() {
+        val current = mutable.value.manual
+        writeToken = null; duplicateConfirmed = false; preconditionRetried = false
+        mutable.value = mutable.value.copy(manual = ManualState(open = true, types = current.types,
+            usingBasicTypes = current.usingBasicTypes, schemas = current.schemas,
+            collectionKey = current.collectionKey, collectionName = current.collectionName))
+    }
+
+    fun loadManualTypes() {
+        if (mutable.value.manual.types.isNotEmpty()) return
+        val current = ++typesGeneration
+        typesJob?.cancel()
+        mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(typesLoading = true))
+        typesJob = scope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { schemaClient.itemTypes() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Never leave the chooser on a spinner: fall back to the built-in type list.
+                if (current != typesGeneration) return@launch
+                mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(
+                    typesLoading = false, types = ZoteroSchemaFallback.types, usingBasicTypes = true))
+                return@launch
+            }
+            if (current != typesGeneration) return@launch
+            val manual = mutable.value.manual
+            mutable.value = mutable.value.copy(manual = when (result) {
+                is SchemaResult.Success<*> -> manual.copy(typesLoading = false,
+                    types = result.value as List<ItemTypeInfo>, usingBasicTypes = result.basic)
+                // The client already falls back to the basic list; reaching here means
+                // even that failed, which cannot happen — keep the flags consistent.
+                else -> manual.copy(typesLoading = false, types = ZoteroSchemaFallback.types,
+                    usingBasicTypes = true)
+            })
+        }
+    }
+
+    /** Human-readable message for a failed schema load, including the failing stage and HTTP status. */
+    private fun schemaErrorText(label: String, stage: String, status: Int?, exception: String?): String {
+        val base = "Could not load fields for $label: step $stage"
+        return base + when {
+            status != null -> ", HTTP $status"
+            exception != null -> ": $exception"
+            else -> ""
+        }
+    }
+
+    /** Exact, key-free details for the "Copy details" button (stage, HTTP status, exception class). */
+    private fun schemaCopyDetails(stage: String, status: Int?, exception: String?): String =
+        "stage=$stage; httpStatus=${status ?: "none"}; exception=${exception ?: "none"}"
+
+    /**
+     * Starts (or restarts) the schema load for [type]. Re-entrant by design: every call cancels
+     * any load still in flight and starts a fresh one, so changing the type, tapping Retry,
+     * rotating the phone or reopening the sheet always produces a new load. A failed load is
+     * never cached, so this always makes a request again for a type that is not loaded yet.
+     */
+    fun loadManualSchema(type: String) {
+        val current = ++schemaGeneration
+        schemaJob?.cancel()
+        val manual = mutable.value.manual
+        if (manual.schemas.containsKey(type)) {
+            // Already loaded: just clear any stale loading/error state for this type.
+            if (manual.schemaLoadingType != null || manual.schemaError != null) {
+                mutable.value = mutable.value.copy(manual = manual.copy(
+                    schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+                    schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
+            }
+            return
+        }
+        // The label comes from the type list already in memory; no extra request for it.
+        val label = manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
+        mutable.value = mutable.value.copy(manual = manual.copy(
+            schemaLoadingType = type, schemaError = null, schemaErrorType = null,
+            schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
+        schemaJob = scope.launch {
+            val result = try {
+                withContext(Dispatchers.IO) { schemaClient.typeSchema(type, label) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A crash inside the client must still end the spinner, with a stage to show.
+                SchemaResult.Failed("schema", null, e.javaClass.simpleName)
+            }
+            if (current != schemaGeneration) return@launch
+            val manualNow = mutable.value.manual
+            mutable.value = mutable.value.copy(manual = when (result) {
+                is SchemaResult.Success<*> -> manualNow.copy(schemaLoadingType = null,
+                    schemas = manualNow.schemas + (type to result.value as TypeSchema))
+                is SchemaResult.Failed -> manualNow.copy(schemaLoadingType = null,
+                    schemaError = schemaErrorText(label, result.stage, result.status, result.exception),
+                    schemaErrorType = type, schemaErrorStage = result.stage,
+                    schemaErrorStatus = result.status, schemaErrorException = result.exception)
+                else -> manualNow.copy(schemaLoadingType = null,
+                    schemaError = schemaErrorText(label, "schema", null, "unknown"),
+                    schemaErrorType = type, schemaErrorStage = "schema",
+                    schemaErrorStatus = null, schemaErrorException = "unknown")
+            })
+        }
+    }
+
+    /**
+     * Escape hatch: open the form with the built-in classic fields (for the 11 common types)
+     * or a minimal title-plus-author schema otherwise, so the user can always continue even
+     * when the schema API is unavailable. Never blocks and never logs anything.
+     */
+    fun useBasicManualForm(type: String) {
+        val manual = mutable.value.manual
+        if (manual.schemaLoadingType == type) {
+            ++schemaGeneration
+            schemaJob?.cancel()
+        }
+        if (manual.schemas.containsKey(type)) {
+            mutable.value = mutable.value.copy(manual = manual.copy(
+                schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+                schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null))
+            return
+        }
+        val label = manual.types.firstOrNull { it.type == type }?.label ?: humaniseSchemaName(type)
+        val schema = ZoteroSchemaFallback.schema(type) ?: basicSchema(type, label)
+        mutable.value = mutable.value.copy(manual = manual.copy(
+            schemaLoadingType = null, schemaError = null, schemaErrorType = null,
+            schemaErrorStage = null, schemaErrorStatus = null, schemaErrorException = null,
+            schemas = manual.schemas + (type to schema)))
+    }
+
+    /** Builds the copy-details text for the current schema error (no keys or item contents). */
+    fun manualSchemaCopyDetails(): String? {
+        val manual = mutable.value.manual
+        return manual.schemaErrorStage?.let { schemaCopyDetails(it, manual.schemaErrorStatus, manual.schemaErrorException) }
+    }
+
+    fun saveManualDraft(draft: ItemDraft, inCollection: Boolean) {
+        if (mutable.value.manual.saving) return
+        val token = writeToken ?: newWriteToken().also { writeToken = it }
+        val collectionKey = if (inCollection) mutable.value.manual.collectionKey else null
+        mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(saving = true, error = null))
+        scope.launch {
+            val outcome = withContext(Dispatchers.IO) { saveOnce(draft, collectionKey, token) }
+            when (outcome) {
+                is SaveOutcome.Saved -> {
+                    val item = savedItemFor(draft, inCollection, mutable.value.manual.collectionKey, outcome.key)
+                    cache.clear()
+                    mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(
+                        saving = false, savedKey = outcome.key, savedItem = item, duplicateTitle = null))
+                    if (mutable.value.route is LibraryRoute.Node) loadFirstPage()
+                }
+                is SaveOutcome.Duplicate -> mutable.value = mutable.value.copy(
+                    manual = mutable.value.manual.copy(saving = false, duplicateTitle = outcome.title,
+                        duplicateViaIsbn = outcome.viaIsbn))
+                is SaveOutcome.PermissionNeeded -> mutable.value = mutable.value.copy(
+                    manual = mutable.value.manual.copy(saving = false),
+                    showPermissionSheet = true, permissionManualKey = false)
+                is SaveOutcome.Failed -> mutable.value = mutable.value.copy(
+                    manual = mutable.value.manual.copy(saving = false, error = outcome.message))
+            }
+        }
+    }
+
+    fun confirmManualAddAnyway(draft: ItemDraft, inCollection: Boolean) {
+        duplicateConfirmed = true
+        mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(duplicateTitle = null))
+        saveManualDraft(draft, inCollection)
+    }
+
+    fun cancelManualDuplicate() {
+        mutable.value = mutable.value.copy(manual = mutable.value.manual.copy(duplicateTitle = null))
+    }
+
+    fun viewManualSavedItem() {
+        val item = mutable.value.manual.savedItem ?: return
+        closeManual()
+        showSavedItem(item)
+    }
+
     fun close() {
         groupsGeneration++; collectionsGeneration++; listGeneration++; tagsGeneration++
+        typesGeneration++; schemaGeneration++
         listJob?.cancel(); scope.cancel()
     }
 }

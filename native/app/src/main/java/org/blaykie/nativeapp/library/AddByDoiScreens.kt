@@ -51,6 +51,9 @@ internal fun AddMenuSheet(controller: LibraryController, onDismiss: () -> Unit) 
             TextButton(onClick = { controller.openAddByDoi() }, modifier = Modifier.fillMaxWidth()) {
                 Text("Add by DOI", style = MaterialTheme.typography.bodyLarge)
             }
+            TextButton(onClick = { controller.openAddManually() }, modifier = Modifier.fillMaxWidth()) {
+                Text("Add manually", style = MaterialTheme.typography.bodyLarge)
+            }
         }
     }
 }
@@ -197,7 +200,7 @@ private fun ReviewContent(state: LibraryState, controller: LibraryController) {
         }
         if (add.duplicateTitle != null) item {
             Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text("This DOI is already in your library: ${add.duplicateTitle}",
+                Text("This ${if (add.duplicateViaIsbn) "ISBN" else "DOI"} is already in your library: ${add.duplicateTitle}",
                     color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppPrimaryButton(onClick = { controller.confirmAddAnyway(edited(), inCollection && collectionAvailable) }) { Text("Add anyway") }

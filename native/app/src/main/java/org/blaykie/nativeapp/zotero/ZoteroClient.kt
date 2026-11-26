@@ -55,6 +55,9 @@ sealed class ZoteroLibrary {
     }
 }
 
+/** ISBN comparison form: letters and digits only, uppercased (spaces and hyphens ignored). */
+internal fun normalizeIsbn(value: String): String = value.uppercase().filter { it.isLetterOrDigit() }
+
 data class KeyPermissions(val personalLibrary: Boolean, val personalFiles: Boolean, val personalNotes: Boolean, val personalWrite: Boolean, val groupAccess: Boolean) {
     val broaderThanPersonalReadOnly: Boolean get() = personalFiles || personalWrite || groupAccess
 }
@@ -335,6 +338,25 @@ class ZoteroClient private constructor(private val calls: Call.Factory, private 
         return when (val result = parse(request(listOf("users", userId.toString(), "items"), params, apiKey), ::parseItems)) {
             is ZoteroResult.Success -> ZoteroResult.Success(result.value.filter {
                 org.blaykie.nativeapp.crossref.canonicalDoi((it.data["DOI"] as? JsonPrimitive)?.contentOrNull.orEmpty()) == wanted
+            })
+            is ZoteroResult.EmptyLibrary -> result
+            is ZoteroResult.InvalidKey -> result
+            is ZoteroResult.NetworkFailure -> result
+            is ZoteroResult.Cancelled -> result
+            is ZoteroResult.MalformedJson -> result
+            is ZoteroResult.RateLimited -> result
+            is ZoteroResult.HttpError -> result
+        }
+    }
+
+    /** Items whose ISBN field matches (ignoring spaces, hyphens and case), for the manual-add duplicate check. */
+    fun findByIsbn(userId: Long, apiKey: String, isbn: String): ZoteroResult<List<ZoteroItem>> {
+        val wanted = normalizeIsbn(isbn)
+        if (wanted.isEmpty()) return ZoteroResult.Success(emptyList())
+        val params = mapOf("q" to isbn, "qmode" to "everything", "limit" to "5", "format" to "json")
+        return when (val result = parse(request(listOf("users", userId.toString(), "items"), params, apiKey), ::parseItems)) {
+            is ZoteroResult.Success -> ZoteroResult.Success(result.value.filter {
+                normalizeIsbn((it.data["ISBN"] as? JsonPrimitive)?.contentOrNull.orEmpty()) == wanted
             })
             is ZoteroResult.EmptyLibrary -> result
             is ZoteroResult.InvalidKey -> result
