@@ -56,7 +56,7 @@ internal fun groupedTypes(
  * The classic (Zotero 7-era) fields of the Common types. A field of a Common type
  * that is not in its classic set (for example DOI on a web page, or publisher on a
  * journal article, both added by newer Zotero) is shown under "More fields".
- * Types not listed here show all their fields in the main list.
+ * Types not listed here treat all their fields as classic for grouping.
  */
 internal val classicFieldsByType: Map<String, Set<String>> = mapOf(
     "journalArticle" to setOf("title", "abstractNote", "publicationTitle", "volume", "issue", "pages", "date",
@@ -105,12 +105,11 @@ internal val classicFieldsByType: Map<String, Set<String>> = mapOf(
 
 private val mainPublicationFields = listOf(
     "publicationTitle", "bookTitle", "encyclopediaTitle", "dictionaryTitle", "websiteTitle", "blogTitle",
-    "proceedingsTitle", "conferenceName", "meetingName", "institution", "university", "publisher", "place",
-    "series", "seriesTitle", "seriesNumber", "seriesText", "edition", "thesisType", "reportType",
-    "reportNumber", "presentationType", "interviewMedium", "websiteType", "repository", "genre",
-    "legislativeBody", "session", "billNumber", "code", "codeVolume", "codePages", "section", "history",
-    "identifier", "versionNumber",
+    "forumTitle", "proceedingsTitle", "conferenceName", "meetingName", "institution", "university",
+    "publisher", "place", "repository",
 )
+private val mainFormFields = setOf("volume", "issue", "pages", "numPages", "DOI", "ISBN", "url", "abstractNote", "language")
+private val accessDateVisibleTypes = setOf("webpage", "blogPost", "forumPost")
 
 /** The field that holds the item's title for this type (title itself, or its base-mapped name). */
 internal fun titleFieldOf(schema: TypeSchema): SchemaField? {
@@ -123,42 +122,52 @@ internal fun titleFieldOf(schema: TypeSchema): SchemaField? {
 private fun isDateField(field: SchemaField): Boolean =
     field.name == "date" || field.baseField == "date" || knownBaseFields[field.name] == "date"
 
-private fun fieldRank(schema: TypeSchema, field: SchemaField, titleField: SchemaField?): Int = when {
+private fun fieldRank(field: SchemaField, titleField: SchemaField?): Int = when {
     titleField != null && field.name == titleField.name -> 0
     field.name in mainPublicationFields -> 10
-    field.name in setOf("volume", "numberOfVolumes") -> 20
+    field.name == "volume" -> 20
     field.name == "issue" -> 21
     field.name in setOf("pages", "numPages") -> 22
+    field.name == "accessDate" -> 34
     isDateField(field) -> 23
     field.name == "DOI" -> 30
     field.name == "ISBN" -> 31
-    field.name == "ISSN" -> 32
     field.name == "url" -> 33
-    field.name == "accessDate" -> 34
+    field.name == "language" -> 35
     field.name == "abstractNote" -> 90
     else -> 50
 }
 
-internal data class OrderedFormFields(val main: List<SchemaField>, val more: List<SchemaField>)
+internal data class OrderedFormFields(
+    val main: List<SchemaField>,
+    val optional: List<SchemaField>,
+    val more: List<SchemaField>,
+)
 
-/**
- * Orders a type's fields for the form (title first, main publication fields, volume,
- * issue, pages, date, identifiers, the rest, abstract last) and splits off the
- * non-classic fields of Common types into "More fields".
- */
+/** Split classic fields into main and optional; preserve newer fields in More fields. */
 internal fun orderedFormFields(schema: TypeSchema): OrderedFormFields {
     val titleField = titleFieldOf(schema)
     val classic = classicFieldsByType[schema.type]
     val ordered = schema.fields
         .filter { it.name !in hiddenSchemaFields }
-        .mapIndexed { index, field -> Triple(field, fieldRank(schema, field, titleField), index) }
+        .mapIndexed { index, field -> Triple(field, fieldRank(field, titleField), index) }
         .sortedWith(compareBy({ it.second }, { mainPublicationFields.indexOf(it.first.name).let { i -> if (i < 0) 999 else i } }, { it.third }))
         .map { it.first }
-    if (classic == null) return OrderedFormFields(ordered, emptyList())
     fun isClassic(field: SchemaField): Boolean =
-        field.name in classic || (field.baseField != null && field.baseField in classic) ||
+        classic == null || field.name in classic || (field.baseField != null && field.baseField in classic) ||
             (knownBaseFields[field.name] != null && knownBaseFields[field.name] in classic)
-    return OrderedFormFields(ordered.filter { isClassic(it) }, ordered.filter { !isClassic(it) })
+    fun isMain(field: SchemaField): Boolean =
+        field.name == titleField?.name || field.name in mainPublicationFields || field.name in mainFormFields ||
+            (field.name == "accessDate" && schema.type in accessDateVisibleTypes) ||
+            (field.name != "accessDate" && isDateField(field))
+    // Language is always visible when supplied by a schema, even for types whose
+    // classic field list predates it. Other newer fields remain under More fields.
+    val classicFields = ordered.filter { isClassic(it) || it.name == "language" }
+    return OrderedFormFields(
+        main = classicFields.filter { isMain(it) },
+        optional = classicFields.filterNot { isMain(it) },
+        more = ordered.filter { !isClassic(it) && it.name != "language" },
+    )
 }
 
 /** True when the type's title (or title-mapped) field has text; types without one never block saving. */

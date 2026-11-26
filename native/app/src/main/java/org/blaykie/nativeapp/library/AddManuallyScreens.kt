@@ -40,6 +40,7 @@ internal class ManualFormState {
     val creators = mutableStateListOf<ManualCreatorRow>()
     var formInitialised: Boolean by mutableStateOf(false)
     var moreOpen: Boolean by mutableStateOf(false)
+    var optionalOpen: Boolean by mutableStateOf(false)
     var showAllCreators: Boolean by mutableStateOf(false)
     var inCollection: Boolean by mutableStateOf(true)
     var pasteOpen: Boolean by mutableStateOf(false)
@@ -51,13 +52,13 @@ internal class ManualFormState {
         typeLabel = info.label
         fields.clear(); creators.clear(); pasteRows.clear()
         pasteText = ""; pasteOpen = false
-        moreOpen = false; showAllCreators = false; formInitialised = false
+        moreOpen = false; optionalOpen = false; showAllCreators = false; formInitialised = false
     }
 
     fun backToChooser() {
         itemType = null
         fields.clear(); creators.clear(); pasteRows.clear()
-        pasteText = ""; pasteOpen = false; formInitialised = false
+        pasteText = ""; pasteOpen = false; optionalOpen = false; formInitialised = false
     }
 
     fun ensureInitialised(schema: TypeSchema) {
@@ -77,7 +78,7 @@ internal class ManualFormState {
         itemType = null; typeLabel = ""; typeQuery = ""
         fields.clear(); creators.clear(); pasteRows.clear()
         pasteText = ""; pasteOpen = false
-        moreOpen = false; showAllCreators = false; formInitialised = false
+        moreOpen = false; optionalOpen = false; showAllCreators = false; formInitialised = false
         inCollection = true
     }
 }
@@ -96,6 +97,7 @@ internal val manualFormSaver: Saver<ManualFormState, ArrayList<String>> = Saver(
                 add(row.role); add(if (row.singleField) "1" else "0")
                 add(row.firstName); add(row.lastName); add(row.name)
             }
+            add(if (form.optionalOpen) "1" else "0")
         }
     },
     restore = { saved ->
@@ -114,6 +116,7 @@ internal val manualFormSaver: Saver<ManualFormState, ArrayList<String>> = Saver(
                 val first = next(); val last = next(); val name = next()
                 form.creators += ManualCreatorRow(role, single, first, last, name)
             }
+            if (index < saved.size) form.optionalOpen = next() == "1"
         }
         form
     },
@@ -323,112 +326,134 @@ private fun ManualFieldsForm(state: LibraryState, controller: LibraryController,
         schema.fields.any { isDateLike(it) }
     val noCreators = form.creators.all { it.isBlank() }
 
+    // Reopen on restored values and whenever optional field values change. A user
+    // may still collapse the section until the next edit or restoration.
+    val optionalValues = ordered.optional.map { form.fields[it.name].orEmpty() }
+    LaunchedEffect(schema.type, optionalValues) {
+        if (optionalValues.any { it.isNotEmpty() }) form.optionalOpen = true
+    }
+
     LaunchedEffect(form.pasteText) {
         val parsed = parsePastedCreators(form.pasteText)
         form.pasteRows.clear()
         form.pasteRows.addAll(parsed)
     }
 
-    LazyColumn(Modifier.heightIn(max = 620.dp), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-        if (titleField != null) item(key = "title") { ManualFieldEditor(titleField, form) }
-        item(key = "creators-header") {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Creators", style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TextButton(onClick = { form.pasteOpen = !form.pasteOpen }) { Text("Paste several authors") }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+        LazyColumn(Modifier.weight(1f, fill = false).heightIn(max = 620.dp),
+            verticalArrangement = Arrangement.spacedBy(Space.small)) {
+            if (titleField != null) item(key = "title") { ManualFieldEditor(titleField, form) }
+            item(key = "creators-header") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Creators", style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { form.pasteOpen = !form.pasteOpen }) { Text("Paste several authors") }
+                }
             }
-        }
-        if (form.pasteOpen) item(key = "paste") { PasteSection(form, primaryRole) }
-        val visibleCount = if (form.showAllCreators) form.creators.size else minOf(5, form.creators.size)
-        items(visibleCount, key = { index -> "creator-$index" }) { index ->
-            CreatorRowEditor(index, form.creators[index], schema,
-                canMoveUp = index > 0, canMoveDown = index < form.creators.lastIndex,
-                onChange = { updated -> form.creators[index] = updated },
-                onRemove = { form.creators.removeAt(index) },
-                onMove = { delta ->
-                    val target = index + delta
-                    if (target in form.creators.indices) {
-                        val moved = form.creators.removeAt(index)
-                        form.creators.add(target, moved)
+            if (form.pasteOpen) item(key = "paste") { PasteSection(form, primaryRole) }
+            val visibleCount = if (form.showAllCreators) form.creators.size else minOf(5, form.creators.size)
+            items(visibleCount, key = { index -> "creator-$index" }) { index ->
+                CreatorRowEditor(index, form.creators[index], schema,
+                    canMoveUp = index > 0, canMoveDown = index < form.creators.lastIndex,
+                    onChange = { updated -> form.creators[index] = updated },
+                    onRemove = { form.creators.removeAt(index) },
+                    onMove = { delta ->
+                        val target = index + delta
+                        if (target in form.creators.indices) {
+                            val moved = form.creators.removeAt(index)
+                            form.creators.add(target, moved)
+                        }
+                    })
+            }
+            if (form.creators.size > 5 && !form.showAllCreators) item(key = "show-all-creators") {
+                TextButton(onClick = { form.showAllCreators = true }) {
+                    Text("Show all ${form.creators.size}")
+                }
+            }
+            item(key = "add-creator") {
+                TextButton(onClick = { form.creators += ManualCreatorRow(role = primaryRole) }) {
+                    Text("Add creator")
+                }
+            }
+            if (noCreators) item(key = "no-creators-hint") {
+                Text("APA uses the title in place of an author; you can add an author later in Zotero.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            items(restFields, key = { it.name }) { field -> ManualFieldEditor(field, form) }
+            if (ordered.optional.isNotEmpty()) {
+                item(key = "optional-toggle") {
+                    Column {
+                        TextButton(onClick = { form.optionalOpen = !form.optionalOpen }) {
+                            Text(if (form.optionalOpen) "Hide optional details ▴" else "Optional details ▾")
+                        }
+                        if (!form.optionalOpen) Text(
+                            "${ordered.optional.size} more ${if (ordered.optional.size == 1) "field" else "fields"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                })
-        }
-        if (form.creators.size > 5 && !form.showAllCreators) item(key = "show-all-creators") {
-            TextButton(onClick = { form.showAllCreators = true }) {
-                Text("Show all ${form.creators.size}")
+                }
+                if (form.optionalOpen) items(ordered.optional, key = { it.name }) { field -> ManualFieldEditor(field, form) }
             }
-        }
-        item(key = "add-creator") {
-            TextButton(onClick = { form.creators += ManualCreatorRow(role = primaryRole) }) {
-                Text("Add creator")
-            }
-        }
-        if (noCreators) item(key = "no-creators-hint") {
-            Text("APA uses the title in place of an author; you can add an author later in Zotero.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        items(restFields, key = { it.name }) { field -> ManualFieldEditor(field, form) }
-        if (ordered.more.isNotEmpty()) {
-            item(key = "more-toggle") {
-                Column {
-                    TextButton(onClick = { form.moreOpen = !form.moreOpen }) {
-                        Text(if (form.moreOpen) "Hide more fields ▴" else "More fields ▾")
+            if (ordered.more.isNotEmpty()) {
+                item(key = "more-toggle") {
+                    Column {
+                        TextButton(onClick = { form.moreOpen = !form.moreOpen }) {
+                            Text(if (form.moreOpen) "Hide more fields ▴" else "More fields ▾")
+                        }
+                        Text("These fields need a recent Zotero; items using them may not show in older Zotero versions or mobile apps.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text("These fields need a recent Zotero; items using them may not show in older Zotero versions or mobile apps.",
+                }
+                if (form.moreOpen) items(ordered.more, key = { it.name }) { field -> ManualFieldEditor(field, form) }
+            }
+            item(key = "hints") {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (titleField != null && titleBlank) Text("${titleField.label} is needed to save.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (dateBlank) Text("No date yet — you can add one later in Zotero.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (collectionAvailable && form.inCollection) "Will be saved to My Library, in collection ${manual.collectionName}"
+                        else "Will be saved to My Library", style = MaterialTheme.typography.bodyMedium)
+                    if (collectionAvailable) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = form.inCollection, onCheckedChange = { form.inCollection = it })
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add to this collection", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
-            if (form.moreOpen) items(ordered.more, key = { it.name }) { field -> ManualFieldEditor(field, form) }
-        }
-        item(key = "hints") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (titleField != null && titleBlank) Text("${titleField.label} is needed to save.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (dateBlank) Text("No date yet — you can add one later in Zotero.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(if (collectionAvailable && form.inCollection) "Will be saved to My Library, in collection ${manual.collectionName}"
-                    else "Will be saved to My Library", style = MaterialTheme.typography.bodyMedium)
-                if (collectionAvailable) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = form.inCollection, onCheckedChange = { form.inCollection = it })
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add to this collection", style = MaterialTheme.typography.bodyMedium)
+            if (manual.duplicateTitle != null) item(key = "duplicate") {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+                    Text("This ${if (manual.duplicateViaIsbn) "ISBN" else "DOI"} is already in your library: ${manual.duplicateTitle}",
+                        color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppPrimaryButton(onClick = {
+                            controller.confirmManualAddAnyway(form.editedDraft(schema),
+                                form.inCollection && collectionAvailable)
+                        }) { Text("Add anyway") }
+                        TextButton(onClick = controller::cancelManualDuplicate) { Text("Cancel") }
+                    }
+                }
+            }
+            if (manual.error != null) item(key = "error") {
+                Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
+                    Text(manual.error ?: "", color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = {
+                        controller.saveManualDraft(form.editedDraft(schema), form.inCollection && collectionAvailable)
+                    }) { Text("Retry") }
                 }
             }
         }
-        if (manual.duplicateTitle != null) item(key = "duplicate") {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text("This ${if (manual.duplicateViaIsbn) "ISBN" else "DOI"} is already in your library: ${manual.duplicateTitle}",
-                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppPrimaryButton(onClick = {
-                        controller.confirmManualAddAnyway(form.editedDraft(schema),
-                            form.inCollection && collectionAvailable)
-                    }) { Text("Add anyway") }
-                    TextButton(onClick = controller::cancelManualDuplicate) { Text("Cancel") }
-                }
-            }
-        }
-        if (manual.error != null) item(key = "error") {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text(manual.error ?: "", color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = {
-                    controller.saveManualDraft(form.editedDraft(schema), form.inCollection && collectionAvailable)
-                }) { Text("Retry") }
-            }
-        }
-        item(key = "save") {
-            AppPrimaryButton(
-                onClick = {
-                    controller.saveManualDraft(form.editedDraft(schema), form.inCollection && collectionAvailable)
-                },
-                enabled = !titleBlank && !manual.saving, modifier = Modifier.fillMaxWidth()) {
-                Text(if (manual.saving) "Saving…" else "Save to Zotero")
-            }
+        AppPrimaryButton(
+            onClick = {
+                controller.saveManualDraft(form.editedDraft(schema), form.inCollection && collectionAvailable)
+            },
+            enabled = !titleBlank && !manual.saving, modifier = Modifier.fillMaxWidth()) {
+            Text(if (manual.saving) "Saving…" else "Save to Zotero")
         }
     }
 }
