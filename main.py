@@ -67,7 +67,7 @@ if platform == "android":
     except Exception:
         IMPORT_ERRORS.append("storage: " + traceback.format_exc(limit=2))
 
-LOGO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icon.png")
+LOGO_DIR = os.path.dirname(os.path.abspath(__file__))
 
 CHUNK = 10          # paragraphs drawn at a time while you scroll
 SEARCH_LIMIT = 60   # references fetched per Zotero search
@@ -450,8 +450,9 @@ class LabApp(App):
                          spacing=dp(14))
 
         header = BoxLayout(size_hint_y=None, height=dp(64), spacing=dp(12))
-        if os.path.exists(LOGO_FILE):
-            header.add_widget(Logo(LOGO_FILE, size_hint=(None, None),
+        logo_file = os.path.join(LOGO_DIR, "cat_logo_dark.png" if is_dark() else "cat_logo_light.png")
+        if os.path.exists(logo_file):
+            header.add_widget(Logo(logo_file, size_hint=(None, None),
                                    size=(dp(52), dp(52)), pos_hint={"center_y": 0.5}))
         title = Label(
             text=f"[size=26sp][b]Blaykie[/b][/size]\n[size=12sp][color={resolve_color(MUTED)}]"

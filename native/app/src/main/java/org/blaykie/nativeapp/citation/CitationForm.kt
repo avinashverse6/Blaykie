@@ -4,7 +4,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
@@ -44,6 +43,7 @@ import androidx.compose.ui.unit.em
 import org.blaykie.nativeapp.AppPrimaryButton
 import org.blaykie.nativeapp.AppShapes
 import org.blaykie.nativeapp.AppTextButton
+import org.blaykie.nativeapp.BlaykieCatLogo
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.docx.CitationFormatting
 import org.blaykie.nativeapp.docx.CitationItem
@@ -116,7 +116,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                                 if (!editing && state.query.isBlank() && selected.isEmpty() && !state.loading) item {
                                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                         verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Image(painterResource(R.drawable.home_logo), null, Modifier.size(44.dp))
+                                        BlaykieCatLogo(72.dp)
                                         Text("Search your Zotero library", style = typography.bodyMedium, color = colors.onSurfaceVariant)
                                     }
                                 }

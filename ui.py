@@ -78,7 +78,7 @@ def small_label(text, color=MUTED, size=12, bold=False, height=20):
 # ---------------------------------------------------------------------
 
 class Logo(Widget):
-    """The cat logo with rounded corners."""
+    """The transparent cat logo."""
 
     def __init__(self, source, **kwargs):
         super().__init__(**kwargs)
