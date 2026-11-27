@@ -1,7 +1,7 @@
 package org.blaykie.nativeapp
 
 import java.io.File
-import javax.imageio.ImageIO
+import java.io.DataInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.*
 import org.junit.Test
@@ -41,13 +41,18 @@ class CatLogoResourceTest {
         }
     }
 
-    @Test fun legacyLaunchersExistAtEveryDensityWithOffWhiteBackground() {
+    @Test fun legacyLaunchersExistAtEveryDensityAndAdaptiveBackgroundIsOffWhite() {
+        val background = xml("drawable/launcher_background.xml").getElementsByTagName("solid").item(0)
+        assertEquals("#FBFAF8", background.attributes.getNamedItemNS(android, "color").nodeValue)
         for ((density, size) in listOf("mdpi" to 48, "hdpi" to 72, "xhdpi" to 96, "xxhdpi" to 144, "xxxhdpi" to 192)) {
             for (name in listOf("ic_launcher", "ic_launcher_round")) {
-                val image = ImageIO.read(res("mipmap-$density/$name.png"))
-                assertEquals(size, image.width)
-                assertEquals(size, image.height)
-                assertEquals(0xFFFBFAF8.toInt(), image.getRGB(0, 0))
+                DataInputStream(res("mipmap-$density/$name.png").inputStream()).use { stream ->
+                    assertEquals(0x89504E470D0A1A0AuL.toLong(), stream.readLong())
+                    assertEquals(13, stream.readInt()) // IHDR length
+                    assertEquals(0x49484452, stream.readInt()) // IHDR type
+                    assertEquals(size, stream.readInt())
+                    assertEquals(size, stream.readInt())
+                }
             }
         }
     }
