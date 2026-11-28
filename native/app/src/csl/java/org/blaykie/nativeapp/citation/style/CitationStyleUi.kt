@@ -17,7 +17,11 @@ import androidx.compose.ui.platform.LocalContext
 import org.blaykie.nativeapp.OptionalSettingsBindings
 import org.blaykie.nativeapp.DocumentTonalBanner
 import org.blaykie.nativeapp.SettingsListRow
-import org.blaykie.nativeapp.SettingsSectionTitle
+import org.blaykie.nativeapp.SettingsDivider
+import org.blaykie.nativeapp.SettingsPickerSheet
+import org.blaykie.nativeapp.SettingsChoiceRow
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import org.blaykie.nativeapp.Settings
 import org.blaykie.nativeapp.SettingsStore
 import androidx.lifecycle.ViewModel
@@ -434,14 +438,13 @@ internal fun SettingsExtraSection(settings: Settings, store: SettingsStore) {
         onDispose { vm.setEnabled(false) }
     }
     LaunchedEffect(vm) { vm.refreshInventory() }
-    SettingsSectionTitle("Citations")
+    SettingsDivider()
     CitationStylePicker(vm, bindings.styleId, bindings.languageTag ?: "en-US", bindings.languageTag != null, true,
         { value -> bindings.chooseStyle(value); true },
         { value -> bindings.chooseLanguage(value); true },
         { bindings.chooseLanguage(null); true }, settings.styleMessage, settings.languageMessage,
         { scope.launch { store.updateOptionalSelection(::dismissStyleMessage) } },
         { scope.launch { store.updateOptionalSelection(::dismissLanguageMessage) } })
-    HorizontalDivider(Modifier.padding(vertical = 8.dp))
 }
 
 @Composable
@@ -458,31 +461,27 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
     val selected = state.choices.firstOrNull { it.id == styleId }?.title
         ?: if (settingsMode && styleId != null) "Unavailable style" else "APA 7 (built-in)"
     Column(Modifier.fillMaxWidth()) {
-        Box(Modifier.fillMaxWidth()) {
-            SettingsListRow("Citation style", if (settingsMode) selected else "$selected · ${styleLanguageSummary(styleId, language)}") { expanded = true }
-            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                state.choices.forEach { choice ->
-                    DropdownMenuItem(text = {
-                        Column {
-                            Text(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "")
-                            if (choice.dependent) Text(DEPENDENT_STYLE_NOTE, style = MaterialTheme.typography.bodySmall)
-                            val resolution = resolveStyleLanguage(choice, language, explicit, state.locales)
-                            val shownLanguage = if (choice.id == styleId) language else resolution.tag
-                            Text(styleLanguageSummary(choice.id, shownLanguage), style = MaterialTheme.typography.bodySmall)
-                            resolution.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        }
-                    }, trailingIcon = if (choice.source == StyleSource.PRIVATE) ({
-                        TextButton(enabled = !state.importing, onClick = { expanded = false; removing = choice }) { Text("Remove") }
-                    }) else null, enabled = choice.disabledReason == null && choice.id !in state.failedIds && !state.importing, onClick = {
-                        expanded = false
-                        onStyleChange(choice.id)
-                    })
-                }
-                DropdownMenuItem(text = { Text("Import style (.csl)") }, enabled = !state.importing, onClick = {
-                    expanded = false
-                    try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
-                })
+        SettingsListRow("Citation style", if (settingsMode) selected else "$selected · ${styleLanguageSummary(styleId, language)}") { expanded = true }
+        if (expanded) SettingsPickerSheet("Citation style", { expanded = false }) {
+            state.choices.forEach { choice ->
+                val resolution = resolveStyleLanguage(choice, language, explicit, state.locales)
+                val shownLanguage = if (choice.id == styleId) language else resolution.tag
+                SettingsChoiceRow(choice.title + if (choice.source == StyleSource.PRIVATE) " · Imported" else "",
+                    selected = choice.id == styleId,
+                    enabled = choice.disabledReason == null && choice.id !in state.failedIds && !state.importing,
+                    onClick = { expanded = false; onStyleChange(choice.id) },
+                    supporting = {
+                        if (choice.dependent) Text(DEPENDENT_STYLE_NOTE, style = MaterialTheme.typography.bodySmall)
+                        Text(styleLanguageSummary(choice.id, shownLanguage), style = MaterialTheme.typography.bodySmall)
+                        resolution.note?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        (if (choice.id in state.failedIds) "Failed to load." else choice.disabledReason)?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    }, trailing = if (choice.source == StyleSource.PRIVATE) ({
+                        TextButton(enabled = !state.importing, onClick = { expanded = false; removing = choice }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove") }
+                    }) else null)
+            }
+            SettingsListRow("Import style (.csl)", enabled = !state.importing) {
+                expanded = false
+                try { picker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
             }
         }
         SettingsFallbackMessage(styleMessage, dismissStyle)
@@ -491,20 +490,19 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
         resolveStyleLanguage(currentChoice, language, explicit, state.locales).note?.let {
             Text(it, style = MaterialTheme.typography.bodySmall)
         }
-        Box(Modifier.fillMaxWidth()) {
-            SettingsListRow("Citation language", if (settingsMode && !explicit) "Automatic" else if (language.equals("en-US", true)) "English (US), bundled" else language) { languageExpanded = true }
-            DropdownMenu(expanded = languageExpanded, onDismissRequest = { languageExpanded = false }) {
-                DropdownMenuItem(text = { Text("Use style language (automatic)") }, enabled = !state.importing, onClick = { languageExpanded = false; onUseStyleLanguage() })
-                DropdownMenuItem(text = { Text("English (US), bundled") }, enabled = !state.importing, onClick = { languageExpanded = false; onLanguageChange("en-US") })
-                state.locales.forEach { locale ->
-                    DropdownMenuItem(text = { Text(locale.tag) }, enabled = !state.importing,
-                        trailingIcon = { TextButton(enabled = !state.importing, onClick = { languageExpanded = false; removingLocale = locale }) { Text("Remove") } },
-                        onClick = { languageExpanded = false; onLanguageChange(locale.tag) })
-                }
-                DropdownMenuItem(text = { Text("Import language (locale .xml)") }, enabled = !state.importing, onClick = {
-                    languageExpanded = false
-                    try { localePicker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
-                })
+        SettingsDivider()
+        SettingsListRow("Citation language", if (settingsMode && !explicit) "Automatic" else if (language.equals("en-US", true)) "English (US), bundled" else language) { languageExpanded = true }
+        if (languageExpanded) SettingsPickerSheet("Citation language", { languageExpanded = false }) {
+            SettingsChoiceRow("Use style language (automatic)", !explicit, enabled = !state.importing, onClick = { languageExpanded = false; onUseStyleLanguage() })
+            SettingsChoiceRow("English (US), bundled", explicit && language.equals("en-US", true), enabled = !state.importing, onClick = { languageExpanded = false; onLanguageChange("en-US") })
+            state.locales.forEach { locale ->
+                SettingsChoiceRow(locale.tag, explicit && language.equals(locale.tag, true), enabled = !state.importing,
+                    onClick = { languageExpanded = false; onLanguageChange(locale.tag) },
+                    trailing = { TextButton(enabled = !state.importing, onClick = { languageExpanded = false; removingLocale = locale }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Remove") } })
+            }
+            SettingsListRow("Import language (locale .xml)", enabled = !state.importing) {
+                languageExpanded = false
+                try { localePicker.launch(arrayOf("*/*")) } catch (_: Exception) { vm.pickerError() }
             }
         }
         SettingsFallbackMessage(languageMessage, dismissLanguage)
@@ -532,7 +530,7 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
             } }, confirmButton = { TextButton(onClick = vm::closePreview) { Text("Done") } })
     }
     removingLocale?.let { locale ->
-        AlertDialog(onDismissRequest = { removingLocale = null }, title = { Text("Remove imported language?") },
+        AlertDialog(shape = RoundedCornerShape(28.dp), onDismissRequest = { removingLocale = null }, title = { Text("Remove imported language?") },
             text = { Text("Remove ${locale.tag} from this device?") },
             confirmButton = { TextButton(onClick = {
                 removingLocale = null
@@ -540,7 +538,7 @@ private fun CitationStylePicker(vm: StyleController, styleId: String?, language:
             }) { Text("Remove") } }, dismissButton = { TextButton(onClick = { removingLocale = null }) { Text("Cancel") } })
     }
     removing?.let { choice ->
-        AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove imported style?") },
+        AlertDialog(shape = RoundedCornerShape(28.dp), onDismissRequest = { removing = null }, title = { Text("Remove imported style?") },
             text = { Text("Remove ${choice.title} from this device?") },
             confirmButton = { TextButton(onClick = {
                 removing = null

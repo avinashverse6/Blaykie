@@ -29,6 +29,8 @@ import org.blaykie.nativeapp.BrandLogo
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.SettingsListRow
+import org.blaykie.nativeapp.SettingsInfoRow
+import org.blaykie.nativeapp.SettingsDivider
 
 internal fun canConnectKey(key: String, checking: Boolean, warning: Boolean): Boolean =
     key.isNotBlank() && !checking && !warning
@@ -193,6 +195,7 @@ private fun KeyScreen(state: AccountState, firstRun: Boolean, onOpenBrowser: () 
         }
     }
     if (state.warning) AlertDialog(
+        shape = RoundedCornerShape(28.dp),
         onDismissRequest = { key = ""; onCancel() },
         title = { Text("This key has broader access") },
         text = { Text("This key can write to a library or access groups. For a read-only key, create a new key on zotero.org with access only to your personal library and no write access.") },
@@ -206,30 +209,26 @@ internal fun AccountSection(state: AccountState, onChange: () -> Unit, onRemove:
     Column {
         val account = state.account
         if (account == null) {
-            Text("No key saved", modifier = Modifier.padding(vertical = 12.dp))
+            SettingsInfoRow("No key saved")
         } else {
             val p = account.permissions
             val level = if (p.personalWrite) "Library read and write" else "Read only"
-            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text(if (account.username.isNullOrBlank()) "Using an API key" else "Signed in as ${account.username}",
-                    style = MaterialTheme.typography.bodyLarge)
-                Text("User ID: ${account.userId}", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Permissions: $level", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                state.groupsCount?.let { count ->
-                    Text(if (count > 0) "Groups available: $count" else "Groups available: None",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (count == 0) Text("Groups need read access on your Zotero key.",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            SettingsInfoRow(if (account.username.isNullOrBlank()) "Using an API key" else "Signed in as ${account.username}")
+            SettingsDivider(); SettingsInfoRow("User ID: ${account.userId}")
+            SettingsDivider(); SettingsInfoRow("Permissions: $level")
+            state.groupsCount?.let { count ->
+                SettingsDivider()
+                SettingsInfoRow(if (count > 0) "Groups available: $count" else "Groups available: None",
+                    if (count == 0) "Groups need read access on your Zotero key." else "")
             }
-            Text(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}", modifier = Modifier.padding(vertical = 12.dp))
+            SettingsDivider(); SettingsInfoRow(if (account.lastFour.isEmpty()) "Key: ••••" else "Key: ••••${account.lastFour}")
         }
+        SettingsDivider()
         SettingsListRow(if (account == null) "Add key" else "Change key", enabled = !state.checking, onClick = onChange)
-        if (account != null) SettingsListRow("Remove key from this phone", enabled = !state.checking, destructive = true, onClick = onRemove)
-        Text("To revoke the key itself, use zotero.org.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (state.checking) CircularProgressIndicator()
-        if (state.message.isNotEmpty()) Text(state.message, color = MaterialTheme.colorScheme.onSurface)
+        if (account != null) { SettingsDivider(); SettingsListRow("Remove key from this phone", enabled = !state.checking, destructive = true, onClick = onRemove) }
+        Text("To revoke the key itself, use zotero.org.", modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (state.checking) CircularProgressIndicator(Modifier.padding(12.dp))
+        if (state.message.isNotEmpty()) Text(state.message, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurface)
         SignInDetails(state.details)
     }
 }

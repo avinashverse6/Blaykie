@@ -634,46 +634,34 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onAbout: () -> Unit, onCrash: () -> Unit, root: Boolean = false) {
     val scope = rememberCoroutineScope()
     var dialog by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        if (root) Text("Settings", Modifier.padding(horizontal = 20.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        if (root) Text("Settings", Modifier.padding(horizontal = 20.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
         else SettingsTopBar("Settings", onBack)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
             SettingsSectionTitle("Account")
-            AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsCard { AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey) }
             SettingsSectionTitle("Appearance")
-            SettingsListRow("Theme", settings.theme.name) { dialog = "theme" }
-            SettingsListRow("Text size", settings.textSize.name) { dialog = "size" }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsCard {
+                SettingsListRow("Theme", settings.theme.name) { dialog = "theme" }
+                SettingsDivider()
+                SettingsListRow("Text size", settings.textSize.name) { dialog = "size" }
+            }
             SettingsExtraSection(settings, store)
             SettingsSectionTitle("About")
-            SettingsListRow("About Blaykie") { onAbout() }
-            SettingsListRow("Last crash") { onCrash() }
-            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                Text("App version", style = MaterialTheme.typography.bodyLarge)
+            SettingsCard {
+                SettingsListRow("About Blaykie") { onAbout() }
+                SettingsDivider()
+                SettingsListRow("Last crash") { onCrash() }
+                SettingsDivider()
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val version = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty() }
-                Text(version, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                SettingsInfoRow("App version", version)
             }
         }
     }
-    if (dialog.isNotEmpty()) AlertDialog(onDismissRequest = { dialog = "" }, title = { Text(if (dialog == "theme") "Theme" else "Text size") }, text = {
-        Column(Modifier.selectableGroup()) {
-            val labels = if (dialog == "theme") ThemeMode.entries.map { it.name } else TextSize.entries.map { it.name }
-            labels.forEach { label ->
-                val selected = if (dialog == "theme") settings.theme.name == label else settings.textSize.name == label
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).then(selectedOptionModifier(selected)).selectable(selected, role = Role.RadioButton, onClick = {
-                    if (dialog == "theme") scope.launch { store.setTheme(ThemeMode.valueOf(label)) } else scope.launch { store.setTextSize(TextSize.valueOf(label)) }
-                    dialog = ""
-                }), verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = selected, onClick = null); Text(label, Modifier.padding(start = 8.dp))
-                }
-            }
-        }
-    }, confirmButton = { TextButton(onClick = { dialog = "" }) { Text("Cancel") } })
+    if (dialog.isNotEmpty()) SettingsAppearancePicker(dialog, settings, store) { dialog = "" }
 }

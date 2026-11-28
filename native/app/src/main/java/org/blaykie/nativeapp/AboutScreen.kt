@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,54 +66,62 @@ internal fun AboutScreen(onBack: () -> Unit) {
     val licenseText = remember { runCatching { context.assets.open(AboutInfo.licenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "License text could not be loaded." } }
     Column(Modifier.fillMaxSize()) {
         SettingsTopBar("About", onBack)
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                BrandLogo(size = 56)
-                Spacer(Modifier.width(16.dp))
-                Column {
-                    Text(AboutInfo.appName, style = MaterialTheme.typography.headlineSmall)
-                    Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                BlaykieCatLogo(72.dp)
+                Spacer(Modifier.height(12.dp))
+                Text("Blaykie Citation Manager", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             SettingsSectionTitle("Licence")
-            Text(AboutInfo.license, style = MaterialTheme.typography.bodyLarge)
-            TextButton(onClick = { scope.launch { licenseRequester.bringIntoView() } }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Read full licence text") }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsCard {
+                SelectionContainer { SettingsInfoRow(AboutInfo.license) }
+                SettingsDivider()
+                SettingsListRow("Read full licence text") { scope.launch { licenseRequester.bringIntoView() } }
+            }
             SettingsSectionTitle("Source")
-            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.source) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Source: ${AboutInfo.source}") }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsCard { SettingsListRow("Source: ${AboutInfo.source}") { runCatching { uri.openUri(AboutInfo.source) } } }
             SettingsSectionTitle("Privacy")
-            Text(AboutInfo.privacy, style = MaterialTheme.typography.bodyMedium)
-            Text("The app sends network requests only to api.zotero.org. Links open in your browser.", style = MaterialTheme.typography.bodyMedium)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsCard {
+                SelectionContainer { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(AboutInfo.privacy, style = MaterialTheme.typography.bodyMedium)
+                    Text("The app sends network requests only to api.zotero.org. Links open in your browser.", style = MaterialTheme.typography.bodyMedium)
+                } }
+            }
             AboutExtraCredits()
             SettingsSectionTitle("Fonts")
-            Text(AboutInfo.jakartaFontCredit, style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.jakartaFontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.jakartaFontSource, style = MaterialTheme.typography.bodyMedium) }
-            TextButton(onClick = { showJakartaFontLicense = !showJakartaFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showJakartaFontLicense) "Hide Plus Jakarta Sans license text" else "Read Plus Jakarta Sans license text") }
-            if (showJakartaFontLicense) Text(jakartaFontLicenseText, style = MaterialTheme.typography.bodySmall)
-            Text(AboutInfo.fontCredit, style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.fontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.fontSource, style = MaterialTheme.typography.bodyMedium) }
-            TextButton(onClick = { showFontLicense = !showFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showFontLicense) "Hide font license text" else "Read font license text") }
-            if (showFontLicense) Text(fontLicenseText, style = MaterialTheme.typography.bodyMedium)
-            Text(AboutInfo.timesFontCredit, style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.timesFontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.timesFontSource, style = MaterialTheme.typography.bodyMedium) }
-            TextButton(onClick = { showTimesFontLicense = !showTimesFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showTimesFontLicense) "Hide Tinos license text" else "Read Tinos license text") }
-            if (showTimesFontLicense) Text(timesFontLicenseText, style = MaterialTheme.typography.bodyMedium)
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            SettingsSectionTitle("Third-party libraries and artwork")
-            AboutInfo.libraries.forEach { library ->
-                Text("${library.name} — ${library.license}", style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = { runCatching { uri.openUri(library.url) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(library.url, style = MaterialTheme.typography.bodySmall) }
+            SettingsCard {
+                SelectionContainer { SettingsInfoRow(AboutInfo.jakartaFontCredit) }
+                SettingsListRow(AboutInfo.jakartaFontSource) { runCatching { uri.openUri(AboutInfo.jakartaFontSource) } }
+                SettingsListRow(if (showJakartaFontLicense) "Hide Plus Jakarta Sans license text" else "Read Plus Jakarta Sans license text") { showJakartaFontLicense = !showJakartaFontLicense }
+                if (showJakartaFontLicense) SelectionContainer { Text(jakartaFontLicenseText, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
+                SettingsDivider()
+                SelectionContainer { SettingsInfoRow(AboutInfo.fontCredit) }
+                SettingsListRow(AboutInfo.fontSource) { runCatching { uri.openUri(AboutInfo.fontSource) } }
+                SettingsListRow(if (showFontLicense) "Hide font license text" else "Read font license text") { showFontLicense = !showFontLicense }
+                if (showFontLicense) SelectionContainer { Text(fontLicenseText, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
+                SettingsDivider()
+                SelectionContainer { SettingsInfoRow(AboutInfo.timesFontCredit) }
+                SettingsListRow(AboutInfo.timesFontSource) { runCatching { uri.openUri(AboutInfo.timesFontSource) } }
+                SettingsListRow(if (showTimesFontLicense) "Hide Tinos license text" else "Read Tinos license text") { showTimesFontLicense = !showTimesFontLicense }
+                if (showTimesFontLicense) SelectionContainer { Text(timesFontLicenseText, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
             }
-            Text("Other transitive components and their notices require a distribution-specific audit.", style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { showApache = !showApache }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showApache) "Hide Apache-2.0 license text" else "Read Apache-2.0 license text") }
-            if (showApache) Text(apacheText, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.apacheLicense) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Apache-2.0 license (upstream)") }
-            HorizontalDivider()
-            Text("GNU Affero General Public License", modifier = Modifier.bringIntoViewRequester(licenseRequester), style = MaterialTheme.typography.titleMedium)
-            Text(licenseText, style = MaterialTheme.typography.bodySmall)
+            SettingsSectionTitle("Third-party libraries and artwork")
+            SettingsCard {
+                AboutInfo.libraries.forEach { library ->
+                    SelectionContainer { SettingsInfoRow("${library.name} — ${library.license}") }
+                    SettingsListRow(library.url) { runCatching { uri.openUri(library.url) } }
+                    SettingsDivider()
+                }
+                SelectionContainer { Text("Other transitive components and their notices require a distribution-specific audit.", Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
+                SettingsListRow(if (showApache) "Hide Apache-2.0 license text" else "Read Apache-2.0 license text") { showApache = !showApache }
+                if (showApache) SelectionContainer { Text(apacheText, Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
+                SettingsListRow("Apache-2.0 license (upstream)") { runCatching { uri.openUri(AboutInfo.apacheLicense) } }
+            }
+            SettingsSectionTitle("GNU Affero General Public License")
+            SettingsCard {
+                SelectionContainer { Text(licenseText, modifier = Modifier.bringIntoViewRequester(licenseRequester).padding(16.dp), style = MaterialTheme.typography.bodyMedium) }
+            }
         }
     }
 }
