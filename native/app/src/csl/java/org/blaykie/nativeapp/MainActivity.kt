@@ -192,6 +192,13 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     val scope = rememberCoroutineScope()
     var screenName by rememberSaveable { mutableStateOf(Screen.HOME.name) }
     var screen by remember { mutableStateOf(Screen.valueOf(screenName)) }
+    var selectedTab by rememberSaveable(stateSaver = rootTabSaver) { mutableStateOf(RootTab.DOCUMENTS) }
+    val rootHolder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+    val libraryModel = remember(context, accountStore) {
+        ViewModelProvider(context as ComponentActivity, LibraryNavigationModel.Factory(accountStore))[LibraryNavigationModel::class.java]
+    }
+    libraryModel.accountChanged(accountState.account?.userId)
+    val libraryController = libraryModel.controller
     val documents = remember(context) { DocumentRepository(context) }
     var documentRows by remember { mutableStateOf<List<StoredDocument>>(emptyList()) }
     var activeId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -352,11 +359,15 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             Screen.DOCUMENT, Screen.MOBILE_VIEW -> navigate(Screen.HOME)
             Screen.EXPORT -> if (exportState.phase in setOf(ExportPhase.IDLE, ExportPhase.DONE)) { exportController.reset(); navigate(Screen.DOCUMENT) } else if (exportState.phase == ExportPhase.PREPARING) exportController.cancelLookup()
             Screen.SETTINGS -> navigate(Screen.HOME)
-            Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.SETTINGS)
+            Screen.ABOUT, Screen.LAST_CRASH -> navigate(Screen.HOME)
             Screen.HOME -> Unit
         }
     }
-    BackHandler(enabled = screen != Screen.HOME) { if (searchState.open) citationSearch.close() else back() }
+    BackHandler(enabled = screen != Screen.HOME || selectedTab != RootTab.DOCUMENTS) {
+        if (searchState.open) citationSearch.close()
+        else if (screen != Screen.HOME) back()
+        else selectedTab = RootTab.DOCUMENTS
+    }
     LaunchedEffect(accountState.account, searchState.open) {
         if (searchState.open) citationSearch.refreshAccount()
     }
@@ -517,18 +528,30 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
         return
     }
     when (screen) {
-        Screen.HOME -> HomeScreen(documentRows, message,
+        Screen.HOME -> rootHolder.SaveableStateProvider("home") { HomeScreen(documentRows, message,
             onAdd = {
                 try { picker.launch(arrayOf(DOCX_MIME)) }
                 catch (_: Exception) { message = "Could not open the file picker." }
             },
-            onOpen = ::openDocument, onRename = ::renameDocument, onDelete = ::deleteDocument, onSettings = { navigate(Screen.SETTINGS) },
+            onOpen = ::openDocument, onRename = ::renameDocument, onDelete = ::deleteDocument,
             textSize = settings.textSize,
             extraStep = if (settings.customCitationStyles) HomeExtraStep("Choose your citation style", R.drawable.ic_style_format) else null,
-            accountStore = accountStore, libraryGroupId = settings.libraryGroupId,
+            libraryController = libraryController, libraryGroupId = settings.libraryGroupId,
             onLibraryChoice = { id -> scope.launch { settingsStore.setLibraryGroupId(id) } },
             onSignIn = { account.openKey(false) }, onAllowEditing = { account.startOAuth(writeAccess = true) },
-        )
+            selectedTab = selectedTab, screenName = screen.name,
+            onSelectTab = { tab ->
+                val (next, reselected) = rootTabSelection(selectedTab, tab)
+                if (reselected && tab == RootTab.LIBRARY) libraryController.resetToLibraries()
+                selectedTab = next
+            },
+            settingsContent = {
+                SettingsScreen(settings, settingsStore, accountState, onBack = { selectedTab = RootTab.DOCUMENTS }, onChangeKey = { account.openKey(false) }, onRemoveKey = { account.remove() }, onAbout = { navigate(Screen.ABOUT) }, onCrash = {
+                    crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
+                    navigate(Screen.LAST_CRASH)
+                }, root = true)
+            },
+        ) }
         Screen.DOCUMENT, Screen.MOBILE_VIEW -> Column(Modifier.fillMaxSize()) {
             val p = project
             val current = session
@@ -671,10 +694,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             crashText = try { File(context.filesDir, "crash.log").readText() } catch (_: Exception) { "No crash recorded." }
             navigate(Screen.LAST_CRASH)
         })
-        Screen.ABOUT -> AboutScreen(onBack = { navigate(Screen.SETTINGS) })
+        Screen.ABOUT -> AboutScreen(onBack = { navigate(Screen.HOME) })
         Screen.LAST_CRASH -> Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Last crash", style = MaterialTheme.typography.headlineMedium)
-            TextButton(onClick = { navigate(Screen.SETTINGS) }) { Text("Back") }
+            TextButton(onClick = { navigate(Screen.HOME) }) { Text("Back") }
             TextButton(onClick = { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Last crash", crashText)) }) { Text("Copy") }
             Text(crashText, modifier = Modifier.verticalScroll(rememberScrollState()))
         }
@@ -720,11 +743,12 @@ private fun ParagraphTextField(value: TextFieldValue, onValueChange: (TextFieldV
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onAbout: () -> Unit, onCrash: () -> Unit) {
+private fun SettingsScreen(settings: Settings, store: SettingsStore, account: AccountState, onBack: () -> Unit, onChangeKey: () -> Unit, onRemoveKey: () -> Unit, onAbout: () -> Unit, onCrash: () -> Unit, root: Boolean = false) {
     val scope = rememberCoroutineScope()
     var dialog by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
-        SettingsTopBar("Settings", onBack)
+        if (root) Text("Settings", Modifier.padding(horizontal = 20.dp, vertical = 16.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        else SettingsTopBar("Settings", onBack)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsSectionTitle("Account")
             AccountSection(account, onChange = onChangeKey, onRemove = onRemoveKey)

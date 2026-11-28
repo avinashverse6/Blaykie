@@ -125,7 +125,7 @@ private fun HorizontalSteps(steps: List<HomeStep>) {
 }
 
 @Composable
-private fun VerticalSteps(steps: List<HomeStep>) {
+internal fun VerticalSteps(steps: List<HomeStep>) {
     Column {
         steps.forEachIndexed { index, step ->
             Row(verticalAlignment = Alignment.CenterVertically) {

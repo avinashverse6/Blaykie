@@ -275,6 +275,10 @@ internal class LibraryController(private val accounts: AccountStore,
         return true
     }
 
+    fun resetToLibraries() {
+        while (back()) { /* Pop the Library stack to its tab root. */ }
+    }
+
     fun toggleExpanded(key: String) {
         val expanded = mutable.value.expandedCollections
         mutable.value = mutable.value.copy(expandedCollections = if (key in expanded) expanded - key else expanded + key)
