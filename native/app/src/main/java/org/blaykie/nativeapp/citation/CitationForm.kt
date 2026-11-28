@@ -162,7 +162,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                                             border = BorderStroke(if (checked) 2.dp else 1.dp, if (checked) colors.primary else colors.outlineVariant)) {
                                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                                 Box(Modifier.size(26.dp).background(if (checked) colors.primary else colors.surface, CircleShape)
-                                                    .border(1.5.dp, if (checked) colors.primary else colors.outline, CircleShape),
+                                                    .border(1.5.dp, if (checked) colors.primary else colors.onSurfaceVariant, CircleShape),
                                                     contentAlignment = Alignment.Center) {
                                                     if (checked) Text("✓", color = colors.onPrimary, style = typography.labelLarge)
                                                 }

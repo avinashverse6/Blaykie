@@ -158,8 +158,8 @@ class MainActivity : ComponentActivity() {
             val textSize = settings?.textSize ?: TextSize.Normal
             val scaled = remember(density, textSize) { Density(density.density, density.fontScale * textSize.scale) }
             CompositionLocalProvider(LocalDensity provides scaled) {
-                MaterialTheme(colorScheme = visualColors(dark), typography = visualTypography) {
-                    Surface(Modifier.fillMaxSize()) {
+                MaterialTheme(colorScheme = visualColors(dark), typography = visualTypography, shapes = visualShapes) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         // Insets are consumed by systemBarsPadding before imePadding, so the
                         // navigation bar is not added a second time when the IME is visible.
                         Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
@@ -555,8 +555,10 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                         preparePreviewReferences(p.copyForBibliographyPreview(), true, accountStore::read, progress)
                     },
                 ) { copy, allowMissing -> org.blaykie.nativeapp.export.previewBibliographyXml(context, copy, current, settings.customCitationStyles, allowMissing) }
-                MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
-                    onCitation = { block, number -> selectedCitation = block to number })
+                DocumentPresentationTheme {
+                    MobileDocumentScreen(p, mobile, bibliography, onViewChanged = { session?.let(::recordDocumentState) }, onParagraph = ::editParagraph,
+                        onCitation = { block, number -> selectedCitation = block to number })
+                }
                 selectedCitation?.let { (block, number) ->
                     val editable = p.citations().any { it.block == block && it.number == number }
                     AlertDialog(onDismissRequest = { selectedCitation = null }, title = { Text("Citation") },

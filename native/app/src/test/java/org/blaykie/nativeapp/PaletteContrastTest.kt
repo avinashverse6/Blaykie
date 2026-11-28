@@ -38,7 +38,11 @@ class PaletteContrastTest {
                 "settings row value and icon" to (p.onSurfaceVariant to p.background),
                 "inverse surface" to (other.surface to other.onSurface),
             )
-            val iconPairs = listOf("outline on surface" to (p.outline to p.surface), "outline on background" to (p.outline to p.background), "outline on variant" to (p.outline to p.surfaceVariant))
+            // The outline token is a deliberately subtle decorative card border, not
+            // an icon colour. Interactive indicators use onSurfaceVariant instead.
+            val iconPairs = listOf("control on surface" to (p.onSurfaceVariant to p.surface),
+                "control on background" to (p.onSurfaceVariant to p.background),
+                "control on variant" to (p.onSurfaceVariant to p.surfaceVariant))
             for ((name, colors) in textPairs) assertTrue("$theme $name contrast ${ratio(colors.first, colors.second)}", ratio(colors.first, colors.second) >= 4.5)
             for ((name, colors) in iconPairs) assertTrue("$theme $name contrast ${ratio(colors.first, colors.second)}", ratio(colors.first, colors.second) >= 3.0)
         }

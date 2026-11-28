@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
+import org.blaykie.nativeapp.BottomSheetShape
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.crossref.ItemDraft
@@ -152,7 +153,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
         else form.backToChooser()
     }
 
-    ModalBottomSheet(onDismissRequest = { requestClose() }) {
+    ModalBottomSheet(onDismissRequest = { requestClose() }, shape = BottomSheetShape) {
         Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large)) {
             when {
                 manual.savedKey != null -> ManualSavedContent(
@@ -531,9 +532,9 @@ private fun CreatorRowEditor(index: Int, row: ManualCreatorRow, schema: TypeSche
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !row.singleField, onClick = { onChange(row.copy(singleField = false)) },
-                label = { Text("Person (last name, first name)") })
+                label = { Text("Person (last name, first name)") }, shape = CircleShape)
             FilterChip(selected = row.singleField, onClick = { onChange(row.copy(singleField = true)) },
-                label = { Text("Single name or organisation (one field)") })
+                label = { Text("Single name or organisation (one field)") }, shape = CircleShape)
         }
         if (row.singleField) {
             Text("Use this for an organisation such as Ministry of Rural Development, or for a person who has only one name.",

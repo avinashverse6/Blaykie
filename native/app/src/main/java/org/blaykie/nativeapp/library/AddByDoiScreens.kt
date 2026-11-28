@@ -12,6 +12,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
+import org.blaykie.nativeapp.BottomSheetShape
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.crossref.DraftCreator
@@ -22,7 +23,7 @@ import org.blaykie.nativeapp.crossref.supportedItemTypes
 @Composable
 internal fun PermissionSheet(state: LibraryState, onAllowEditing: () -> Unit, onAdvancedKey: () -> Unit,
                              onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape) {
         Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large),
             verticalArrangement = Arrangement.spacedBy(Space.medium)) {
             Text("Add items to Zotero", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -44,7 +45,7 @@ internal fun PermissionSheet(state: LibraryState, onAllowEditing: () -> Unit, on
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AddMenuSheet(controller: LibraryController, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape) {
         Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large),
             verticalArrangement = Arrangement.spacedBy(Space.medium)) {
             Text("Add to My Library", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -62,7 +63,7 @@ internal fun AddMenuSheet(controller: LibraryController, onDismiss: () -> Unit) 
 @Composable
 internal fun AddByDoiSheet(state: LibraryState, controller: LibraryController, onDismiss: () -> Unit) {
     val add = state.add
-    ModalBottomSheet(onDismissRequest = { if (!add.saving) onDismiss() }) {
+    ModalBottomSheet(onDismissRequest = { if (!add.saving) onDismiss() }, shape = BottomSheetShape) {
         Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large)) {
             when {
                 add.savedKey != null -> SavedContent(state, controller)

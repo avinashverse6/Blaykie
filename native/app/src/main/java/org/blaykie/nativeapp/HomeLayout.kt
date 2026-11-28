@@ -24,7 +24,7 @@ internal fun BrandChip(label: String) {
     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer) {
         Text(label, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.labelMedium.copy(letterSpacing = 1.sp))
+            style = MaterialTheme.typography.labelMedium)
     }
 }
 

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
+import org.blaykie.nativeapp.BottomSheetShape
 import org.blaykie.nativeapp.AppShapes
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
@@ -331,7 +332,7 @@ private fun ItemCardText(item: ZoteroItem) {
 @Composable
 private fun TagsSheet(state: LibraryState, controller: LibraryController, onDismiss: () -> Unit) {
     var tagQuery by remember { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape) {
         Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large)) {
             Text("Tags", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(Space.medium))

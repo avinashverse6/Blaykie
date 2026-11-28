@@ -24,6 +24,8 @@ internal object AboutInfo {
     const val privacy = "Your Zotero key is stored encrypted on this phone. Blaykie has no analytics and contacts only api.zotero.org."
     const val fontCredit = "Lora — SIL Open Font License 1.1"
     const val fontSource = "https://fonts.google.com/specimen/Lora"
+    const val jakartaFontCredit = "Plus Jakarta Sans — SIL Open Font License 1.1"
+    const val jakartaFontSource = "https://github.com/tokotype/PlusJakartaSans"
     const val timesFontCredit = "Tinos — SIL Open Font License 1.1"
     const val timesFontSource = "https://github.com/googlefonts/tinos"
     const val apacheLicense = "https://www.apache.org/licenses/LICENSE-2.0"
@@ -54,8 +56,10 @@ internal fun AboutScreen(onBack: () -> Unit) {
     var showApache by rememberSaveable { mutableStateOf(false) }
     var showFontLicense by rememberSaveable { mutableStateOf(false) }
     var showTimesFontLicense by rememberSaveable { mutableStateOf(false) }
+    var showJakartaFontLicense by rememberSaveable { mutableStateOf(false) }
     val apacheText = remember { runCatching { context.assets.open(AboutInfo.apacheLicenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Apache-2.0 license text could not be loaded." } }
     val fontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.lora_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
+    val jakartaFontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.plus_jakarta_sans_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
     val timesFontLicenseText = remember { runCatching { context.resources.openRawResource(R.raw.tinos_ofl).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "Font license text could not be loaded." } }
     val licenseText = remember { runCatching { context.assets.open(AboutInfo.licenseAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }.getOrElse { "License text could not be loaded." } }
     Column(Modifier.fillMaxSize()) {
@@ -83,6 +87,10 @@ internal fun AboutScreen(onBack: () -> Unit) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             AboutExtraCredits()
             SettingsSectionTitle("Fonts")
+            Text(AboutInfo.jakartaFontCredit, style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = { runCatching { uri.openUri(AboutInfo.jakartaFontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.jakartaFontSource, style = MaterialTheme.typography.bodyMedium) }
+            TextButton(onClick = { showJakartaFontLicense = !showJakartaFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showJakartaFontLicense) "Hide Plus Jakarta Sans license text" else "Read Plus Jakarta Sans license text") }
+            if (showJakartaFontLicense) Text(jakartaFontLicenseText, style = MaterialTheme.typography.bodySmall)
             Text(AboutInfo.fontCredit, style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = { runCatching { uri.openUri(AboutInfo.fontSource) } }, modifier = Modifier.heightIn(min = 48.dp)) { Text(AboutInfo.fontSource, style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = { showFontLicense = !showFontLicense }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (showFontLicense) "Hide font license text" else "Read font license text") }
