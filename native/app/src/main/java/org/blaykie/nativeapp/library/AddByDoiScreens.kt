@@ -94,7 +94,7 @@ private fun AddMenuRow(title: String, hint: String, icon: Int, onClick: () -> Un
 @Composable
 internal fun AddByDoiSheet(state: LibraryState, controller: LibraryController, onDismiss: () -> Unit) {
     val add = state.add
-    fun close() { if (!add.saving) onDismiss() }
+    fun close() { if (!add.saving && !add.fetching) onDismiss() }
     ModalBottomSheet(onDismissRequest = { close() }, shape = BottomSheetShape,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
@@ -195,16 +195,24 @@ private fun ReviewContent(state: LibraryState, controller: LibraryController, on
             item {
                 AddItemSection("Creators") {
                     creators.forEachIndexed { index, creator ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(creator.displayName(), { value ->
-                                creators = creators.toMutableList().apply { this[index] = creator.copy(firstName = "", lastName = "", name = value) }
-                            }, label = { Text("Creator ${index + 1} (${creator.role})") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp))
-                            IconButton(onClick = { creators = creators.toMutableList().apply { removeAt(index) } }) { Icon(painterResource(R.drawable.ic_close), "Remove creator") }
+                        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Creator ${index + 1} (${creator.role})", Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    IconButton(onClick = { creators = creators.toMutableList().apply { removeAt(index) } }) {
+                                        Icon(painterResource(R.drawable.ic_close), "Remove creator")
+                                    }
+                                }
+                                AddFormField(creator.displayName(), "Creator ${index + 1} (${creator.role})", { value ->
+                                    creators = creators.toMutableList().apply { this[index] = creator.copy(firstName = "", lastName = "", name = value) }
+                                })
+                            }
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { creators = creators + DraftCreator(role = "author") }) { Text("Add author") }
-                        TextButton(onClick = { creators = creators + DraftCreator(role = "editor") }) { Text("Add editor") }
+                        OutlinedButton(onClick = { creators = creators + DraftCreator(role = "author") }, shape = CircleShape) { Text("Add author") }
+                        OutlinedButton(onClick = { creators = creators + DraftCreator(role = "editor") }, shape = CircleShape) { Text("Add editor") }
                     }
                 }
             }

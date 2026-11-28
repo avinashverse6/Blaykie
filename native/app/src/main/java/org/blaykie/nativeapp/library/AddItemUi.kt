@@ -85,6 +85,22 @@ internal fun AddItemSection(title: String, content: @Composable ColumnScope.() -
 }
 
 @Composable
+internal fun CollapsibleItemSection(title: String, count: Int, expanded: Boolean, onToggle: () -> Unit,
+                                    content: @Composable ColumnScope.() -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Surface(shape = RoundedCornerShape(20.dp), color = colors.surface, border = BorderStroke(1.dp, colors.outline), modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextButton(onClick = onToggle, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), contentPadding = PaddingValues(0.dp)) {
+                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(if (expanded) "▴" else "▾")
+            }
+            if (!expanded) Text("$count more ${if (count == 1) "field" else "fields"}", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
+            content()
+        }
+    }
+}
+
+@Composable
 internal fun AddFormField(value: String, label: String, onChange: (String) -> Unit, modifier: Modifier = Modifier,
                           singleLine: Boolean = false, minLines: Int = 1, supportingText: @Composable (() -> Unit)? = null) {
     OutlinedTextField(value = value, onValueChange = onChange, label = { Text(label) },

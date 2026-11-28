@@ -156,6 +156,7 @@ internal fun AddManuallySheet(state: LibraryState, controller: LibraryController
         }
     }
     fun requestChangeType() {
+        if (manual.saving) return
         if (form.isDirty(schema)) { discardForChangeType = true; showDiscard = true }
         else form.backToChooser()
     }
@@ -309,9 +310,6 @@ private fun ManualFieldsForm(state: LibraryState, controller: LibraryController,
     val ordered = remember(schema) { orderedFormFields(schema) }
     val titleField = remember(schema) { titleFieldOf(schema) }
     val restFields = remember(ordered, titleField) { ordered.main.filter { titleField == null || it.name != titleField.name } }
-    val detailNames = setOf("volume", "issue", "pages", "numPages", "DOI", "ISBN", "url", "accessDate", "language", "abstractNote")
-    val basics = restFields.takeWhile { it.name !in detailNames && !isDateLike(it) }
-    val details = restFields.drop(basics.size)
     val collectionAvailable = manual.collectionKey != null
     val primaryRole = schema.primaryCreatorType()
     val titleBlank = !titleSatisfied(schema, form.fields)
@@ -328,7 +326,6 @@ private fun ManualFieldsForm(state: LibraryState, controller: LibraryController,
             item(key = "basics") {
                 AddItemSection("Basics") {
                     if (titleField != null) ManualFieldEditor(titleField, form)
-                    basics.forEach { ManualFieldEditor(it, form) }
                 }
             }
             item(key = "creators") {
@@ -356,26 +353,16 @@ private fun ManualFieldsForm(state: LibraryState, controller: LibraryController,
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            if (details.isNotEmpty()) item(key = "details") {
-                AddItemSection("Details") { details.forEach { ManualFieldEditor(it, form) } }
+            if (restFields.isNotEmpty()) item(key = "details") {
+                AddItemSection("Details") { restFields.forEach { ManualFieldEditor(it, form) } }
             }
             if (ordered.optional.isNotEmpty()) item(key = "optional") {
-                AddItemSection("Optional details") {
-                    TextButton(onClick = { form.optionalOpen = !form.optionalOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(if (form.optionalOpen) "Hide optional details ▴" else "Optional details ▾", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    }
-                    if (!form.optionalOpen) Text("${ordered.optional.size} more ${if (ordered.optional.size == 1) "field" else "fields"}",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CollapsibleItemSection("Optional details", ordered.optional.size, form.optionalOpen, { form.optionalOpen = !form.optionalOpen }) {
                     if (form.optionalOpen) ordered.optional.forEach { ManualFieldEditor(it, form) }
                 }
             }
             if (ordered.more.isNotEmpty()) item(key = "more") {
-                AddItemSection("More fields") {
-                    TextButton(onClick = { form.moreOpen = !form.moreOpen }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(if (form.moreOpen) "Hide more fields ▴" else "More fields ▾", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    }
-                    if (!form.moreOpen) Text("${ordered.more.size} more ${if (ordered.more.size == 1) "field" else "fields"}",
-                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CollapsibleItemSection("More fields", ordered.more.size, form.moreOpen, { form.moreOpen = !form.moreOpen }) {
                     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
                         Text("These fields need a recent Zotero; items using them may not show in older Zotero versions or mobile apps.",
                             Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
