@@ -627,7 +627,8 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
             }
             if (searchState.open) {
                 CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
-                    cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting, onInsert = {
+                    cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting,
+                    session = session, existingCitations = project?.citations()?.flatMap { it.items }.orEmpty(), onInsert = {
                     val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
                     if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
                     else if (p != null && s != null) {

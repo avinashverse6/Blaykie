@@ -50,7 +50,7 @@ internal fun showSelectedReferences(count: Int): Boolean = count >= 2
 @Composable
 internal fun CitationForm(state: SearchState, controller: CitationSearchController, paragraph: String,
                           onCancel: () -> Unit, onSubmit: () -> Unit, onAddKey: () -> Unit,
-                          cslNote: String? = null, restriction: String? = null, inserting: Boolean = false) {
+                          cslNote: String? = null, cslPreview: String? = null, restriction: String? = null, inserting: Boolean = false) {
     val editing = state.editNumber != null
     val canSelect = state.hasKey || editing
     val selected = remember(state.results, state.selected, state.existingItems, editing) { state.selectedItems() }
@@ -148,7 +148,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                             if (details) CitationOptionFields(state, controller)
                         }
                     }
-                    if (selected.isNotEmpty()) item { CitationPreview(state, cslNote, restriction) }
+                    if (selected.isNotEmpty()) item { CitationPreview(state, cslNote, cslPreview, restriction) }
                     else if (restriction != null) item { Text(restriction, style = typography.bodySmall) }
                 }
             }
@@ -182,14 +182,14 @@ private fun CitationContext(paragraph: String, cursor: Int) {
 }
 
 @Composable
-private fun CitationPreview(state: SearchState, cslNote: String?, restriction: String?) {
+private fun CitationPreview(state: SearchState, cslNote: String?, cslPreview: String?, restriction: String?) {
     val colors = MaterialTheme.colorScheme
     val fallback = cslNote != null && state.savedOptions().needsApa
     Surface(shape = RoundedCornerShape(18.dp), color = colors.surface, border = BorderStroke(1.dp, colors.outline)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Preview", style = MaterialTheme.typography.labelMedium, color = colors.onSurfaceVariant)
             val preview = state.preview()
-            if (preview.isNotEmpty()) Text(if (cslNote != null && !fallback) cslNote else preview,
+            if (preview.isNotEmpty()) Text(if (cslNote != null && !fallback) cslPreview ?: cslNote else preview,
                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (fallback) Text("Options apply to the built-in APA style only", style = MaterialTheme.typography.bodySmall)
             if (restriction != null) Text(restriction, style = MaterialTheme.typography.bodySmall)
