@@ -67,6 +67,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), containerColor = colors.surface,
         tonalElevation = 0.dp, dragHandle = { BottomSheetDefaults.DragHandle() }) {
         BoxWithConstraints(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
+          val previewMaxHeight = maxHeight * 0.25f
           Column(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.weight(1f).fillMaxWidth().imeNestedScroll(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
@@ -157,7 +158,7 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                 }
             }
             if (canSelect && selected.isNotEmpty()) {
-                Box(Modifier.fillMaxWidth().heightIn(max = maxHeight * 0.25f)
+                Box(Modifier.fillMaxWidth().heightIn(max = previewMaxHeight)
                     .verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
                     CitationPreview(state, cslNote, cslPreview, restriction)
                 }
