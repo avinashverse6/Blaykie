@@ -211,29 +211,27 @@ private fun LibraryRootScreen(state: LibraryState, controller: LibraryController
     val title = when (library) { is ZoteroLibrary.Personal -> "My Library"; is ZoteroLibrary.Group -> library.group.name }
     val roots = remember(state.collections) { collectionTree(state.collections) }
     val tiles = libraryRootTiles(library, roots, state.publicationsAvailable, state.expandedCollections)
-    Column(Modifier.fillMaxSize()) {
-        LibraryHeader(title, onBack = { controller.back() }, onAdd = if (libraryAddVisible(state.route)) controller::addTapped else null)
-        LibrarySearch(state.query, controller::query, onSearch = { controller.openNode(BrowseNode.All, "All Items") },
-            onClear = { controller.query("") })
-        LibraryFilterChips(state, onCollections = { collectionsOpen = true }, onClearCollection = {},
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = Space.medium),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { LibraryHeader(title, onBack = { controller.back() }, onAdd = if (libraryAddVisible(state.route)) controller::addTapped else null) }
+        item { LibrarySearch(state.query, controller::query, onSearch = { controller.openNode(BrowseNode.All, "All Items") },
+            onClear = { controller.query("") }) }
+        item { LibraryFilterChips(state, onCollections = { collectionsOpen = true }, onClearCollection = {},
             onTags = { controller.openNode(BrowseNode.All, "All Items"); controller.requestTags() },
-            onClearTag = { controller.setTag(null) }, onSort = { sortOpen = true })
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = Space.large, vertical = Space.medium),
-            verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            itemsIndexed(tiles.chunked(2)) { row, pair ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                    pair.forEachIndexed { column, tile -> LibraryGridTile(tile, row * 2 + column, controller, state.expandedCollections, Modifier.weight(1f)) }
-                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                }
+            onClearTag = { controller.setTag(null) }, onSort = { sortOpen = true }) }
+        itemsIndexed(tiles.chunked(2)) { row, pair ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.large), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                pair.forEachIndexed { column, tile -> LibraryGridTile(tile, row * 2 + column, controller, state.expandedCollections, Modifier.weight(1f)) }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
-            if (state.collectionsError != null) item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(state.collectionsError, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = controller::retryCollections) { Text("Retry") }
-                }
-            } else if (!state.collectionsLoaded) item { LoadingState(Modifier.fillMaxWidth()) }
-            else if (roots.isEmpty()) item { EmptyState("No collections", Modifier.fillMaxWidth()) }
         }
+        if (state.collectionsError != null) item {
+            Row(Modifier.padding(horizontal = Space.large), verticalAlignment = Alignment.CenterVertically) {
+                Text(state.collectionsError, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                TextButton(onClick = controller::retryCollections) { Text("Retry") }
+            }
+        } else if (!state.collectionsLoaded) item { LoadingState(Modifier.fillMaxWidth()) }
+        else if (roots.isEmpty()) item { EmptyState("No collections", Modifier.fillMaxWidth()) }
     }
     if (collectionsOpen) CollectionsSheet(state, controller) { collectionsOpen = false }
     if (sortOpen) SortSheet(state, onDismiss = { sortOpen = false }, onSort = { sort, descending ->
@@ -290,43 +288,48 @@ private fun LibraryNodeScreen(state: LibraryState, controller: LibraryController
     val listState = rememberLazyListState()
     LaunchedEffect(listState, state.items.size, state.endReached, state.loadingMore) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .collect { last -> if (last >= state.items.size - 5) controller.loadMore() }
+            .collect { last -> if (last >= listState.layoutInfo.totalItemsCount - 5) controller.loadMore() }
     }
     val subcollections = remember(state.collections, route.node) {
         (route.node as? BrowseNode.Collection)?.let { node ->
             state.collections.filter { it.parentKey == node.key }.sortedBy { it.name.lowercase() }
         } ?: emptyList()
     }
-    Column(Modifier.fillMaxSize()) {
-        LibraryHeader(route.title, onBack = { controller.back() }, onAdd = if (libraryAddVisible(route)) controller::addTapped else null)
-        LibrarySearch(state.query, controller::query, controller::search, onClear = { controller.query(""); controller.search() })
-        LibraryFilterChips(state, onCollections = { collectionsOpen = true }, onClearCollection = { controller.openNode(BrowseNode.All, "All Items") },
-            onTags = { tagsOpen = true; controller.loadTags("") }, onClearTag = { controller.setTag(null) }, onSort = { sortOpen = true })
-        Row(Modifier.fillMaxWidth().padding(horizontal = Space.large).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = state.everything, onCheckedChange = controller::setEverything)
-            Spacer(Modifier.width(8.dp))
-            Text("Search everything", Modifier.weight(1f), style = typography.bodyMedium)
-            Text(if (state.descending) "↓" else "↑", color = colors.onSurfaceVariant)
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = Space.medium),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item { LibraryHeader(route.title, onBack = { controller.back() }, onAdd = if (libraryAddVisible(route)) controller::addTapped else null) }
+        item { LibrarySearch(state.query, controller::query, controller::search, onClear = { controller.query(""); controller.search() }) }
+        item { LibraryFilterChips(state, onCollections = { collectionsOpen = true }, onClearCollection = { controller.openNode(BrowseNode.All, "All Items") },
+            onTags = { tagsOpen = true; controller.loadTags("") }, onClearTag = { controller.setTag(null) }, onSort = { sortOpen = true }) }
+        item {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Space.large).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = state.everything, onCheckedChange = controller::setEverything)
+                Spacer(Modifier.width(8.dp))
+                Text("Search everything", Modifier.weight(1f), style = typography.bodyMedium)
+                Text(if (state.descending) "↓" else "↑", color = colors.onSurfaceVariant)
+            }
         }
         when {
-            state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingState() }
-            state.error != null && state.items.isEmpty() -> Column(Modifier.fillMaxSize().padding(Space.large),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Text(state.error, style = typography.bodyLarge)
-                Spacer(Modifier.height(Space.medium)); AppPrimaryButton(onClick = controller::retry) { Text("Retry") }
+            state.loading -> item { LoadingState(Modifier.fillMaxWidth()) }
+            state.error != null && state.items.isEmpty() -> item {
+                Column(Modifier.fillMaxWidth().padding(Space.large), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(state.error, style = typography.bodyLarge)
+                    Spacer(Modifier.height(Space.medium)); AppPrimaryButton(onClick = controller::retry) { Text("Retry") }
+                }
             }
-            state.items.isEmpty() && subcollections.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { EmptyState("No items") }
-            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = Space.large, vertical = Space.medium), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            state.items.isEmpty() && subcollections.isEmpty() -> item { EmptyState("No items", Modifier.fillMaxWidth()) }
+            else -> {
                 if (subcollections.isNotEmpty()) {
-                    item { Text("Subcollections", style = typography.titleSmall, fontWeight = FontWeight.Bold) }
+                    item { Text("Subcollections", Modifier.padding(horizontal = Space.large), style = typography.titleSmall, fontWeight = FontWeight.Bold) }
                     items(subcollections, key = { "sub-" + it.key }) { collection ->
-                        LibraryRow(collection.name, collection.numItems?.let { "$it items" }) { controller.openCollection(collection) }
+                        Box(Modifier.padding(horizontal = Space.large)) {
+                            LibraryRow(collection.name, collection.numItems?.let { "$it items" }) { controller.openCollection(collection) }
+                        }
                     }
-                    if (state.items.isNotEmpty()) item { Text("Items", style = typography.titleSmall, fontWeight = FontWeight.Bold) }
+                    if (state.items.isNotEmpty()) item { Text("Items", Modifier.padding(horizontal = Space.large), style = typography.titleSmall, fontWeight = FontWeight.Bold) }
                 }
                 items(state.items, key = { it.key }) { item ->
-                    OutlinedCard(onClick = { controller.selectItem(item) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+                    OutlinedCard(onClick = { controller.selectItem(item) }, modifier = Modifier.fillMaxWidth().padding(horizontal = Space.large), shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.outlinedCardColors(containerColor = colors.surface), border = BorderStroke(1.dp, colors.outline)) {
                         Column(Modifier.padding(14.dp)) {
                             ItemCardText(item)
@@ -338,7 +341,7 @@ private fun LibraryNodeScreen(state: LibraryState, controller: LibraryController
                 if (state.items.isEmpty() && subcollections.isNotEmpty()) item { EmptyState("No items", Modifier.fillMaxWidth()) }
                 if (state.loadingMore) item { LoadingState(Modifier.fillMaxWidth()) }
                 if (state.error != null && state.items.isNotEmpty()) item {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.padding(horizontal = Space.large), verticalAlignment = Alignment.CenterVertically) {
                         Text(state.error, Modifier.weight(1f), style = typography.bodySmall)
                         TextButton(onClick = controller::loadMore) { Text("Retry") }
                     }
