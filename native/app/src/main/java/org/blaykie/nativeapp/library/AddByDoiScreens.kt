@@ -1,18 +1,27 @@
 package org.blaykie.nativeapp.library
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.AppPrimaryButton
 import org.blaykie.nativeapp.BottomSheetShape
+import org.blaykie.nativeapp.BlaykieCatLogo
 import org.blaykie.nativeapp.R
 import org.blaykie.nativeapp.Space
 import org.blaykie.nativeapp.crossref.DraftCreator
@@ -23,20 +32,24 @@ import org.blaykie.nativeapp.crossref.supportedItemTypes
 @Composable
 internal fun PermissionSheet(state: LibraryState, onAllowEditing: () -> Unit, onAdvancedKey: () -> Unit,
                              onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape) {
-        Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large),
-            verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-            Text("Add items to Zotero", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (state.permissionManualKey) {
-                Text("Your key does not allow editing. Create a key with 'Allow write access' on zotero.org, or sign in with Zotero.",
-                    style = MaterialTheme.typography.bodyLarge)
-                AppPrimaryButton(onClick = onAdvancedKey, modifier = Modifier.fillMaxWidth()) { Text("Open the key screen") }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Not now") }
-            } else {
-                Text("To add items, Blaykie needs permission to edit your Zotero library. You can change or revoke this any time on zotero.org.",
-                    style = MaterialTheme.typography.bodyLarge)
-                AppPrimaryButton(onClick = onAllowEditing, modifier = Modifier.fillMaxWidth()) { Text("Allow editing") }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Not now") }
+    val colors = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.surface, tonalElevation = 0.dp) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
+            AddItemHeader("Add items to Zotero", onDismiss)
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                BlaykieCatLogo(56.dp)
+                Text("Add items to Zotero", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                Text(if (state.permissionManualKey)
+                    "Your key does not allow editing. Create a key with 'Allow write access' on zotero.org, or sign in with Zotero."
+                    else "To add items, Blaykie needs permission to edit your Zotero library. You can change or revoke this any time on zotero.org.",
+                    style = MaterialTheme.typography.bodyLarge, color = colors.onSurfaceVariant)
+                Button(onClick = if (state.permissionManualKey) onAdvancedKey else onAllowEditing,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp), shape = CircleShape) {
+                    Text(if (state.permissionManualKey) "Open the key screen" else "Allow editing")
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Not now") }
             }
         }
     }
@@ -81,68 +94,80 @@ private fun AddMenuRow(title: String, hint: String, icon: Int, onClick: () -> Un
 @Composable
 internal fun AddByDoiSheet(state: LibraryState, controller: LibraryController, onDismiss: () -> Unit) {
     val add = state.add
-    ModalBottomSheet(onDismissRequest = { if (!add.saving) onDismiss() }, shape = BottomSheetShape) {
-        Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large)) {
+    fun close() { if (!add.saving) onDismiss() }
+    ModalBottomSheet(onDismissRequest = { close() }, shape = BottomSheetShape,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
+            AddItemHeader(when { add.savedKey != null -> "Added to My Library"; add.draft != null -> "Review and save"; else -> "Add by DOI" }, { close() })
             when {
-                add.savedKey != null -> SavedContent(state, controller)
-                add.draft != null -> ReviewContent(state, controller)
-                else -> EnterDoiContent(state, controller)
+                add.savedKey != null -> AddItemSuccess(add.savedKey, add.savedItem, controller::viewSavedItem, controller::addAnother, controller::closeAdd)
+                add.draft != null -> ReviewContent(state, controller, onCancel = { close() })
+                else -> EnterDoiContent(state, controller, onCancel = { close() })
             }
         }
     }
 }
 
 @Composable
-private fun EnterDoiContent(state: LibraryState, controller: LibraryController) {
+private fun EnterDoiContent(state: LibraryState, controller: LibraryController, onCancel: () -> Unit) {
     val add = state.add
-    Column(verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-        Text("Add by DOI", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("Blaykie will look up this DOI at Crossref (api.crossref.org). Only the DOI is sent.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(value = add.doi, onValueChange = controller::setDoi,
-            label = { Text("DOI or doi.org link") }, singleLine = true, shape = CircleShape,
-            modifier = Modifier.fillMaxWidth())
-        if (add.error != null) Text(add.error, color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodyMedium)
-        AppPrimaryButton(onClick = controller::fetchDetails, enabled = add.doi.isNotBlank() && !add.fetching,
-            modifier = Modifier.fillMaxWidth()) {
-            Text(if (add.fetching) "Looking up…" else "Fetch details")
+    val clipboard = LocalClipboardManager.current
+    val colors = MaterialTheme.colorScheme
+    Column(Modifier.fillMaxSize()) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(value = add.doi, onValueChange = controller::setDoi,
+                label = { Text("DOI or doi.org link") }, singleLine = true, shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+                trailingIcon = if (add.doi.isNotEmpty()) { { IconButton(onClick = { controller.setDoi("") }) {
+                    Icon(painterResource(R.drawable.ic_close), "Clear DOI")
+                } } } else null)
+            TextButton(onClick = { clipboard.getText()?.text?.let(controller::setDoi) }, modifier = Modifier.heightIn(min = 48.dp)) { Text("Paste") }
+            Surface(shape = RoundedCornerShape(16.dp), color = colors.primaryContainer, contentColor = colors.onPrimaryContainer) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("ⓘ", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Blaykie will look up this DOI at Crossref (api.crossref.org). Only the DOI is sent.",
+                        style = MaterialTheme.typography.bodySmall, color = colors.onPrimaryContainer)
+                }
+            }
+            if (add.error != null) AddItemError(add.error, controller::fetchDetails)
         }
-        if (add.fetching) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        AddItemFooter("Cancel", onCancel, "Fetch details", controller::fetchDetails, add.doi.isNotBlank(), add.fetching)
     }
 }
 
+private val reviewCreatorsSaver = listSaver<List<DraftCreator>, String>(
+    save = { rows -> rows.flatMap { listOf(it.firstName, it.lastName, it.name, it.role) } },
+    restore = { values -> values.chunked(4).filter { it.size == 4 }.map { DraftCreator(it[0], it[1], it[2], it[3]) } },
+)
+
 @Composable
-private fun SavedContent(state: LibraryState, controller: LibraryController) {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.medium)) {
-        Text("Added to My Library", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        AppPrimaryButton(onClick = controller::viewSavedItem, modifier = Modifier.fillMaxWidth()) { Text("View item") }
-        TextButton(onClick = controller::addAnother, modifier = Modifier.fillMaxWidth()) { Text("Add another") }
-        TextButton(onClick = controller::closeAdd, modifier = Modifier.fillMaxWidth()) { Text("Done") }
-    }
+private fun ReviewField(value: String, label: String, minLines: Int = 1, onChange: (String) -> Unit) {
+    AddFormField(value, label, onChange, minLines = minLines)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReviewContent(state: LibraryState, controller: LibraryController) {
+private fun ReviewContent(state: LibraryState, controller: LibraryController, onCancel: () -> Unit) {
     val add = state.add
     val base = add.draft ?: return
     val f = base.fields
-    var itemType by remember(base) { mutableStateOf(base.itemType) }
-    var title by remember(base) { mutableStateOf(f["title"].orEmpty()) }
-    var date by remember(base) { mutableStateOf(f["date"].orEmpty()) }
-    var publication by remember(base) { mutableStateOf(f["publicationTitle"].orEmpty()) }
-    var volume by remember(base) { mutableStateOf(f["volume"].orEmpty()) }
-    var issue by remember(base) { mutableStateOf(f["issue"].orEmpty()) }
-    var pages by remember(base) { mutableStateOf(f["pages"].orEmpty()) }
-    var doi by remember(base) { mutableStateOf(f["DOI"].orEmpty()) }
-    var url by remember(base) { mutableStateOf(f["url"].orEmpty()) }
-    var publisher by remember(base) { mutableStateOf(f["publisher"].orEmpty()) }
-    var abstract by remember(base) { mutableStateOf(f["abstractNote"].orEmpty()) }
-    var abstractOpen by remember(base) { mutableStateOf(false) }
+    var itemType by rememberSaveable(base) { mutableStateOf(base.itemType) }
+    var title by rememberSaveable(base) { mutableStateOf(f["title"].orEmpty()) }
+    var date by rememberSaveable(base) { mutableStateOf(f["date"].orEmpty()) }
+    var publication by rememberSaveable(base) { mutableStateOf(f["publicationTitle"].orEmpty()) }
+    var volume by rememberSaveable(base) { mutableStateOf(f["volume"].orEmpty()) }
+    var issue by rememberSaveable(base) { mutableStateOf(f["issue"].orEmpty()) }
+    var pages by rememberSaveable(base) { mutableStateOf(f["pages"].orEmpty()) }
+    var doi by rememberSaveable(base) { mutableStateOf(f["DOI"].orEmpty()) }
+    var url by rememberSaveable(base) { mutableStateOf(f["url"].orEmpty()) }
+    var publisher by rememberSaveable(base) { mutableStateOf(f["publisher"].orEmpty()) }
+    var abstract by rememberSaveable(base) { mutableStateOf(f["abstractNote"].orEmpty()) }
+    var abstractOpen by rememberSaveable(base) { mutableStateOf(false) }
     var typeMenu by remember { mutableStateOf(false) }
-    val creators = remember(base) { mutableStateListOf<DraftCreator>().apply { addAll(base.creators) } }
-    var inCollection by remember(base) { mutableStateOf(true) }
+    var creators by rememberSaveable(base, stateSaver = reviewCreatorsSaver) { mutableStateOf(base.creators.toList()) }
+    var inCollection by rememberSaveable(base) { mutableStateOf(true) }
     val collectionAvailable = add.collectionKey != null
     fun edited(): ItemDraft {
         val fields = LinkedHashMap(base.fields)
@@ -152,92 +177,67 @@ private fun ReviewContent(state: LibraryState, controller: LibraryController) {
         set("DOI", doi); set("url", url); set("publisher", publisher); set("abstractNote", abstract)
         return ItemDraft(itemType, fields, creators.toMutableList(), typeGuessed = false)
     }
-    LazyColumn(Modifier.heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(Space.small)) {
-        item {
-            Text("Review and save", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            if (base.typeGuessed) Text("Crossref did not give a known type, so this is treated as a journal article. You can change the type below.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        item {
-            Box {
-                OutlinedButton(onClick = { typeMenu = true }, shape = CircleShape) { Text(typeLabel(itemType)) }
-                DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
-                    supportedItemTypes.forEach { type ->
-                        DropdownMenuItem(text = { Text(typeLabel(type)) }, onClick = { itemType = type; typeMenu = false })
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (base.typeGuessed) item { Text("Crossref did not give a known type, so this is treated as a journal article. You can change the type below.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item {
+                AddItemSection("Basics") {
+                    Box {
+                        OutlinedButton(onClick = { typeMenu = true }, shape = CircleShape, modifier = Modifier.heightIn(min = 48.dp)) { Text(typeLabel(itemType)) }
+                        DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
+                            supportedItemTypes.forEach { type -> DropdownMenuItem(text = { Text(typeLabel(type)) }, onClick = { itemType = type; typeMenu = false }) }
+                        }
+                    }
+                    ReviewField(title, "Title") { title = it }
+                }
+            }
+            item {
+                AddItemSection("Creators") {
+                    creators.forEachIndexed { index, creator ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(creator.displayName(), { value ->
+                                creators = creators.toMutableList().apply { this[index] = creator.copy(firstName = "", lastName = "", name = value) }
+                            }, label = { Text("Creator ${index + 1} (${creator.role})") }, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f).heightIn(min = 56.dp))
+                            IconButton(onClick = { creators = creators.toMutableList().apply { removeAt(index) } }) { Icon(painterResource(R.drawable.ic_close), "Remove creator") }
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { creators = creators + DraftCreator(role = "author") }) { Text("Add author") }
+                        TextButton(onClick = { creators = creators + DraftCreator(role = "editor") }) { Text("Add editor") }
                     }
                 }
             }
-        }
-        item { OutlinedTextField(value = title, onValueChange = { v: String -> title = v }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth()) }
-        itemsIndexed(creators) { index, creator ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(creator.displayName(), { value ->
-                    creators[index] = creator.copy(firstName = "", lastName = "", name = value)
-                }, label = { Text("Creator ${index + 1} (${creator.role})") }, modifier = Modifier.weight(1f))
-                IconButton(onClick = { creators.removeAt(index) }) {
-                    Icon(painterResource(R.drawable.ic_close), "Remove creator")
+            item {
+                AddItemSection("Details") {
+                    ReviewField(date, "Date") { date = it }
+                    ReviewField(volume, "Volume") { volume = it }
+                    ReviewField(issue, "Issue") { issue = it }
+                    ReviewField(publication, "Publication") { publication = it }
+                    ReviewField(pages, "Pages") { pages = it }
+                    ReviewField(doi, "DOI") { doi = it }
+                    ReviewField(url, "URL") { url = it }
+                    ReviewField(publisher, "Publisher") { publisher = it }
+                    TextButton(onClick = { abstractOpen = !abstractOpen }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (abstractOpen) "Hide abstract ▴" else "Abstract ▾") }
+                    if (abstractOpen) ReviewField(abstract, "Abstract", 3) { abstract = it }
                 }
             }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { creators += DraftCreator(role = "author") }) { Text("Add author") }
-                TextButton(onClick = { creators += DraftCreator(role = "editor") }) { Text("Add editor") }
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = date, onValueChange = { v: String -> date = v }, label = { Text("Date") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = volume, onValueChange = { v: String -> volume = v }, label = { Text("Volume") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = issue, onValueChange = { v: String -> issue = v }, label = { Text("Issue") }, modifier = Modifier.weight(1f))
-            }
-        }
-        item { OutlinedTextField(value = publication, onValueChange = { v: String -> publication = v }, label = { Text("Publication") }, modifier = Modifier.fillMaxWidth()) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = pages, onValueChange = { v: String -> pages = v }, label = { Text("Pages") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = doi, onValueChange = { v: String -> doi = v }, label = { Text("DOI") }, modifier = Modifier.weight(1f))
-            }
-        }
-        item { OutlinedTextField(value = url, onValueChange = { v: String -> url = v }, label = { Text("URL") }, modifier = Modifier.fillMaxWidth()) }
-        item { OutlinedTextField(value = publisher, onValueChange = { v: String -> publisher = v }, label = { Text("Publisher") }, modifier = Modifier.fillMaxWidth()) }
-        item {
-            TextButton(onClick = { abstractOpen = !abstractOpen }) {
-                Text(if (abstractOpen) "Hide abstract ▴" else "Abstract ▾")
-            }
-            if (abstractOpen) OutlinedTextField(value = abstract, onValueChange = { v: String -> abstract = v }, label = { Text("Abstract") },
-                modifier = Modifier.fillMaxWidth(), minLines = 3)
-        }
-        item {
-            Text(if (collectionAvailable && inCollection) "Will be saved to My Library, in collection ${add.collectionName}"
-                else "Will be saved to My Library", style = MaterialTheme.typography.bodyMedium)
-            if (collectionAvailable) Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = inCollection, onCheckedChange = { inCollection = it })
-                Spacer(Modifier.width(4.dp))
-                Text("Add to this collection", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-        if (add.duplicateTitle != null) item {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text("This ${if (add.duplicateViaIsbn) "ISBN" else "DOI"} is already in your library: ${add.duplicateTitle}",
-                    color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppPrimaryButton(onClick = { controller.confirmAddAnyway(edited(), inCollection && collectionAvailable) }) { Text("Add anyway") }
-                    TextButton(onClick = controller::cancelDuplicate) { Text("Cancel") }
+            item {
+                Column {
+                    if (title.isBlank()) Text("Title is needed to save.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (collectionAvailable && inCollection) "Will be saved to My Library, in collection ${add.collectionName}"
+                        else "Will be saved to My Library", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (collectionAvailable) Row(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .toggleable(value = inCollection, role = Role.Switch, onValueChange = { inCollection = it }), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Add to this collection", Modifier.weight(1f)); Switch(checked = inCollection, onCheckedChange = null)
+                    }
                 }
             }
+            if (add.error != null) item { AddItemError(add.error) { controller.saveDraft(edited(), inCollection && collectionAvailable) } }
         }
-        if (add.error != null) item {
-            Column(verticalArrangement = Arrangement.spacedBy(Space.small)) {
-                Text(add.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-                TextButton(onClick = { controller.saveDraft(edited(), inCollection && collectionAvailable) }) { Text("Retry") }
-            }
-        }
-        item {
-            AppPrimaryButton(onClick = { controller.saveDraft(edited(), inCollection && collectionAvailable) },
-                enabled = title.isNotBlank() && !add.saving, modifier = Modifier.fillMaxWidth()) {
-                Text(if (add.saving) "Saving…" else "Save to Zotero")
-            }
-        }
+        AddItemFooter("Cancel", onCancel, "Save to Zotero", { controller.saveDraft(edited(), inCollection && collectionAvailable) },
+            addFormSaveEnabled(title.isNotBlank(), add.saving), add.saving)
     }
+    if (add.duplicateTitle != null) AddDuplicateDialog(add.duplicateTitle, add.duplicateViaIsbn,
+        onConfirm = { controller.confirmAddAnyway(edited(), inCollection && collectionAvailable) }, onCancel = controller::cancelDuplicate)
 }
