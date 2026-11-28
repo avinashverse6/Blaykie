@@ -207,6 +207,10 @@ internal class LibraryController(private val accounts: AccountStore,
     fun start(initialGroupId: Long) {
         if (mutable.value.started) return
         mutable.value = mutable.value.copy(started = true)
+        refreshAccount()
+    }
+
+    fun refreshAccount() {
         scope.launch {
             val present = withContext(Dispatchers.IO) { accounts.read() is AccountRead.Present }
             mutable.value = mutable.value.copy(signedIn = present)

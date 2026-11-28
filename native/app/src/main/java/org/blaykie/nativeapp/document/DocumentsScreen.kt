@@ -17,6 +17,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.blaykie.nativeapp.*
+import org.blaykie.nativeapp.R
 import java.text.DateFormat
 import java.util.Calendar
 import java.util.Date

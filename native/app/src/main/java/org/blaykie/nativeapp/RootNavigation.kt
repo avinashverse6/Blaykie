@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import org.blaykie.nativeapp.account.AccountStore
+import org.blaykie.nativeapp.account.AccountSummary
 import org.blaykie.nativeapp.library.LibraryController
 
 internal enum class RootTab(val label: String) { DOCUMENTS("Documents"), LIBRARY("Library"), SETTINGS("Settings") }
@@ -35,16 +36,20 @@ internal fun showRootNavigation(screen: String, keyboardOpen: Boolean, libraryMo
 internal class LibraryNavigationModel(private val accountStore: AccountStore) : ViewModel() {
     var controller by mutableStateOf(LibraryController(accountStore))
         private set
-    private var knownUser: Long? = null
+    private var knownAccount: AccountSummary? = null
     private var initialized = false
 
-    fun accountChanged(userId: Long?) {
-        if (initialized && knownUser != userId) {
-            controller.close()
-            controller = LibraryController(accountStore)
+    fun accountChanged(account: AccountSummary?) {
+        if (initialized && knownAccount != account) {
+            if (knownAccount?.userId != account?.userId) {
+                controller.close()
+                controller = LibraryController(accountStore)
+            } else if (controller.state.value.started) {
+                controller.refreshAccount()
+            }
         }
         initialized = true
-        knownUser = userId
+        knownAccount = account
     }
     override fun onCleared() { controller.close() }
 

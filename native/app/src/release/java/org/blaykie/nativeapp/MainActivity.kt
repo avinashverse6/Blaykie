@@ -183,7 +183,7 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
     val libraryModel = remember(context, accountStore) {
         ViewModelProvider(context as ComponentActivity, LibraryNavigationModel.Factory(accountStore))[LibraryNavigationModel::class.java]
     }
-    libraryModel.accountChanged(accountState.account?.userId)
+    libraryModel.accountChanged(accountState.account)
     val libraryController = libraryModel.controller
     val documents = remember(context) { DocumentRepository(context) }
     var documentRows by remember { mutableStateOf<List<StoredDocument>>(emptyList()) }
