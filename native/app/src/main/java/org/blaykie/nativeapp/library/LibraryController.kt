@@ -342,10 +342,10 @@ internal class LibraryController(private val accounts: AccountStore,
     fun setTag(tag: String?) { mutable.value = mutable.value.copy(tag = tag); loadFirstPage() }
 
     private fun queryKey(state: LibraryState): String = listOf(state.library?.journalValue ?: "?", state.node?.cacheKey ?: "?",
-        state.query.trim(), state.everything, state.tag ?: "", state.sort.name, state.descending).joinToString("|")
+        libraryQueryForRequest(state.query), state.everything, state.tag ?: "", state.sort.name, state.descending).joinToString("|")
 
     private fun currentQuery(state: LibraryState, start: Int) = BrowseQuery(state.node ?: BrowseNode.All,
-        state.query.trim(), state.everything, state.tag, state.sort, state.descending, start)
+        libraryQueryForRequest(state.query), state.everything, state.tag, state.sort, state.descending, start)
 
     fun loadFirstPage() {
         val route = mutable.value.route as? LibraryRoute.Node ?: return

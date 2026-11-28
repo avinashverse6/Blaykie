@@ -45,15 +45,33 @@ internal fun PermissionSheet(state: LibraryState, onAllowEditing: () -> Unit, on
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AddMenuSheet(controller: LibraryController, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape) {
-        Column(Modifier.padding(horizontal = Space.large).padding(bottom = Space.large),
-            verticalArrangement = Arrangement.spacedBy(Space.medium)) {
+    val colors = MaterialTheme.colorScheme
+    ModalBottomSheet(onDismissRequest = onDismiss, shape = BottomSheetShape, containerColor = colors.surface, tonalElevation = 0.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = Space.large).padding(bottom = Space.large),
+            verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Add to My Library", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            TextButton(onClick = { controller.openAddByDoi() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Add by DOI", style = MaterialTheme.typography.bodyLarge)
+            AddMenuRow("Add by DOI", "Look up a reference using its DOI", R.drawable.ic_search, controller::openAddByDoi)
+            AddMenuRow("Add manually", "Enter the reference details yourself", R.drawable.ic_document_plus, controller::openAddManually)
+        }
+    }
+}
+
+@Composable
+private fun AddMenuRow(title: String, hint: String, icon: Int, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    OutlinedCard(onClick = onClick, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = colors.surface),
+        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline)) {
+        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(48.dp), shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                color = colors.primaryContainer, contentColor = colors.onPrimaryContainer) {
+                Box(contentAlignment = Alignment.Center) { Icon(painterResource(icon), null, Modifier.size(24.dp)) }
             }
-            TextButton(onClick = { controller.openAddManually() }, modifier = Modifier.fillMaxWidth()) {
-                Text("Add manually", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(hint, style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant)
             }
         }
     }
