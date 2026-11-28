@@ -26,6 +26,7 @@ import org.blaykie.nativeapp.zotero.ZoteroItem
 import org.blaykie.nativeapp.zotero.ZoteroLibrary
 import org.blaykie.nativeapp.zotero.ZoteroResult
 
+internal fun searchQueryForRequest(query: String): String = query.trim()
 internal fun hasUsableKey(read: AccountRead): Boolean = read is AccountRead.Present
 internal fun insertionPoint(start: Int, end: Int, length: Int): Int = maxOf(start, end).coerceIn(0, length)
 internal fun chosenItems(results: List<ZoteroItem>, selected: Set<Int>): List<CitationItem> =
@@ -62,7 +63,7 @@ internal data class SearchState(
     fun itemLibraries(): List<String> = if (editNumber != null) emptyList()
         else List(selectedItems().size) { library.journalValue }
     fun savedOptions(): CitationOptions = options.normalized(style, page)
-    fun preview(): String = CitationFormatting.citationText(selectedItems(), style, page, prefix, options = savedOptions())
+    fun preview(): String = CitationFormatting.citationText(selectedItems(), style, page.trim(), prefix.trim(), options = savedOptions())
 }
 
 /** Retains only search data across rotation. Credentials are read for each request, never in state. */
@@ -152,7 +153,7 @@ internal class CitationSearchController(private val accounts: AccountStore) : Vi
     fun message(value: String) { mutable.value = mutable.value.copy(message = value) }
     fun showMore() { mutable.value = mutable.value.copy(shown = (mutable.value.shown + 20).coerceAtMost(mutable.value.results.size)) }
     fun search() {
-        val query = mutable.value.query.trim()
+        val query = searchQueryForRequest(mutable.value.query)
         if (query.isEmpty()) { message("Type something to search."); return }
         client?.cancel(); job?.cancel()
         val current = ++generation

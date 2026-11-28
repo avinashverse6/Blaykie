@@ -598,80 +598,83 @@ private fun AppScreens(context: Context, settingsStore: SettingsStore, settings:
                 }
             }
         }
-        Screen.EDITOR -> if (searchState.open) {
-            CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
-                cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting, onInsert = {
-                val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
-                if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
-                else if (p != null && s != null) {
-                    fun insert(preview: String?, fallback: Boolean) {
-                        val current = session
-                        if (current == null || current.sourceName != s.sourceName || project !== p || citationSearch.state.value != snapshot) {
-                            if (citationSearch.state.value.open) citationSearch.message("Selection changed. Please try again.")
-                            return
-                        }
-                        try {
-                            val edit = snapshot.editNumber
-                            val page = snapshot.page.trim(); val prefix = snapshot.prefix.trim()
-                            val options = snapshot.savedOptions()
-                            val citation = if (edit != null) p.editCitation(snapshot.block, edit, snapshot.style, page, prefix, options, preview)
-                                else {
-                                    p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, page, prefix, preview, options)
-                                    p.citations().last().text
-                                }
-                            val operation = EditOperation(block = snapshot.block, type = if (edit == null) "citation" else "editCitation",
-                                position = edit ?: snapshot.position, items = if (edit == null) chosen else emptyList(), itemLibraries = if (edit == null) snapshot.itemLibraries() else emptyList(),
-                                style = snapshot.style, page = page, prefix = prefix, previewText = preview, citationOptions = options)
-                            if (!persist(current.copy(edits = current.edits + operation, draft = null))) p.undo()
-                            else {
-                                citationSearch.close(); mobile.changed(snapshot.block); mobile.focusParagraph(snapshot.block); navigate(Screen.DOCUMENT)
-                                message = (if (edit == null) "Citation added: " else "Citation updated: ") + citation.take(50) + when {
-                                    options.needsApa && citationUsesCsl(current, settings.customCitationStyles) -> "\nOptions apply to the built-in APA style only"
-                                    else -> citationInsertionNote(fallback, preview != null)
-                                }
+        Screen.EDITOR -> Box(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                ParagraphEditorTopBar(session?.draft?.block) { if (finishEditor()) navigate(Screen.DOCUMENT) }
+                if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
+                ParagraphTextField(value = field, onValueChange = { next ->
+                    // Normalize only newly inserted line breaks and tabs, not existing document content.
+                    val old = field.text; val fresh = next.text
+                    var prefix = 0
+                    while (prefix < old.length && prefix < fresh.length && old[prefix] == fresh[prefix]) prefix++
+                    var suffix = 0
+                    while (suffix < old.length - prefix && suffix < fresh.length - prefix && old[old.lastIndex - suffix] == fresh[fresh.lastIndex - suffix]) suffix++
+                    val inserted = fresh.substring(prefix, fresh.length - suffix).replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+                    val text = fresh.substring(0, prefix) + inserted + fresh.substring(fresh.length - suffix)
+                    field = if (fresh == text) next else next.copy(text = text, selection = androidx.compose.ui.text.TextRange(next.selection.start.coerceAtMost(text.length), next.selection.end.coerceAtMost(text.length)), composition = null)
+                    selectionBlock = session?.draft?.block ?: -1
+                    selectionStart = field.selection.start; selectionEnd = field.selection.end
+                    if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
+                }, modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp))
+                ParagraphEditorActions(onInsert = {
+                    val draft = session?.draft
+                    val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
+                    if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position, activeId?.let { documents.load(it)?.state?.citationLibraryGroupId } ?: 0L)
+                }, onUndo = {
+                    val currentBlock = session?.draft?.block
+                    if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
+                })
+            }
+            if (searchState.open) {
+                CitationSearchScreen(searchState, citationSearch, paragraph = field.text, onCancel = { citationSearch.close() }, onAddKey = { account.openKey(false) },
+                    cslSelected = citationUsesCsl(session, settings.customCitationStyles), restriction = citationOptionRestriction(context, session, searchState, settings.customCitationStyles), inserting = inserting, onInsert = {
+                    val p = project; val s = session; val snapshot = searchState; val chosen = snapshot.selectedItems()
+                    if (chosen.isEmpty()) citationSearch.message("Select a reference first.")
+                    else if (p != null && s != null) {
+                        fun insert(preview: String?, fallback: Boolean) {
+                            val current = session
+                            if (current == null || current.sourceName != s.sourceName || project !== p || citationSearch.state.value != snapshot) {
+                                if (citationSearch.state.value.open) citationSearch.message("Selection changed. Please try again.")
+                                return
                             }
-                        } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
-                        catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
-                    }
-                    if (!citationUsesCsl(s, settings.customCitationStyles) || snapshot.savedOptions().needsApa) insert(null, false)
-                    else if (!inserting && citationOptionRestriction(context, s, snapshot, settings.customCitationStyles) == null) {
-                        inserting = true
-                        scope.launch {
                             try {
-                                val existing = p.citations().flatMap { it.items }
-                                val preview = renderCitationPreview(context, s, snapshot, existing + chosen, latestCustomStyles)
-                                if (latestCustomStyles) insert(preview, preview == null)
-                                else if (citationSearch.state.value.open) citationSearch.message("Custom citation styles are off. Please try again.")
-                            } finally { inserting = false }
+                                val edit = snapshot.editNumber
+                                val page = snapshot.page.trim(); val prefix = snapshot.prefix.trim()
+                                val options = snapshot.savedOptions()
+                                val citation = if (edit != null) p.editCitation(snapshot.block, edit, snapshot.style, page, prefix, options, preview)
+                                    else {
+                                        p.insertCitation(snapshot.block, snapshot.position, snapshot.position, chosen, snapshot.style, page, prefix, preview, options)
+                                        p.citations().last().text
+                                    }
+                                val operation = EditOperation(block = snapshot.block, type = if (edit == null) "citation" else "editCitation",
+                                    position = edit ?: snapshot.position, items = if (edit == null) chosen else emptyList(), itemLibraries = if (edit == null) snapshot.itemLibraries() else emptyList(),
+                                    style = snapshot.style, page = page, prefix = prefix, previewText = preview, citationOptions = options)
+                                if (!persist(current.copy(edits = current.edits + operation, draft = null))) p.undo()
+                                else {
+                                    citationSearch.close(); mobile.changed(snapshot.block); mobile.focusParagraph(snapshot.block); navigate(Screen.DOCUMENT)
+                                    message = (if (edit == null) "Citation added: " else "Citation updated: ") + citation.take(50) + when {
+                                        options.needsApa && citationUsesCsl(current, settings.customCitationStyles) -> "\nOptions apply to the built-in APA style only"
+                                        else -> citationInsertionNote(fallback, preview != null)
+                                    }
+                                }
+                            } catch (error: NotEditable) { citationSearch.message(error.message?.take(100) ?: "This spot is protected.") }
+                            catch (_: IllegalArgumentException) { citationSearch.message("Citation could not be inserted.") }
+                        }
+                        if (!citationUsesCsl(s, settings.customCitationStyles) || snapshot.savedOptions().needsApa) insert(null, false)
+                        else if (!inserting && citationOptionRestriction(context, s, snapshot, settings.customCitationStyles) == null) {
+                            inserting = true
+                            scope.launch {
+                                try {
+                                    val existing = p.citations().flatMap { it.items }
+                                    val preview = renderCitationPreview(context, s, snapshot, existing + chosen, latestCustomStyles)
+                                    if (latestCustomStyles) insert(preview, preview == null)
+                                    else if (citationSearch.state.value.open) citationSearch.message("Custom citation styles are off. Please try again.")
+                                } finally { inserting = false }
+                            }
                         }
                     }
-                }
-            })
-        } else Column(Modifier.fillMaxSize()) {
-            ParagraphEditorTopBar(session?.draft?.block) { if (finishEditor()) navigate(Screen.DOCUMENT) }
-            if (message.isNotEmpty()) DocumentTonalBanner { AppErrorState(message) }
-            ParagraphTextField(value = field, onValueChange = { next ->
-                // Normalize only newly inserted line breaks and tabs, not existing document content.
-                val old = field.text; val fresh = next.text
-                var prefix = 0
-                while (prefix < old.length && prefix < fresh.length && old[prefix] == fresh[prefix]) prefix++
-                var suffix = 0
-                while (suffix < old.length - prefix && suffix < fresh.length - prefix && old[old.lastIndex - suffix] == fresh[fresh.lastIndex - suffix]) suffix++
-                val inserted = fresh.substring(prefix, fresh.length - suffix).replace("\r\n", " ").replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
-                val text = fresh.substring(0, prefix) + inserted + fresh.substring(fresh.length - suffix)
-                field = if (fresh == text) next else next.copy(text = text, selection = androidx.compose.ui.text.TextRange(next.selection.start.coerceAtMost(text.length), next.selection.end.coerceAtMost(text.length)), composition = null)
-                selectionBlock = session?.draft?.block ?: -1
-                selectionStart = field.selection.start; selectionEnd = field.selection.end
-                if (text != old) session?.draft?.let { draft -> session?.let { persist(it.copy(draft = draft.copy(text = text))) } }
-            }, modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 16.dp))
-            ParagraphEditorActions(onInsert = {
-                val draft = session?.draft
-                val position = insertionPoint(field.selection.start, field.selection.end, field.text.length)
-                if (draft != null && syncEditor(true)) citationSearch.open(draft.block, position, activeId?.let { documents.load(it)?.state?.citationLibraryGroupId } ?: 0L)
-            }, onUndo = {
-                val currentBlock = session?.draft?.block
-                if (currentBlock != null && syncEditor(true)) undoSession(currentBlock)
-            })
+                })
+            }
         }
         Screen.BIBLIOGRAPHY -> {
             val p = project
