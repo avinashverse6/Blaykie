@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.InlineTextContent
@@ -45,6 +46,9 @@ internal fun citationSubmitLabel(editing: Boolean) = if (editing) "Save" else "I
 internal fun citationSubmitEnabled(selectedCount: Int, loading: Boolean, inserting: Boolean, restricted: Boolean): Boolean =
     selectedCount > 0 && !loading && !inserting && !restricted
 internal fun showSelectedReferences(count: Int): Boolean = count >= 2
+// Do not truncate shaped Hindi or Gujarati words or their combining marks.
+internal fun citationTitleMaxLines(title: String): Int =
+    if (title.any { it in '\u0900'..'\u097F' || it in '\u0A80'..'\u0AFF' }) Int.MAX_VALUE else 3
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -62,7 +66,8 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
     ModalBottomSheet(onDismissRequest = onCancel, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp), containerColor = colors.surface,
         tonalElevation = 0.dp, dragHandle = { BottomSheetDefaults.DragHandle() }) {
-        Column(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
+        BoxWithConstraints(Modifier.fillMaxWidth().fillMaxHeight(0.94f).imePadding()) {
+          Column(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.weight(1f).fillMaxWidth().imeNestedScroll(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -148,11 +153,17 @@ internal fun CitationForm(state: SearchState, controller: CitationSearchControll
                             if (details) CitationOptionFields(state, controller)
                         }
                     }
-                    if (selected.isNotEmpty()) item { CitationPreview(state, cslNote, cslPreview, restriction) }
-                    else if (restriction != null) item { Text(restriction, style = typography.bodySmall) }
+                    if (selected.isEmpty() && restriction != null) item { Text(restriction, style = typography.bodySmall) }
+                }
+            }
+            if (canSelect && selected.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth().heightIn(max = maxHeight * 0.25f)
+                    .verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 10.dp)) {
+                    CitationPreview(state, cslNote, cslPreview, restriction)
                 }
             }
             CitationActions(editing, citationSubmitEnabled(selected.size, state.loading, inserting, restriction != null), onCancel, onSubmit)
+          }
         }
     }
 }
@@ -266,7 +277,7 @@ private fun ReferenceText(item: CitationItem) {
     val authors = item.authors.joinToString(", ") { it.last }.ifBlank { "Unknown author" }
     val venue = item.publicationTitle.ifBlank { item.publisher.ifBlank { item.bookTitle } }
     Text(item.title.ifBlank { "[No title]" }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
-        maxLines = 3, overflow = TextOverflow.Ellipsis)
+        maxLines = citationTitleMaxLines(item.title), overflow = TextOverflow.Ellipsis)
     Text("$authors · ${CitationFormatting.displayYear(item)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     if (venue.isNotBlank()) Text(venue, style = MaterialTheme.typography.bodySmall, fontStyle = FontStyle.Italic,
         color = MaterialTheme.colorScheme.onSurfaceVariant)

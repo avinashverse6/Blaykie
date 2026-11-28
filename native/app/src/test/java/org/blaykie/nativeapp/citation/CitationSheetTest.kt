@@ -34,6 +34,11 @@ class CitationSheetTest {
         assertTrue(showSelectedReferences(2))
         assertTrue(showSelectedReferences(3))
     }
+    @Test fun indicTitlesRemainWhole() {
+        assertEquals(3, citationTitleMaxLines("A long English title"))
+        assertEquals(Int.MAX_VALUE, citationTitleMaxLines("हिन्दी में एक शीर्षक"))
+        assertEquals(Int.MAX_VALUE, citationTitleMaxLines("ગુજરાતી શીર્ષક"))
+    }
     @Test fun previewMatchesInsertionTrimming() {
         val item = CitationItem("x", "Title", emptyList(), "2020")
         val state = SearchState(editNumber = 1, existingItems = listOf(item), prefix = "  ", page = "  ")
